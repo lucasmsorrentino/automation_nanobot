@@ -1,0 +1,20 @@
+{
+  "agents": {
+    "defaults": {
+      "model": "gemini/gemini-1.5-pro",
+      "provider": "gemini",
+      "workspace": "./ufpr_automation/workspace"
+    }
+  },
+  "providers": {
+    "gemini": {
+      "apiKey": "SUA_API_KEY_AQUI"
+    }
+  },
+  "tools": {
+    "exec": {
+      "timeout": 120
+    },
+    "restrictToWorkspace": false
+  }
+}
