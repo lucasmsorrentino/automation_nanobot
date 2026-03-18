@@ -6,7 +6,43 @@
 
 ---
 
-## Estrutura de Ofícios
+## Estrutura de E-mails
+
+### Assinatura de E-mail
+
+'''
+Prezada(s)/o(s) [Nome do Destinatário],
+
+[Corpo do texto — 1º parágrafo: contextualização]
+
+[2º parágrafo: desenvolvimento / solicitação]
+
+[3º parágrafo: conclusão / encaminhamentos]
+
+[ASSINATURA_EMAIL](env)
+'''
+
+### Formato Padrão de E-mail UFPR
+
+```
+De: [Seu E-mail]
+Para: [E-mail do Destinatário]
+Assunto: [Descrição objetiva do assunto]
+
+[Corpo do texto — 1º parágrafo: contextualização]
+
+[2º parágrafo: desenvolvimento / solicitação]
+
+[3º parágrafo: conclusão / encaminhamentos]
+
+Atenciosamente,
+
+[Nome do Remetente]
+[Cargo / Matrícula]
+[Setor / Departamento]
+```
+
+## Estrutura de Ofícios (apenas para processo SEI, ainda não implementado)
 
 ### Formato Padrão de Ofício UFPR
 
