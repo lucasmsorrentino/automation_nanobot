@@ -2,4 +2,7 @@
 
 from ufpr_automation.cli.commands import main
 
-main()
+if __name__ == "__main__":
+    main()
+
+

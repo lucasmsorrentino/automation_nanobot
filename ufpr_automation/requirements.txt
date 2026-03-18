@@ -1,0 +1,18 @@
+# ============================================================================
+# UFPR Automation — Requirements
+# ============================================================================
+
+# Automação de Navegador (OWA Web Scraping)
+playwright>=1.49.0
+
+# Gerenciamento de Variáveis de Ambiente (.env)
+python-dotenv>=1.0.1
+
+# ----------------------------------------------------------------------------
+# Instalação do nanobot (Framework Core)
+# O framework pai deve estar instalado. Se você estiver instalando 
+# em um novo ambiente, descomente a linha abaixo para instalá-lo 
+# diretamente do diretório pai em modo editável:
+#
+# -e ../
+# ----------------------------------------------------------------------------

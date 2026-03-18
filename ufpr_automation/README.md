@@ -36,6 +36,7 @@ ufpr_automation/
 ├── __init__.py              # Package init
 ├── __main__.py              # python -m ufpr_automation
 ├── .env.example             # Template de variáveis de ambiente
+├── ARCHITECTURE.md          # 📐 Diagrama de Arquitetura (Mermaid)
 │
 ├── config/                  # ⚙️ Configurações
 │   ├── __init__.py
@@ -58,11 +59,11 @@ ufpr_automation/
 │   ├── __init__.py
 │   └── debug.py             # Captura DOM + screenshot para debug
 │
-├── docs/                    # 📚 Documentação técnica
-│   ├── architecture_mermaid.md
+├── docs/                    # 📚 Documentação complementar
 │   └── CHANNEL_PLUGIN_GUIDE.md
 │
 ├── workspace/               # 🐈 Integração com nanobot
+
 │   ├── AGENTS.md            # Personalidade do agente
 │   ├── SOUL.md              # Normas UFPR (ICL context)
 │   ├── config.json          # Config do provider Gemini
@@ -142,7 +143,7 @@ O script detecta a sessão salva e executa em background (headless), imprimindo 
 | **Autonomia** | Rascunho + Humano | Auto (baixo risco) | Totalmente autônomo |
 | **Sistemas** | OWA | OWA | OWA + SIGA + SEI |
 
-> Veja o diagrama completo em [`docs/architecture_mermaid.md`](docs/architecture_mermaid.md).
+> Veja o diagrama completo em [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 

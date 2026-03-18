@@ -10,7 +10,7 @@
   - [x] Arquivo `.env.example` para variáveis sensíveis
 
 - [x] **Arquitetura e documentação**
-  - [x] Diagrama Mermaid.js com 3 fases de maturidade (`docs/architecture_mermaid.md`)
+  - [x] Diagrama Mermaid.js com 3 fases de maturidade (`ARCHITECTURE.md`)
   - [x] README.md do projeto com quickstart e estrutura
   - [x] Especificação original mantida (`INICIO.md`)
 
