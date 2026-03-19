@@ -16,7 +16,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent  # ufpr_automation/
 _ENV_FILE = _PACKAGE_DIR / ".env"
 if not _ENV_FILE.exists():
     _ENV_FILE = _PACKAGE_DIR.parent / ".env"  # project root
-load_dotenv(_ENV_FILE, override=False)
+load_dotenv(_ENV_FILE, override=False, encoding="utf-8")
 
 
 # ============================================================================
