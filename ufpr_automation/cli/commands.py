@@ -159,18 +159,41 @@ async def run_main(headed: bool = False, debug: bool = False) -> None:
         print(f"   E-mails não lidos: {len(unread)}")
 
         if unread:
-            print("\n📩 E-mails NÃO LIDOS:")
-            for i, email in enumerate(unread, 1):
-                print(f"   {i}. De: {email.sender}")
-                print(f"      Assunto: {email.subject}")
-                if email.preview:
-                    print(f"      Preview: {email.preview[:80]}...")
-                print()
+            print("\n" + "=" * 60)
+            print("🧠 Iniciando análise do Gemini (Marco I - Pensar)")
+            print("=" * 60)
+            
+            from ufpr_automation.llm import GeminiClient
+            try:
+                llm = GeminiClient()
+                
+                print("\n📩 E-mails NÃO LIDOS analisados:")
+                for i, email in enumerate(unread, 1):
+                    print(f"   {i}. De: {email.sender}")
+                    print(f"      Assunto: {email.subject}")
+                    
+                    print(f"      ⏳ Classificando no Gemini...")
+                    classification = llm.classify_email(email)
+                    email.classification = classification
+                    
+                    print(f"      [ {classification.categoria} ]")
+                    print(f"      Resumo: {classification.resumo}")
+                    print(f"      Ação sugerida: {classification.acao_necessaria}")
+                    if classification.sugestao_resposta:
+                        print(f"      Resposta Gerada:")
+                        print(f"      {'-' * 40}")
+                        draft_lines = classification.sugestao_resposta.split('\n')
+                        for line in draft_lines:
+                            print(f"      | {line}")
+                        print(f"      {'-' * 40}")
+                    print()
+                    
+            except Exception as e:
+                print(f"❌ Erro ao inicializar Gemini: {e}")
 
         # Human-in-the-loop notification
         print("\n🔔 NOTIFICAÇÃO: Varredura concluída.")
         print("   Nenhuma ação automática foi tomada.")
-        print("   (Integração com Gemini será adicionada no próximo passo)")
 
     finally:
         await browser.close()

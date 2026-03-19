@@ -39,11 +39,11 @@
 
 ### 🔜 Pendente
 
-- [ ] **Integração com Gemini (Pensar)**
-  - [ ] Criar módulo `llm/` com cliente Gemini (via nanobot provider)
-  - [ ] System prompt com normas da UFPR (ICL do `SOUL.md`)
-  - [ ] Classificação de e-mails: departamento, urgência, tipo
-  - [ ] Geração de resposta/ofício conforme normas
+- [x] **Integração com Gemini (Pensar)**
+  - [x] Criar módulo `llm/` com cliente Gemini (via nanobot provider)
+  - [x] System prompt com normas da UFPR (ICL do `SOUL.md`)
+  - [x] Classificação de e-mails: departamento, urgência, tipo
+  - [x] Geração de resposta/ofício conforme normas
 
 - [ ] **Ação no OWA (Agir)**
   - [ ] Criar módulo `outlook/responder.py`
