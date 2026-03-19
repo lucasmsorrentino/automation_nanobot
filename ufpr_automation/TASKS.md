@@ -37,8 +37,6 @@
   - [x] `SKILL.md` — Skill do Outlook
   - [x] `config.json` — Provider Gemini
 
-### 🔜 Pendente
-
 - [x] **Integração com Gemini (Pensar)**
   - [x] Criar módulo `llm/` com cliente Gemini (via nanobot provider)
   - [x] System prompt com normas da UFPR (ICL do `SOUL.md`)
@@ -62,9 +60,20 @@
 - [x] **Notificação (Notificar)**
   - [x] Relatório de ações pendentes no terminal (print_summary no orchestrator)
 
-- [ ] **Preencher SOUL.md**
-  - [ ] Modelos de ofício do setor
-  - [ ] Regras específicas do departamento (além das já incluídas)
+- [x] **Preencher SOUL.md — ICL completo**
+  - [x] Normas do regulamento de estágio do Curso de Design Gráfico
+  - [x] Manual de Estágios UFPR (COAFE/PROGRAD)
+  - [x] Resoluções CEPE (46/10, 70/04, IN 01/12, IN 02/12, IN 01/13)
+  - [x] Modelos de despacho SEI (TCE, Aditivo+Relatório, Rescisão)
+  - [x] Templates de e-mail para situações comuns (6 modelos)
+  - [x] Perguntas frequentes com respostas padrão (13 Q&As)
+  - [x] Estrutura do Relatório de Estágio e dados de contato institucionais
+
+### 🔜 Pendente
+
+- [ ] **Validação de seletores Playwright**
+  - [ ] Testar `body_extractor.py` com sessão OWA real (`--perceber-only`)
+  - [ ] Testar `responder.py` com sessão OWA real (rascunho manual)
 
 - [ ] **Testes**
   - [ ] Testes unitários para `core/models.py`

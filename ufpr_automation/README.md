@@ -22,10 +22,10 @@ Sistema de automação burocrática para a **Universidade Federal do Paraná (UF
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos (remetente, assunto, corpo) | ✅ Implementado |
-| **Pensar** | Gemini classifica o e-mail e redige resposta seguindo normas UFPR (ICL) | 🔜 Próximo passo |
-| **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | 🔜 Próximo passo |
-| **Notificar** | Alerta no terminal que há ações pendentes para revisão humana | ✅ Implementado |
+| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos com corpo completo | ✅ Implementado |
+| **Pensar** | Gemini classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
+| **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
+| **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
 
 ---
 
@@ -46,26 +46,31 @@ ufpr_automation/
 │   ├── __init__.py
 │   └── models.py            # EmailData dataclass
 │
+├── agents/                  # 🤖 Agentes do pipeline
+│   ├── perceber.py          # PerceberAgent — scraping + corpo completo
+│   ├── pensar.py            # PensarAgent — classificação Gemini (paralelo)
+│   └── agir.py              # AgirAgent — salva rascunhos no OWA
+│
+├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
+│
+├── llm/                     # 🧠 Integração LLM
+│   └── client.py            # GeminiClient (sync + async)
+│
 ├── outlook/                 # 📧 Integração OWA via Playwright
-│   ├── __init__.py
 │   ├── browser.py           # Ciclo de vida do navegador + sessão
-│   └── scraper.py           # Extração de e-mails (3 estratégias)
+│   ├── scraper.py           # Extração de e-mails (3 estratégias)
+│   ├── body_extractor.py    # Abertura e extração do corpo completo
+│   └── responder.py         # Clica Reply + digita + salva rascunho
 │
 ├── cli/                     # 💻 Interface de linha de comando
-│   ├── __init__.py
 │   └── commands.py          # Entry point com argparse
 │
 ├── utils/                   # 🔧 Utilitários
-│   ├── __init__.py
 │   └── debug.py             # Captura DOM + screenshot para debug
 │
-├── docs/                    # 📚 Documentação complementar
-│   └── CHANNEL_PLUGIN_GUIDE.md
-│
 ├── workspace/               # 🐈 Integração com nanobot
-
 │   ├── AGENTS.md            # Personalidade do agente
-│   ├── SOUL.md              # Normas UFPR (ICL context)
+│   ├── SOUL.md              # Normas UFPR — ICL context (19 seções)
 │   ├── config.json          # Config do provider Gemini
 │   └── skills/
 │       └── ufpr-outlook/
@@ -127,10 +132,11 @@ O script detecta a sessão salva e executa em background (headless), imprimindo 
 
 | Comando | Descrição |
 |---------|-----------|
-| `python -m ufpr_automation` | Execução padrão (auto-detecta sessão) |
-| `python -m ufpr_automation --dry-run` | Testa Playwright sem login |
+| `python -m ufpr_automation` | Pipeline completo (scraping + LLM + rascunhos) |
+| `python -m ufpr_automation --perceber-only` | Apenas scraping + extração de corpo, sem LLM |
 | `python -m ufpr_automation --headed` | Força modo com janela visível |
 | `python -m ufpr_automation --debug` | Captura DOM + screenshot para debug |
+| `python -m ufpr_automation --dry-run` | Testa Playwright sem login |
 
 ---
 
