@@ -75,6 +75,14 @@ VIEWPORT = {"width": 1366, "height": 768}
 
 
 # ============================================================================
+# Institutional Info
+# ============================================================================
+
+# Official Signature of the user/department to append to emails
+ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL", "Atenciosamente,\n\nEquipe UX/Design GF")
+
+
+# ============================================================================
 # LLM Provider (for future Marco I Gemini integration)
 # ============================================================================
 

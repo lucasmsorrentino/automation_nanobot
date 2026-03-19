@@ -19,7 +19,7 @@ Prezada(s)/o(s) [Nome do Destinatário],
 
 [3º parágrafo: conclusão / encaminhamentos]
 
-[ASSINATURA_EMAIL](env)
+{{ ASSINATURA_EMAIL }}
 '''
 
 ### Formato Padrão de E-mail UFPR
