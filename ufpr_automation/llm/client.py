@@ -1,4 +1,9 @@
-"""Client to interact with Gemini 1.5 Pro via Google GenAI SDK."""
+"""Client to interact with Gemini 1.5 Pro via Google GenAI SDK.
+
+Used by PensarAgent to classify emails and generate draft responses.
+Supports both sync (classify_email) and async (classify_email_async) calls
+so PensarAgent can run multiple classifications concurrently.
+"""
 
 import json
 from pathlib import Path
@@ -13,78 +18,128 @@ from ufpr_automation.core.models import EmailData, EmailClassification
 
 
 class GeminiClient:
-    """Client for generating email classifications using Gemini."""
+    """Client for generating email classifications using Gemini.
 
-    def __init__(self):
-        """Initialize the Gemini client using settings."""
+    Args:
+        system_instruction: Override the default system instruction.
+            If None, builds it from workspace AGENTS.md + SOUL.md.
+    """
+
+    def __init__(self, system_instruction: Optional[str] = None):
         if not settings.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not set in settings or .env!")
 
-        # Initialize the official google-genai client
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        
-        # Handle the model name correctly (nanobot format might be gemini/gemini-1.5-pro)
-        self.model_id = settings.LLM_MODEL.replace("gemini/", "", 1) if settings.LLM_MODEL.startswith("gemini/") else settings.LLM_MODEL
-        
-        # Load system instructions
-        self.system_instruction = self._build_system_instruction()
 
-    def _build_system_instruction(self) -> str:
-        """Combine AGENTS.md (Persona) and SOUL.md (Norms) into a single system instruction."""
-        workspace_dir = settings.PACKAGE_ROOT / "workspace"
-        
-        # Read AGENTS.md
-        agents_file = workspace_dir / "AGENTS.md"
-        agents_content = agents_file.read_text(encoding="utf-8") if agents_file.exists() else "Você é um assistente da UFPR."
-        
-        # Read SOUL.md
-        soul_file = workspace_dir / "SOUL.md"
-        soul_content = soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
-        
-        # Inject the signature template if it exists
-        if settings.ASSINATURA_EMAIL:
-            soul_content = soul_content.replace("{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL)
-            
-        return f"{agents_content}\n\n=== NORMAS E CONHECIMENTO INSTITUCIONAL ===\n\n{soul_content}"
-
-    def classify_email(self, email: EmailData) -> EmailClassification:
-        """Classify an email and suggest a response using Gemini."""
-        prompt = (
-            f"Por favor, analise o seguinte e-mail recebido na caixa de entrada técnica:\n\n"
-            f"Remetente: {email.sender}\n"
-            f"Assunto: {email.subject}\n"
-            f"Corpo/Preview: {email.preview}\n\n"
-            f"Classifique o e-mail preenchendo os campos obrigatórios e sugira uma resposta adequada "
-            f"seguindo as normas da UFPR contidas no seu contexto."
+        # Strip the "gemini/" prefix that nanobot config adds
+        self.model_id = (
+            settings.LLM_MODEL.replace("gemini/", "", 1)
+            if settings.LLM_MODEL.startswith("gemini/")
+            else settings.LLM_MODEL
         )
 
+        self.system_instruction = system_instruction or self._build_system_instruction()
+
+    # ------------------------------------------------------------------
+    # System prompt construction
+    # ------------------------------------------------------------------
+
+    def _build_system_instruction(self) -> str:
+        """Combine AGENTS.md (persona) and SOUL.md (norms) into one system prompt."""
+        workspace_dir = settings.PACKAGE_ROOT / "workspace"
+
+        agents_file = workspace_dir / "AGENTS.md"
+        agents_content = (
+            agents_file.read_text(encoding="utf-8")
+            if agents_file.exists()
+            else "Você é um assistente da UFPR."
+        )
+
+        soul_file = workspace_dir / "SOUL.md"
+        soul_content = soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
+
+        if settings.ASSINATURA_EMAIL:
+            soul_content = soul_content.replace("{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL)
+
+        return (
+            f"{agents_content}\n\n"
+            "=== NORMAS E CONHECIMENTO INSTITUCIONAL ===\n\n"
+            f"{soul_content}"
+        )
+
+    # ------------------------------------------------------------------
+    # Shared config factory
+    # ------------------------------------------------------------------
+
+    def _generation_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=self.system_instruction,
+            response_mime_type="application/json",
+            response_schema=EmailClassification,
+            temperature=0.2,
+        )
+
+    def _build_prompt(self, email: EmailData) -> str:
+        """Build the classification prompt, preferring full body over preview."""
+        content = email.body if email.body else email.preview
+        content_label = "Corpo completo" if email.body else "Preview"
+        return (
+            "Por favor, analise o seguinte e-mail recebido na caixa de entrada:\n\n"
+            f"Remetente: {email.sender}\n"
+            f"Assunto: {email.subject}\n"
+            f"{content_label}:\n{content}\n\n"
+            "Classifique o e-mail e redija uma resposta adequada seguindo as normas "
+            "da UFPR contidas no seu contexto."
+        )
+
+    # ------------------------------------------------------------------
+    # Sync classification
+    # ------------------------------------------------------------------
+
+    def classify_email(self, email: EmailData) -> EmailClassification:
+        """Classify and draft a reply for *email* (synchronous)."""
         try:
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction,
-                    response_mime_type="application/json",
-                    response_schema=EmailClassification,
-                    temperature=0.2, # Low temperature for consistent classification
-                ),
+                contents=self._build_prompt(email),
+                config=self._generation_config(),
             )
-            
-            # The google-genai response.text is guaranteed to match the JSON Schema
-            parsed_json = json.loads(response.text)
-            
-            # Use Pydantic to validate and convert the dict into an EmailClassification object
             adapter = TypeAdapter(EmailClassification)
-            classification = adapter.validate_python(parsed_json)
-            
-            return classification
-            
+            return adapter.validate_python(json.loads(response.text))
+
         except Exception as e:
-            # Fallback for errors to not break the pipeline
-            print(f"⚠️ Erro ao classificar e-mail '{email.subject}' com Gemini: {e}")
+            print(f"  ⚠️  Erro ao classificar '{email.subject}': {e}")
             return EmailClassification(
                 categoria="Erro",
-                resumo=f"Erro na análise LLM: {str(e)}",
+                resumo=f"Erro na análise LLM: {e}",
                 acao_necessaria="Revisão Manual",
-                sugestao_resposta=""
+                sugestao_resposta="",
+            )
+
+    # ------------------------------------------------------------------
+    # Async classification (used by PensarAgent for concurrent processing)
+    # ------------------------------------------------------------------
+
+    async def classify_email_async(self, email: EmailData) -> EmailClassification:
+        """Classify and draft a reply for *email* (asynchronous).
+
+        Uses the google-genai async interface so multiple emails can be
+        classified concurrently via asyncio.gather().
+        """
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_id,
+                contents=self._build_prompt(email),
+                config=self._generation_config(),
+            )
+            adapter = TypeAdapter(EmailClassification)
+            return adapter.validate_python(json.loads(response.text))
+
+        except Exception as e:
+            print(f"  ⚠️  Erro ao classificar '{email.subject}': {e}")
+            return EmailClassification(
+                categoria="Erro",
+                resumo=f"Erro na análise LLM: {e}",
+                acao_necessaria="Revisão Manual",
+                sugestao_resposta="",
             )

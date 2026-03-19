@@ -35,14 +35,18 @@ class EmailData:
         sender: Name or email address of the sender.
         subject: Email subject line.
         preview: First lines of the email body (preview text).
+        body: Full email body text, populated by PerceberAgent after clicking into the email.
+        email_index: Position in the inbox list (used for reply/body extraction).
         is_unread: Whether the email has been read.
         timestamp: When the email was received (if available).
-        classification: Output of the LLM analysis.
+        classification: Output of the LLM analysis (populated by PensarAgent).
     """
 
     sender: str = ""
     subject: str = ""
     preview: str = ""
+    body: str = ""
+    email_index: int = -1
     is_unread: bool = False
     timestamp: str = ""
     classification: Optional[EmailClassification] = None
@@ -58,6 +62,8 @@ class EmailData:
             "sender": self.sender,
             "subject": self.subject,
             "preview": self.preview,
+            "body": self.body,
+            "email_index": self.email_index,
             "is_unread": self.is_unread,
             "timestamp": self.timestamp,
             "classification": self.classification.model_dump() if self.classification is not None else None,

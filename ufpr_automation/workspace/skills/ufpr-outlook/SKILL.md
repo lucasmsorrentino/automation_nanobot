@@ -1,46 +1,62 @@
 ---
-description: Automação do Outlook Web (OWA) via Playwright para e-mails UFPR
-always: false
+name: ufpr-outlook
+description: Automação do Outlook Web (OWA) da UFPR via pipeline multi-agente (Perceber → Pensar → Agir)
+metadata: {"nanobot":{"emoji":"📧","always":false}}
 ---
 
 # Skill: UFPR Outlook Web Automation
 
 ## O que esta skill faz
 
-Permite ao agente interagir com o Microsoft Outlook Web Access (OWA) da UFPR usando automação de navegador (Playwright). O acesso é feito via Web Scraping/RPA porque a governança de TI da UFPR bloqueia o uso da Microsoft Graph API.
+Executa um pipeline de três agentes especializados para processar e-mails institucionais da UFPR:
+
+| Fase | Agente | Responsabilidade |
+|------|--------|-----------------|
+| **Perceber** | `PerceberAgent` | Abre o OWA via Playwright, varre a inbox e extrai o corpo **completo** de cada e-mail não lido |
+| **Pensar**   | `PensarAgent × N` | Classifica cada e-mail e gera rascunho de resposta com Gemini (N chamadas **em paralelo**) |
+| **Agir**     | `AgirAgent` | Salva as respostas geradas como **rascunhos** no OWA — nunca envia automaticamente |
 
 ## Comandos disponíveis
 
 ```bash
-# Primeiro uso — login manual (abre navegador visível)
+# Pipeline completo (scraping + LLM + rascunhos)
 python -m ufpr_automation
 
-# Execuções seguintes — usa sessão salva (headless)
-python -m ufpr_automation
+# Primeiro uso — abre navegador para login manual
+python -m ufpr_automation --headed
 
-# Teste rápido do Playwright (sem login)
-python -m ufpr_automation --dry-run
+# Apenas Perceber (scraping + corpos, sem LLM)
+python -m ufpr_automation --perceber-only
 
-# Modo debug — captura DOM + screenshot
+# Debug — captura DOM + screenshot
 python -m ufpr_automation --debug
+
+# Teste do Playwright sem login
+python -m ufpr_automation --dry-run
 ```
 
 ## Estrutura modular
 
 ```
 ufpr_automation/
-├── config/settings.py     # Configurações (via .env)
-├── core/models.py         # EmailData dataclass
-├── outlook/browser.py     # Gerenciamento do navegador + sessão
-├── outlook/scraper.py     # Extração de e-mails (3 estratégias)
-├── cli/commands.py        # Entry point CLI
-├── utils/debug.py         # Captura de DOM para debug
-└── workspace/             # Integração nanobot
+├── orchestrator.py          # Coordenador multi-agente
+├── agents/
+│   ├── perceber.py          # PerceberAgent (Playwright, sequencial)
+│   ├── pensar.py            # PensarAgent (Gemini, paralelo via asyncio)
+│   └── agir.py              # AgirAgent (Playwright, sequencial)
+├── outlook/
+│   ├── browser.py           # Ciclo de vida do navegador + sessão
+│   ├── scraper.py           # Extração da lista de e-mails (3 estratégias)
+│   ├── body_extractor.py    # Abertura e extração do corpo completo
+│   └── responder.py         # Clica Reply + digita + salva rascunho
+├── llm/
+│   └── client.py            # GeminiClient (sync + async)
+├── core/models.py           # EmailData, EmailClassification
+└── workspace/               # Contexto nanobot (AGENTS.md, SOUL.md)
 ```
 
-## Fluxo de dados
+## Garantias de segurança
 
-1. **Perceber**: Playwright abre OWA → extrai e-mails não lidos
-2. **Pensar**: (futuro) Envia conteúdo ao Gemini para classificação
-3. **Agir**: (futuro) Redige resposta e salva como rascunho
-4. **Notificar**: Alerta no terminal que há ações pendentes
+- O sistema **nunca envia e-mails automaticamente**.
+- Toda ação resulta em um **rascunho** na pasta Rascunhos do OWA.
+- O humano deve revisar e enviar manualmente.

@@ -45,21 +45,26 @@
   - [x] Classificação de e-mails: departamento, urgência, tipo
   - [x] Geração de resposta/ofício conforme normas
 
-- [ ] **Ação no OWA (Agir)**
-  - [ ] Criar módulo `outlook/responder.py`
-  - [ ] Clicar em "Responder" no e-mail via Playwright
-  - [ ] Digitar resposta gerada pelo LLM
-  - [ ] Salvar como rascunho (NUNCA enviar automaticamente)
+- [x] **Ação no OWA (Agir)**
+  - [x] Criar módulo `outlook/responder.py`
+  - [x] Clicar em "Responder" no e-mail via Playwright
+  - [x] Digitar resposta gerada pelo LLM
+  - [x] Salvar como rascunho (NUNCA enviar automaticamente)
 
-- [ ] **Notificação (Notificar)**
-  - [ ] Expandir alertas além do terminal (e.g., log file, webhook)
-  - [ ] Relatório de ações pendentes para revisão humana
+- [x] **Arquitetura Multi-Agente**
+  - [x] `agents/perceber.py` — PerceberAgent (scraping + corpo completo)
+  - [x] `agents/pensar.py` — PensarAgent com chamadas Gemini **concorrentes**
+  - [x] `agents/agir.py` — AgirAgent (salvar rascunhos)
+  - [x] `orchestrator.py` — coordenador do pipeline Perceber → Pensar → Agir
+  - [x] `outlook/body_extractor.py` — extração do corpo completo (não apenas preview)
+  - [x] `llm/client.py` — adicionado `classify_email_async` para suporte a asyncio.gather
+
+- [x] **Notificação (Notificar)**
+  - [x] Relatório de ações pendentes no terminal (print_summary no orchestrator)
 
 - [ ] **Preencher SOUL.md**
-  - [ ] Inserir normas reais da UFPR
   - [ ] Modelos de ofício do setor
-  - [ ] Resoluções do CEPE relevantes
-  - [ ] Regras específicas do departamento
+  - [ ] Regras específicas do departamento (além das já incluídas)
 
 - [ ] **Testes**
   - [ ] Testes unitários para `core/models.py`
