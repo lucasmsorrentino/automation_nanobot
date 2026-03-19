@@ -69,16 +69,45 @@
   - [x] Perguntas frequentes com respostas padrão (13 Q&As)
   - [x] Estrutura do Relatório de Estágio e dados de contato institucionais
 
-### 🔜 Pendente
+### 🔜 Pendente — Robustez (Ordered by Impact)
+
+- [ ] **1. Identificação estável de e-mails (substituir email_index)**
+  - [ ] Gerar hash estável `sender + subject + timestamp` como ID único
+  - [ ] Agir valida que o e-mail aberto corresponde ao esperado antes de digitar
+  - [ ] Eliminar dependência de índice posicional que quebra se inbox muda
+
+- [ ] **2. Tratamento de falhas parciais no Pensar**
+  - [ ] Usar `asyncio.gather(*tasks, return_exceptions=True)` para não perder resultados bons
+  - [ ] Filtrar exceções e continuar pipeline com classificações bem-sucedidas
+  - [ ] Reportar falhas individuais no summary
+
+- [ ] **3. Rate limiting nas chamadas LLM paralelas**
+  - [ ] Adicionar `asyncio.Semaphore(max_concurrent=5)` no Pensar
+  - [ ] Evitar exaustão de quota Gemini com muitos e-mails não lidos
+
+- [ ] **4. Substituir hard-coded `wait_for_timeout()` por waits adaptativos**
+  - [ ] Usar `wait_for_selector()` / `expect()` do Playwright onde possível
+  - [ ] Manter timeouts apenas como fallback com valores configuráveis
+
+- [ ] **5. Validação de `categoria` com Literal enum**
+  - [ ] Trocar `str` por `Literal[...]` em `EmailClassification.categoria`
+  - [ ] Garantir que LLM só retorna categorias válidas via schema
+
+- [ ] **6. Testes unitários mínimos**
+  - [ ] Testes para `core/models.py` (EmailData, EmailClassification)
+  - [ ] Testes para `llm/client.py` (mock Gemini, validar schema)
+  - [ ] Teste end-to-end do pipeline com dados mock
+
+- [ ] **7. Logging persistente (structured)**
+  - [ ] Adicionar logging estruturado (JSON) para arquivo em `logs/`
+  - [ ] Substituir `print()` por `logger.info()` nos módulos principais
+
+### 🔜 Pendente — Validação Manual (requer sessão OWA)
 
 - [ ] **Validação de seletores Playwright**
   - [ ] Testar `body_extractor.py` com sessão OWA real (`--perceber-only`)
   - [ ] Testar `responder.py` com sessão OWA real (rascunho manual)
-
-- [ ] **Testes**
-  - [ ] Testes unitários para `core/models.py`
-  - [ ] Testes de integração para `outlook/scraper.py` (mock)
-  - [ ] Teste end-to-end do fluxo completo
+  - [ ] Pipeline completo end-to-end com e-mails reais
 
 ---
 
