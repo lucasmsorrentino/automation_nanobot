@@ -152,11 +152,17 @@ async def _scrape_modern_owa(page: Page) -> list[EmailData]:
             if preview_el:
                 email.preview = (await preview_el.inner_text()).strip()
 
-            unread_indicator = await item.query_selector(
-                '[class*="unread"], [class*="Unread"], '
-                '[aria-label*="Não lida"], [aria-label*="Unread"]'
-            )
-            email.is_unread = unread_indicator is not None
+            # OWA marks unread emails via aria-label on the row itself
+            # (e.g. "Não lidos Recolhido Tem anexos ...") — check that first.
+            row_label = (await item.get_attribute("aria-label") or "").lower()
+            if "não lido" in row_label or "unread" in row_label:
+                email.is_unread = True
+            else:
+                unread_indicator = await item.query_selector(
+                    '[class*="unread"], [class*="Unread"], '
+                    '[aria-label*="Não lido"], [aria-label*="Unread"]'
+                )
+                email.is_unread = unread_indicator is not None
 
             if email.sender or email.subject:
                 emails.append(email)
@@ -194,7 +200,7 @@ async def _scrape_generic_owa(page: Page) -> list[EmailData]:
                     email.subject = label[:100]
 
                 email.is_unread = (
-                    "não lida" in label.lower() or "unread" in label.lower()
+                    "não lido" in label.lower() or "unread" in label.lower()
                 )
 
             if email.sender or email.subject:
@@ -230,7 +236,7 @@ async def _scrape_via_javascript(page: Page) -> list[EmailData]:
                             is_unread:
                                 row.classList.toString().toLowerCase().includes('unread') ||
                                 (row.getAttribute('aria-label') || '').toLowerCase().includes('unread') ||
-                                (row.getAttribute('aria-label') || '').toLowerCase().includes('não lida') ||
+                                (row.getAttribute('aria-label') || '').toLowerCase().includes('não lido') ||
                                 false
                         });
                     }

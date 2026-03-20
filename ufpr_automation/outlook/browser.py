@@ -86,26 +86,41 @@ async def is_logged_in(page: Page) -> bool:
     This checks multiple indicators:
     1. URL contains '/mail/' (inbox route)
     2. Presence of inbox-related DOM elements
+
+    Waits briefly for redirects to settle before checking.
     """
+    # Wait for potential redirects (saved session may redirect through auth)
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=10_000)
+    except Exception:
+        pass
+
     current_url = page.url.lower()
 
-    # Check URL pattern
-    if "/mail/" in current_url or (
-        "outlook.office" in current_url and "login" not in current_url
-    ):
+    # Check URL pattern — covers outlook.office365.com, outlook.office.com,
+    # and the newer outlook.cloud.microsoft domain.
+    url_looks_like_inbox = "/mail/" in current_url or (
+        ("outlook.office" in current_url or "outlook.cloud.microsoft" in current_url)
+        and "login" not in current_url
+    )
+
+    if url_looks_like_inbox:
         # Double-check by looking for inbox elements
         try:
             inbox_indicators = [
                 '[aria-label="Caixa de Entrada"]',
                 '[aria-label="Inbox"]',
+                '[aria-label="Lista de mensagens"]',
                 '[role="main"]',
                 'div[class*="mailList"]',
                 "#MailList",
             ]
             for selector in inbox_indicators:
-                element = await page.query_selector(selector)
-                if element:
+                try:
+                    await page.wait_for_selector(selector, state="visible", timeout=5_000)
                     return True
+                except Exception:
+                    continue
         except Exception:
             pass
 

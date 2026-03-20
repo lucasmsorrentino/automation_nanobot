@@ -141,11 +141,11 @@ Seletores-chave a verificar:
 - Botão Next/Submit: `input[type="submit"]` ou `#idSIButton9`
 - Número MFA: `#displaySign`
 
-- [ ] Auto-login preenche e-mail e senha corretamente
-- [ ] Número MFA é extraído e exibido no console
-- [ ] Notificação Telegram chega com o número MFA
-- [ ] Login conclui após aprovação no Authenticator
-- [ ] `session_data/state.json` é criado com sucesso
+- [x] Auto-login preenche e-mail e senha corretamente
+- [x] Número MFA é extraído e exibido no console
+- [x] Notificação Telegram chega com o número MFA
+- [x] Login conclui após aprovação no Authenticator
+- [x] `session_data/state.json` é criado com sucesso
 
 #### Etapa 2 — Validar scraping (Perceber)
 
@@ -164,9 +164,31 @@ python -m ufpr_automation --perceber-only
 **Se falhar:** Seletores do OWA mudaram. Usar `--headed --debug` para capturar DOM.
 Verificar as 3 estratégias de fallback em `scraper.py` e os seletores em `body_extractor.py`.
 
-- [ ] Sessão salva funciona em modo headless
-- [ ] `scraper.py` extrai lista de e-mails não lidos
-- [ ] `body_extractor.py` extrai corpo completo de cada e-mail
+- [x] Sessão salva funciona em modo headless
+- [x] `scraper.py` extrai lista de e-mails não lidos
+- [x] `body_extractor.py` extrai corpo completo de cada e-mail
+
+#### Etapa 2.5 — Migrar LLM de Gemini direto para LiteLLM + MiniMax
+
+> **Bloqueio:** Gemini free tier esgotado. Substituir `google-genai` SDK direto por LiteLLM
+> (já integrado no nanobot) com MiniMax como provider (já registrado no registry).
+
+**Mudanças necessárias:**
+1. Reescrever `llm/client.py` para usar `litellm.acompletion()` em vez de `google.genai`
+2. Atualizar `config/settings.py`: trocar `GEMINI_API_KEY` por `MINIMAX_API_KEY`, modelo padrão `minimax/<model>`
+3. Atualizar `.env.example` com as novas variáveis
+4. Ajustar `_generation_config()` → parâmetros compatíveis com LiteLLM (response_format JSON)
+5. Garantir que `classify_email_async` continue funcionando com `asyncio.gather()`
+6. Atualizar testes em `tests/test_llm_client.py` para mockar `litellm` em vez de `google.genai`
+
+**Referência:** `nanobot/providers/registry.py` linhas 384-401 (MiniMax ProviderSpec) e
+`nanobot/providers/litellm_provider.py` (padrão de uso do LiteLLM).
+
+- [ ] `llm/client.py` usa `litellm.acompletion()` em vez de `google.genai`
+- [ ] `config/settings.py` com `MINIMAX_API_KEY` e modelo padrão MiniMax
+- [ ] `.env.example` atualizado
+- [ ] Testes unitários passam com mock LiteLLM
+- [ ] Classificação funciona end-to-end com MiniMax API
 
 #### Etapa 3 — Validar classificação LLM (Pensar)
 

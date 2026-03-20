@@ -99,7 +99,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Model to use for classification and response generation
 # Easily swappable: change this to any model supported by nanobot
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemini-1.5-pro")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemini-2.0-flash")
 
 # Provider name (matches nanobot config.json providers key)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
