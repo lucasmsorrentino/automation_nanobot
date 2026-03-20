@@ -89,13 +89,17 @@ async def is_logged_in(page: Page) -> bool:
 
     Waits briefly for redirects to settle before checking.
     """
-    # Wait for potential redirects (saved session may redirect through auth)
+    # Wait for redirects to fully settle (MSAL auth redirects are JS-based)
     try:
-        await page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        await page.wait_for_load_state("networkidle", timeout=15_000)
     except Exception:
         pass
 
     current_url = page.url.lower()
+
+    # Negative check: if we're on a login page, we're definitely not logged in
+    if "login.microsoftonline.com" in current_url or "login.live.com" in current_url:
+        return False
 
     # Check URL pattern — covers outlook.office365.com, outlook.office.com,
     # and the newer outlook.cloud.microsoft domain.
@@ -105,13 +109,12 @@ async def is_logged_in(page: Page) -> bool:
     )
 
     if url_looks_like_inbox:
-        # Double-check by looking for inbox elements
+        # Double-check by looking for OWA-specific inbox elements
         try:
             inbox_indicators = [
                 '[aria-label="Caixa de Entrada"]',
                 '[aria-label="Inbox"]',
                 '[aria-label="Lista de mensagens"]',
-                '[role="main"]',
                 'div[class*="mailList"]',
                 "#MailList",
             ]

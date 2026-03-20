@@ -91,55 +91,58 @@ async def _clear_compose_area(page: Page, el) -> None:
 
 
 async def _close_and_save_draft(page: Page) -> None:
-    """Close the compose pane.  OWA auto-saves as draft when you close."""
-    # Wait for OWA auto-save (fires after ~2 s of typing inactivity).
-    # Use networkidle as an adaptive signal, with a fixed fallback.
+    """Save draft explicitly with Ctrl+S, then close the compose pane.
+
+    By saving first, there are no unsaved changes when we close, so OWA
+    does NOT show the 'Descartar mensagem' confirmation dialog.
+    """
+    # Explicitly save draft via Ctrl+S
+    await page.keyboard.press("Control+s")
+    # Wait for save to complete (network request)
     try:
         await page.wait_for_load_state("networkidle", timeout=5_000)
     except Exception:
         await page.wait_for_timeout(2_000)
 
-    # Try "Discard / Close" button — OWA will prompt to save as draft
-    for selector in _CLOSE_COMPOSE_SELECTORS:
-        try:
-            el = await page.query_selector(selector)
-            if el and await el.is_visible():
-                await el.click()
-                # Wait for save dialog to appear (or compose to close)
-                try:
-                    await page.wait_for_selector(
-                        ", ".join(f"button:has-text('{t}')" for t in ["Save", "Salvar", "Sim", "Yes"]),
-                        state="visible",
-                        timeout=3_000,
-                    )
-                except Exception:
-                    pass
-                await _handle_save_dialog(page)
-                return
-        except Exception:
-            continue
-
-    # Fallback: press Escape (OWA should prompt to save)
+    # Now close compose — no unsaved changes means no dialog
     await page.keyboard.press("Escape")
-    await page.wait_for_timeout(800)
+    await page.wait_for_timeout(1_000)
+
+    # If a dialog still appears (edge case), dismiss it
     await _handle_save_dialog(page)
 
 
 async def _handle_save_dialog(page: Page) -> None:
-    """If OWA shows a 'Save draft?' confirmation dialog, click Save."""
-    save_selectors = [
-        "button[aria-label*='Save']",
-        "button[aria-label*='Salvar']",
-        "button:has-text('Save')",
-        "button:has-text('Salvar')",
-        "button:has-text('Sim')",
-        "button:has-text('Yes')",
+    """If OWA shows a 'Save draft?' confirmation dialog, click Save.
+
+    Scoped to dialog containers to avoid clicking toolbar buttons.
+    """
+    dialog_containers = [
+        "div[role='dialog']",
+        "div[role='alertdialog']",
+        "div[class*='dialog']",
+        "div[class*='Dialog']",
     ]
-    for selector in save_selectors:
+
+    dialog = None
+    for container_sel in dialog_containers:
         try:
-            el = await page.query_selector(selector)
+            el = await page.query_selector(container_sel)
             if el and await el.is_visible():
-                await el.click()
+                dialog = el
+                break
+        except Exception:
+            continue
+
+    if not dialog:
+        return
+
+    save_texts = ["Salvar", "Save", "Sim", "Yes"]
+    for text in save_texts:
+        try:
+            btn = await dialog.query_selector(f"button:has-text('{text}')")
+            if btn and await btn.is_visible():
+                await btn.click()
                 await page.wait_for_timeout(500)
                 return
         except Exception:
@@ -152,30 +155,49 @@ async def dismiss_owa_dialog(page: Page) -> None:
     After saving a draft, OWA sometimes shows a confirmation dialog that
     blocks interaction with the inbox. This clicks the most appropriate
     button to dismiss it without losing work.
+
+    Selectors are scoped to dialog/overlay containers to avoid accidentally
+    clicking regular OWA toolbar buttons.
     """
-    dismiss_selectors = [
-        # "Save" / "Salvar" — keep the draft
-        "button:has-text('Salvar')",
-        "button:has-text('Save')",
-        # "Yes" / "Sim"
-        "button:has-text('Sim')",
-        "button:has-text('Yes')",
-        # "Don't save" / "Não salvar" — fallback to dismiss
-        "button:has-text('Não salvar')",
-        "button:has-text(\"Don't save\")",
-        # "Descartar" — discard dialog itself
-        "button:has-text('Descartar')",
-        "button:has-text('Discard')",
-        # "OK" / "Fechar" / "Close" — generic dismiss
-        "button:has-text('OK')",
-        "button:has-text('Fechar')",
-        "button:has-text('Close')",
+    # First check if there's actually a dialog visible
+    dialog_containers = [
+        "div[role='dialog']",
+        "div[role='alertdialog']",
+        "div[class*='dialog']",
+        "div[class*='Dialog']",
+        "div[class*='modal']",
+        "div[class*='Modal']",
+        "div[class*='overlay']",
+        "div[class*='Overlay']",
     ]
-    for selector in dismiss_selectors:
+
+    dialog = None
+    for container_sel in dialog_containers:
         try:
-            el = await page.query_selector(selector)
+            el = await page.query_selector(container_sel)
             if el and await el.is_visible():
-                await el.click()
+                dialog = el
+                break
+        except Exception:
+            continue
+
+    if not dialog:
+        # No dialog visible — nothing to dismiss
+        return
+
+    # Click the best button inside the dialog
+    button_texts = [
+        "Salvar", "Save",       # keep the draft
+        "Sim", "Yes",
+        "Não salvar", "Don't save",
+        "Descartar", "Discard",
+        "OK", "Fechar", "Close",
+    ]
+    for text in button_texts:
+        try:
+            btn = await dialog.query_selector(f"button:has-text('{text}')")
+            if btn and await btn.is_visible():
+                await btn.click()
                 await page.wait_for_timeout(500)
                 return
         except Exception:

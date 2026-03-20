@@ -211,7 +211,14 @@ Verificar as 3 estratégias de fallback em `scraper.py` e os seletores em `body_
 - [x] Rascunho é salvo na pasta Rascunhos
 - [x] Pipeline end-to-end completo sem erros
 
-#### Etapa 5 — Validar re-login automático
+#### Etapa 5 — Validar re-login automático ✅
+
+> **Concluído em 2026-03-20.** Re-login headless funciona com auto-login + MFA via Telegram.
+
+**Mudanças realizadas (bugs encontrados durante validação):**
+1. `browser.py:is_logged_in()` — corrigido falso positivo: trocado `domcontentloaded` por `networkidle`, adicionado check negativo para `login.microsoftonline.com`, removido seletor genérico `[role="main"]`
+2. `responder.py:_close_and_save_draft()` — salva rascunho com `Ctrl+S` antes de fechar, evitando diálogo "Descartar mensagem"
+3. `responder.py:dismiss_owa_dialog()` + `_handle_save_dialog()` — seletores agora escopados a `div[role="dialog"]` para não clicar em botões do toolbar OWA (causava hang de 120s)
 
 ```bash
 # Teste 5: Deletar sessão e rodar headless (simula expiração)
@@ -225,8 +232,8 @@ python -m ufpr_automation
 #   ✅ Após aprovação, continua pipeline normalmente
 ```
 
-- [ ] Re-login funciona sem janela visível
-- [ ] MFA notification chega via Telegram mesmo em headless
+- [x] Re-login funciona sem janela visível
+- [x] MFA notification chega via Telegram mesmo em headless
 
 ---
 
