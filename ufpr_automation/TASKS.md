@@ -106,15 +106,125 @@
 
 ### 🔜 Pendente — Validação Manual (requer sessão OWA)
 
-- [ ] **Validação de seletores Playwright**
-  - [ ] Testar `body_extractor.py` com sessão OWA real (`--perceber-only`)
-  - [ ] Testar `responder.py` com sessão OWA real (rascunho manual)
-  - [ ] Pipeline completo end-to-end com e-mails reais
-- [ ] **Validação do login automático**
-  - [ ] Testar auto-login com credenciais reais (preenchimento e-mail + senha)
-  - [ ] Testar extração do número MFA da página Microsoft
-  - [ ] Testar notificação Telegram com número MFA
-  - [ ] Testar re-login automático após expiração de sessão
+> **Próxima tarefa.** Executar na ordem abaixo. Cada etapa depende da anterior.
+> Usar `--headed --debug` nas primeiras tentativas para ver o que acontece no browser.
+
+#### Etapa 1 — Validar login automático + MFA via Telegram
+
+**Pré-requisitos:**
+1. Preencher `ufpr_automation/.env` com valores reais:
+   - `OWA_EMAIL` — e-mail institucional UFPR
+   - `OWA_PASSWORD` — senha do e-mail
+   - `TELEGRAM_BOT_TOKEN` — token do bot criado via @BotFather
+   - `TELEGRAM_CHAT_ID` — seu chat ID (obter via @userinfobot no Telegram)
+   - `GEMINI_API_KEY` — chave da API Gemini
+2. Deletar `session_data/state.json` se existir (forçar login do zero)
+
+**Comandos de teste:**
+```bash
+# Teste 1: Login automático com janela visível (observar o fluxo)
+python -m ufpr_automation --headed --debug
+
+# O que observar:
+#   ✅ E-mail é preenchido automaticamente na página Microsoft
+#   ✅ Senha é preenchida após o redirect
+#   ✅ Número MFA de 2 dígitos aparece no console E no Telegram
+#   ✅ Após aprovar no Authenticator, inbox é detectada
+#   ✅ session_data/state.json é criado
+```
+
+**Se falhar:** Provavelmente os seletores da página de login da Microsoft mudaram.
+Capturar o DOM com `--debug` e ajustar os seletores em `browser.py:auto_login()`.
+Seletores-chave a verificar:
+- Input de e-mail: `input[type="email"]` ou `input[name="loginfmt"]`
+- Input de senha: `input[type="password"]` ou `input[name="passwd"]`
+- Botão Next/Submit: `input[type="submit"]` ou `#idSIButton9`
+- Número MFA: `#displaySign`
+
+- [ ] Auto-login preenche e-mail e senha corretamente
+- [ ] Número MFA é extraído e exibido no console
+- [ ] Notificação Telegram chega com o número MFA
+- [ ] Login conclui após aprovação no Authenticator
+- [ ] `session_data/state.json` é criado com sucesso
+
+#### Etapa 2 — Validar scraping (Perceber)
+
+**Pré-requisito:** Etapa 1 concluída (sessão salva).
+
+```bash
+# Teste 2: Scraping headless com sessão salva
+python -m ufpr_automation --perceber-only
+
+# O que observar:
+#   ✅ Sessão é carregada sem precisar de login
+#   ✅ E-mails não lidos são listados com remetente + assunto
+#   ✅ Corpo completo é extraído (não apenas preview)
+```
+
+**Se falhar:** Seletores do OWA mudaram. Usar `--headed --debug` para capturar DOM.
+Verificar as 3 estratégias de fallback em `scraper.py` e os seletores em `body_extractor.py`.
+
+- [ ] Sessão salva funciona em modo headless
+- [ ] `scraper.py` extrai lista de e-mails não lidos
+- [ ] `body_extractor.py` extrai corpo completo de cada e-mail
+
+#### Etapa 3 — Validar classificação LLM (Pensar)
+
+**Pré-requisito:** Etapa 2 concluída (e-mails extraídos com corpo).
+
+```bash
+# Teste 3: Pipeline completo (Perceber + Pensar), sem salvar rascunhos
+# Observar o output de classificação no terminal
+python -m ufpr_automation --perceber-only  # depois rodar sem --perceber-only
+```
+
+**O que verificar:**
+- Gemini retorna JSON válido para cada e-mail
+- `categoria` é um valor válido do Literal enum
+- `sugestao_resposta` faz sentido dado o conteúdo do e-mail e as normas UFPR
+
+- [ ] Gemini classifica e-mails corretamente (JSON válido)
+- [ ] Categorias fazem sentido para e-mails institucionais
+- [ ] Respostas sugeridas seguem normas UFPR do SOUL.md
+
+#### Etapa 4 — Validar rascunhos (Agir)
+
+**Pré-requisito:** Etapa 3 concluída (classificações OK).
+
+```bash
+# Teste 4: Pipeline completo end-to-end
+python -m ufpr_automation --headed
+
+# O que observar:
+#   ✅ Playwright clica "Responder" no e-mail correto
+#   ✅ Texto gerado é digitado no campo de resposta
+#   ✅ Rascunho é salvo (NÃO enviado)
+#   ✅ Verificar pasta Rascunhos no OWA manualmente
+```
+
+**Se falhar:** Seletores de Reply/Draft mudaram. Verificar `responder.py`.
+
+- [ ] Playwright abre o e-mail correto (validação por hash sender+subject)
+- [ ] Resposta é digitada no campo de Reply
+- [ ] Rascunho é salvo na pasta Rascunhos
+- [ ] Pipeline end-to-end completo sem erros
+
+#### Etapa 5 — Validar re-login automático
+
+```bash
+# Teste 5: Deletar sessão e rodar headless (simula expiração)
+rm -f ufpr_automation/session_data/state.json
+python -m ufpr_automation
+
+# O que observar:
+#   ✅ Detecta que não há sessão
+#   ✅ Executa auto-login em headless
+#   ✅ Envia número MFA via Telegram
+#   ✅ Após aprovação, continua pipeline normalmente
+```
+
+- [ ] Re-login funciona sem janela visível
+- [ ] MFA notification chega via Telegram mesmo em headless
 
 ---
 
