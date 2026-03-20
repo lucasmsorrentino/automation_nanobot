@@ -19,10 +19,10 @@ Executa um pipeline de três agentes especializados para processar e-mails insti
 ## Comandos disponíveis
 
 ```bash
-# Pipeline completo (scraping + LLM + rascunhos)
+# Pipeline completo (login automático + scraping + LLM + rascunhos)
 python -m ufpr_automation
 
-# Primeiro uso — abre navegador para login manual
+# Forçar modo com janela visível
 python -m ufpr_automation --headed
 
 # Apenas Perceber (scraping + corpos, sem LLM)
@@ -34,6 +34,10 @@ python -m ufpr_automation --debug
 # Teste do Playwright sem login
 python -m ufpr_automation --dry-run
 ```
+
+## Login automático
+
+O sistema preenche credenciais (`OWA_EMAIL`, `OWA_PASSWORD` do `.env`) automaticamente na página da Microsoft. Quando o MFA de **number matching** é detectado, o número de 2 dígitos é enviado via **Telegram Bot** (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). O usuário aprova no Microsoft Authenticator pelo celular. Se a sessão expirar, o login é re-executado automaticamente sem intervenção.
 
 ## Estrutura modular
 

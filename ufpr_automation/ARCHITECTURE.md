@@ -20,7 +20,9 @@ graph TB
 
         subgraph P1_PERCEPCAO["Perceber (Playwright RPA)"]
             BROWSER1["🌐 Playwright (Headless)<br/>Browser Context + Session State"]
+            AUTOLOGIN["🤖 Auto-Login<br/>Credenciais .env + MFA via Telegram"]
             OWA1["📧 Outlook Web Access (OWA)<br/>UFPR Microsoft 365"]
+            AUTOLOGIN -->|"E-mail + Senha + MFA"| OWA1
             BROWSER1 -->|"Web Scraping DOM"| OWA1
             OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo"| EXTRACT1["📋 Extração de Dados"]
         end
@@ -127,6 +129,7 @@ graph TB
 | **Memória**       | System Prompt (In-Context)  | LanceDB / Chroma (Vetorial)  | Neo4j (Grafo de Conhecimento) |
 | **Interface I/O** | Playwright → OWA            | Playwright → OWA             | Playwright → OWA + SIGA + SEI |
 | **Autonomia**     | Rascunho + Revisão Humana   | Auto (baixo risco) + Humano  | Totalmente autônomo           |
+| **Autenticação**  | Auto-login + MFA Telegram   | Auto-login + MFA Telegram    | Auto-login + MFA Telegram     |
 | **Tratamento Erro** | Logs no terminal          | Recovery nodes (LangGraph)   | Auto-healing + alertas        |
 
 ## Fluxo de Dados — Marco I (Detalhado)
@@ -137,12 +140,26 @@ sequenceDiagram
     participant N as 🐈 Nanobot Loop
     participant P as 🌐 Playwright
     participant O as 📧 OWA (UFPR)
+    participant M as 🔐 Microsoft Login
+    participant T as 📲 Telegram Bot
     participant G as 🧠 Gemini API
     participant H as 👤 Humano
 
     C->>N: Trigger ciclo
     N->>P: Abrir browser (headless)
     P->>O: Navegar → Caixa de Entrada
+
+    alt Sessão expirada ou primeiro uso
+        P->>M: Preencher e-mail + senha (.env)
+        M-->>P: Desafio MFA (number matching)
+        P->>P: Extrair número de 2 dígitos
+        P->>T: Enviar número MFA
+        T->>H: 📲 "Número MFA: 42"
+        H->>M: Aprovar no Authenticator (celular)
+        M-->>P: Login concluído
+        P->>P: Salvar sessão (cookies + storage)
+    end
+
     O-->>P: DOM carregado
     P->>P: Extrair e-mails não lidos<br/>(remetente, assunto, corpo)
     P-->>N: Lista de e-mails

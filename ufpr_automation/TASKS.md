@@ -26,7 +26,9 @@
   - [x] Abrir navegador (headed/headless automático)
   - [x] Persistência de sessão (cookies + storage state)
   - [x] Detecção de login via URL + DOM
-  - [x] Aguardar login manual (5 min timeout)
+  - [x] Aguardar login manual (5 min timeout) — fallback
+  - [x] **Login automático** (credenciais via `.env` + MFA number-match via Telegram Bot)
+  - [x] **Re-login automático** quando sessão expira (sem intervenção manual)
   - [x] Varrer inbox e imprimir títulos dos e-mails
   - [x] 3 estratégias de fallback para extração (React selectors → aria → JS)
   - [x] Modo debug (`--debug`) com captura de DOM + screenshot
@@ -71,36 +73,36 @@
 
 ### 🔜 Pendente — Robustez (Ordered by Impact)
 
-- [ ] **1. Identificação estável de e-mails (substituir email_index)**
-  - [ ] Gerar hash estável `sender + subject + timestamp` como ID único
-  - [ ] Agir valida que o e-mail aberto corresponde ao esperado antes de digitar
-  - [ ] Eliminar dependência de índice posicional que quebra se inbox muda
+- [x] **1. Identificação estável de e-mails (substituir email_index)**
+  - [x] Gerar hash estável `sender + subject + timestamp` como ID único
+  - [x] Agir valida que o e-mail aberto corresponde ao esperado antes de digitar
+  - [x] Eliminar dependência de índice posicional que quebra se inbox muda
 
-- [ ] **2. Tratamento de falhas parciais no Pensar**
-  - [ ] Usar `asyncio.gather(*tasks, return_exceptions=True)` para não perder resultados bons
-  - [ ] Filtrar exceções e continuar pipeline com classificações bem-sucedidas
-  - [ ] Reportar falhas individuais no summary
+- [x] **2. Tratamento de falhas parciais no Pensar**
+  - [x] Usar `asyncio.gather(*tasks, return_exceptions=True)` para não perder resultados bons
+  - [x] Filtrar exceções e continuar pipeline com classificações bem-sucedidas
+  - [x] Reportar falhas individuais no summary
 
-- [ ] **3. Rate limiting nas chamadas LLM paralelas**
-  - [ ] Adicionar `asyncio.Semaphore(max_concurrent=5)` no Pensar
-  - [ ] Evitar exaustão de quota Gemini com muitos e-mails não lidos
+- [x] **3. Rate limiting nas chamadas LLM paralelas**
+  - [x] Adicionar `asyncio.Semaphore(max_concurrent=5)` no Pensar
+  - [x] Evitar exaustão de quota Gemini com muitos e-mails não lidos
 
-- [ ] **4. Substituir hard-coded `wait_for_timeout()` por waits adaptativos**
-  - [ ] Usar `wait_for_selector()` / `expect()` do Playwright onde possível
-  - [ ] Manter timeouts apenas como fallback com valores configuráveis
+- [x] **4. Substituir hard-coded `wait_for_timeout()` por waits adaptativos**
+  - [x] Usar `wait_for_selector()` / `expect()` do Playwright onde possível
+  - [x] Manter timeouts apenas como fallback com valores configuráveis
 
-- [ ] **5. Validação de `categoria` com Literal enum**
-  - [ ] Trocar `str` por `Literal[...]` em `EmailClassification.categoria`
-  - [ ] Garantir que LLM só retorna categorias válidas via schema
+- [x] **5. Validação de `categoria` com Literal enum**
+  - [x] Trocar `str` por `Literal[...]` em `EmailClassification.categoria`
+  - [x] Garantir que LLM só retorna categorias válidas via schema
 
-- [ ] **6. Testes unitários mínimos**
-  - [ ] Testes para `core/models.py` (EmailData, EmailClassification)
-  - [ ] Testes para `llm/client.py` (mock Gemini, validar schema)
-  - [ ] Teste end-to-end do pipeline com dados mock
+- [x] **6. Testes unitários mínimos**
+  - [x] Testes para `core/models.py` (EmailData, EmailClassification)
+  - [x] Testes para `llm/client.py` (mock Gemini, validar schema)
+  - [x] Teste end-to-end do pipeline com dados mock
 
-- [ ] **7. Logging persistente (structured)**
-  - [ ] Adicionar logging estruturado (JSON) para arquivo em `logs/`
-  - [ ] Substituir `print()` por `logger.info()` nos módulos principais
+- [x] **7. Logging persistente (structured)**
+  - [x] Adicionar logging estruturado (JSON) para arquivo em `logs/`
+  - [x] Substituir `print()` por `logger.info()` nos módulos principais
 
 ### 🔜 Pendente — Validação Manual (requer sessão OWA)
 
@@ -108,6 +110,11 @@
   - [ ] Testar `body_extractor.py` com sessão OWA real (`--perceber-only`)
   - [ ] Testar `responder.py` com sessão OWA real (rascunho manual)
   - [ ] Pipeline completo end-to-end com e-mails reais
+- [ ] **Validação do login automático**
+  - [ ] Testar auto-login com credenciais reais (preenchimento e-mail + senha)
+  - [ ] Testar extração do número MFA da página Microsoft
+  - [ ] Testar notificação Telegram com número MFA
+  - [ ] Testar re-login automático após expiração de sessão
 
 ---
 

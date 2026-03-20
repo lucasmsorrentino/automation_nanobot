@@ -13,8 +13,9 @@ from __future__ import annotations
 from playwright.async_api import Page
 
 from ufpr_automation.core.models import EmailClassification, EmailData
-from ufpr_automation.outlook.body_extractor import _click_email_at_index
+from ufpr_automation.outlook.body_extractor import _click_email_at_index, verify_opened_email
 from ufpr_automation.outlook.responder import save_draft_reply
+from ufpr_automation.utils.logging import logger
 
 
 class AgirAgent:
@@ -42,9 +43,9 @@ class AgirAgent:
         Returns:
             List of booleans indicating success for each email.
         """
-        print("\n" + "=" * 60)
-        print("✍️  AGIR — Salvando rascunhos no OWA")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("AGIR — Salvando rascunhos no OWA")
+        logger.info("=" * 60)
 
         results: list[bool] = []
 
@@ -52,22 +53,31 @@ class AgirAgent:
             subject_short = email.subject[:55]
 
             if not cls.sugestao_resposta.strip():
-                print(f"\n  ⏭️  [{subject_short}]")
-                print(f"      Sem sugestão de resposta — pulando (ação: {cls.acao_necessaria})")
+                logger.info("  [%s] Sem sugestão de resposta — pulando (ação: %s)",
+                            subject_short, cls.acao_necessaria)
                 results.append(False)
                 continue
 
-            print(f"\n  📧 [{subject_short}]")
-            print(f"      Abrindo e-mail {email.email_index} para responder...")
+            logger.info("  [%s] Abrindo e-mail %d para responder...",
+                        subject_short, email.email_index)
 
             # Re-open the email (reading pane may have changed since Perceber)
+            # _click_email_at_index already waits for the reading pane to render
             await _click_email_at_index(self._page, email.email_index)
-            await self._page.wait_for_timeout(1_000)
+
+            # Verify the opened email matches what we expect (guards against inbox shift)
+            if not await verify_opened_email(self._page, email):
+                logger.warning(
+                    "  E-mail aberto não corresponde ao esperado (id: %s) — pulando",
+                    email.stable_id[:8],
+                )
+                results.append(False)
+                continue
 
             success = await save_draft_reply(self._page, cls.sugestao_resposta)
             results.append(success)
 
         saved = sum(results)
-        print(f"\n✅ AgirAgent concluído — {saved}/{len(emails)} rascunho(s) salvo(s)")
-        print("🔔 NOTIFICAÇÃO: Revise os rascunhos no OWA antes de enviar.")
+        logger.info("AgirAgent concluído — %d/%d rascunho(s) salvo(s)", saved, len(emails))
+        logger.info("Revise os rascunhos no OWA antes de enviar.")
         return results

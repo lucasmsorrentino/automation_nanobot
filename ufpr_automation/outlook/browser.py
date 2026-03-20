@@ -4,7 +4,7 @@ Handles:
 - Creating Playwright browser contexts with optional saved state
 - Saving session state (cookies + storage) after successful login
 - Detecting whether the user is logged in
-- Waiting for manual login in headed mode
+- Automated login with credential filling and MFA number-match via Telegram
 """
 
 from __future__ import annotations
@@ -16,9 +16,13 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from ufpr_automation.config.settings import (
     BROWSER_TIMEOUT_MS,
     LOGIN_TIMEOUT_MS,
+    OWA_EMAIL,
+    OWA_PASSWORD,
     OWA_URL,
     SESSION_DIR,
     SESSION_STATE_FILE,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
     USER_AGENT,
     VIEWPORT,
 )
@@ -108,13 +112,141 @@ async def is_logged_in(page: Page) -> bool:
     return False
 
 
-async def wait_for_login(page: Page) -> bool:
+async def _send_telegram_notification(text: str) -> None:
+    """Send a notification message via Telegram bot."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️  Telegram não configurado — defina TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env")
+        return
+    try:
+        from telegram import Bot
+
+        bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=text)
+        print("📲 Notificação enviada via Telegram.")
+    except Exception as e:
+        print(f"⚠️  Falha ao enviar Telegram: {e}")
+
+
+def has_credentials() -> bool:
+    """Check if OWA login credentials are configured."""
+    return bool(OWA_EMAIL) and bool(OWA_PASSWORD)
+
+
+async def auto_login(page: Page) -> bool:
+    """Automated login: fill credentials, handle MFA number-match via Telegram.
+
+    Flow:
+    1. Navigate to OWA → Microsoft redirects to login page
+    2. Fill email → click Next
+    3. Fill password → click Sign In
+    4. Detect MFA number-match screen → extract number → send via Telegram
+    5. Wait for user to approve on Microsoft Authenticator
+    6. Detect inbox URL → return success
+
+    Falls back to wait_for_manual_login() if credentials are not configured.
+
+    Returns:
+        True if login was successful, False if timed out.
+    """
+    if not has_credentials():
+        print("⚠️  Credenciais não configuradas — usando login manual.")
+        return await wait_for_manual_login(page)
+
+    print("\n" + "=" * 60)
+    print("🤖 LOGIN AUTOMÁTICO — UFPR Outlook")
+    print("=" * 60)
+    print(f"📎 Navegando para: {OWA_URL}")
+
+    await page.goto(OWA_URL, wait_until="domcontentloaded", timeout=BROWSER_TIMEOUT_MS)
+
+    try:
+        # --- Step 1: Email ---
+        print(f"📧 Preenchendo e-mail: {OWA_EMAIL}")
+        email_input = page.locator('input[type="email"], input[name="loginfmt"]')
+        await email_input.wait_for(state="visible", timeout=30000)
+        await email_input.fill(OWA_EMAIL)
+        await page.locator('input[type="submit"], #idSIButton9').click()
+        await page.wait_for_timeout(2000)
+
+        # --- Step 2: Password ---
+        print("🔑 Preenchendo senha...")
+        password_input = page.locator('input[type="password"], input[name="passwd"]')
+        await password_input.wait_for(state="visible", timeout=30000)
+        await password_input.fill(OWA_PASSWORD)
+        await page.locator('input[type="submit"], #idSIButton9').click()
+        await page.wait_for_timeout(3000)
+
+        # --- Step 3: MFA Number Match ---
+        # Microsoft shows a 2-digit number the user must tap on Authenticator
+        mfa_number = await _extract_mfa_number(page)
+        if mfa_number:
+            print(f"\n{'=' * 40}")
+            print(f"   📱 NÚMERO MFA: {mfa_number}")
+            print(f"{'=' * 40}")
+            print("   Aprove no Microsoft Authenticator com este número.\n")
+            await _send_telegram_notification(
+                f"🔐 UFPR Login — Número MFA: {mfa_number}\n"
+                f"Aprove no Microsoft Authenticator."
+            )
+
+        # --- Step 4: Wait for redirect to inbox ---
+        print("⏳ Aguardando aprovação MFA...")
+        await page.wait_for_url("**/mail/**", timeout=LOGIN_TIMEOUT_MS)
+        print("✅ Login detectado! Redirecionado para a caixa de entrada.")
+
+        # Handle "Stay signed in?" prompt if it appears
+        try:
+            stay_signed_in = page.locator('#idSIButton9, input[value="Yes"]')
+            await stay_signed_in.click(timeout=5000)
+        except Exception:
+            pass
+
+        await page.wait_for_timeout(3000)
+        await _send_telegram_notification("✅ Login UFPR concluído com sucesso!")
+        return True
+
+    except Exception as e:
+        print(f"❌ Falha no login automático: {e}")
+        await _send_telegram_notification(f"❌ Falha no login UFPR: {e}")
+        return False
+
+
+async def _extract_mfa_number(page: Page) -> str | None:
+    """Extract the MFA number-match code from Microsoft's login page.
+
+    Microsoft Authenticator number matching shows a 2-digit number that the user
+    must tap on their phone to approve the sign-in.
+    """
+    # Common selectors for the MFA number display
+    selectors = ["#displaySign", ".display-sign", 'div[id="displaySign"]']
+    for selector in selectors:
+        try:
+            element = page.locator(selector)
+            await element.wait_for(state="visible", timeout=10000)
+            text = await element.text_content()
+            if text and text.strip().isdigit():
+                return text.strip()
+        except Exception:
+            continue
+
+    # Fallback: look for a prominent 2-digit number in the page
+    try:
+        # Microsoft sometimes uses different structures
+        number_el = page.locator("div.display-sign-container, .number-match-display")
+        await number_el.wait_for(state="visible", timeout=5000)
+        text = await number_el.text_content()
+        if text and text.strip().isdigit():
+            return text.strip()
+    except Exception:
+        pass
+
+    return None
+
+
+async def wait_for_manual_login(page: Page) -> bool:
     """Wait for the user to complete manual login in headed mode.
 
     Navigates to OWA and waits until the inbox is detected or timeout is reached.
-
-    Args:
-        page: The Playwright page to use.
 
     Returns:
         True if login was successful, False if timed out.
@@ -133,7 +265,6 @@ async def wait_for_login(page: Page) -> bool:
         await page.wait_for_url("**/mail/**", timeout=LOGIN_TIMEOUT_MS)
         print("✅ Login detectado! Redirecionado para a caixa de entrada.")
 
-        # Give OWA a moment to fully load its dynamic content
         await page.wait_for_timeout(3000)
         return True
 

@@ -43,6 +43,10 @@ DEBUG_OUTPUT_DIR = _PACKAGE_DIR / "debug_output"
 # Outlook Web Access (OWA)
 # ============================================================================
 
+# Credentials for automated login (loaded from .env — NEVER hardcode)
+OWA_EMAIL = os.getenv("OWA_EMAIL", "")
+OWA_PASSWORD = os.getenv("OWA_PASSWORD", "")
+
 # Base URL for UFPR's Outlook Web Access
 OWA_URL = os.getenv("OWA_URL", "https://outlook.office365.com/mail/")
 
@@ -85,6 +89,10 @@ ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL")
 # ============================================================================
 # LLM Provider (for future Marco I Gemini integration)
 # ============================================================================
+
+# Telegram notification for MFA number matching
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # API Key for the LLM provider (NEVER hardcode this!)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

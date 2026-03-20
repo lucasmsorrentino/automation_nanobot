@@ -7,6 +7,7 @@
     <img src="https://img.shields.io/badge/framework-nanobot-orange" alt="nanobot">
     <img src="https://img.shields.io/badge/RPA-Playwright-green" alt="Playwright">
     <img src="https://img.shields.io/badge/LLM-Gemini_1.5_Pro-violet" alt="Gemini">
+    <img src="https://img.shields.io/badge/MFA-Telegram_Bot-blue" alt="Telegram MFA">
   </p>
 </div>
 
@@ -103,20 +104,30 @@ python -m playwright install chromium
 cp ufpr_automation/.env.example ufpr_automation/.env
 ```
 
-Edite o `.env` com sua API key do Gemini e URLs do OWA:
+Edite o `.env` com suas credenciais e chaves:
 
 ```env
+# Login automático
+OWA_EMAIL=seu.email@ufpr.br
+OWA_PASSWORD=sua_senha_aqui
+
+# Notificação MFA via Telegram
+TELEGRAM_BOT_TOKEN=token_do_botfather
+TELEGRAM_CHAT_ID=seu_chat_id
+
+# LLM
 GEMINI_API_KEY=sua_chave_aqui
-OWA_URL=https://outlook.office365.com/mail/
 ```
 
-### 3. Primeiro Uso — Login Manual
+### 3. Primeiro Uso — Login Automático com MFA via Telegram
 
 ```bash
 python -m ufpr_automation
 ```
 
-O navegador abrirá em modo visível. Faça login no OWA da UFPR manualmente. A sessão será salva automaticamente em `session_data/state.json`.
+O sistema preenche e-mail e senha automaticamente na página da Microsoft. Quando o MFA de **number matching** aparecer, o número de 2 dígitos é enviado para o seu **Telegram** — basta aprovar no Microsoft Authenticator pelo celular. A sessão é salva em `session_data/state.json`.
+
+> **Sem credenciais?** Se `OWA_EMAIL`/`OWA_PASSWORD` não estiverem configurados, o sistema abre o navegador para login manual (comportamento legado).
 
 ### 4. Execuções Seguintes — Headless
 
@@ -124,7 +135,7 @@ O navegador abrirá em modo visível. Faça login no OWA da UFPR manualmente. A 
 python -m ufpr_automation
 ```
 
-O script detecta a sessão salva e executa em background (headless), imprimindo os e-mails no terminal.
+O script detecta a sessão salva e executa em background (headless). Se a sessão expirar, o login automático é executado novamente — sem necessidade de intervenção manual.
 
 ---
 
@@ -159,13 +170,15 @@ O script detecta a sessão salva e executa em background (headless), imprimindo 
 - **Playwright** — Automação de navegador (RPA)
 - **nanobot** — Framework de agente AI (loop Perceber-Pensar-Agir)
 - **Gemini 1.5 Pro** — Motor cognitivo (facilmente cambiável)
+- **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
 
 ---
 
 ## 📝 Notas Importantes
 
-- **Sessão do browser**: Salva em `session_data/state.json`. Se expirar, delete o arquivo e execute novamente.
+- **Login automático**: Credenciais são lidas do `.env`. O número MFA é enviado via Telegram para aprovação remota no Microsoft Authenticator.
+- **Sessão do browser**: Salva em `session_data/state.json`. Se expirar, o login automático é re-executado automaticamente.
 - **Seletores OWA**: O scraper usa 3 estratégias de fallback. Use `--debug` quando seletores pararem de funcionar.
 - **Segurança**: Nunca comite o `.env` — ele já está no `.gitignore`.
 - **Human-in-the-loop**: O sistema **nunca** envia e-mails automaticamente — sempre salva como rascunho.

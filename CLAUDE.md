@@ -27,10 +27,11 @@ nanobot agent -m "..."   # send a message
 nanobot gateway          # start the gateway server
 nanobot status           # show current status
 
-# Run UFPR automation
-python -m ufpr_automation
-python -m ufpr_automation --debug
-python -m ufpr_automation --headed   # visible browser (Playwright)
+# Run UFPR automation (auto-login + MFA via Telegram)
+python -m ufpr_automation               # full pipeline (headless, auto-login)
+python -m ufpr_automation --debug       # capture DOM + screenshot
+python -m ufpr_automation --headed      # force visible browser
+python -m ufpr_automation --perceber-only  # scrape only, no LLM
 ```
 
 ## Architecture
@@ -64,7 +65,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 
 **Packages under `ufpr_automation/`:**
 
-- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access).
+- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access). Includes automated login with credential filling and MFA number-match notification via Telegram Bot.
 - **`llm/`** — Gemini API client for email classification and draft generation (ICL: UFPR regulations in system prompt).
 - **`config/`** — `.env`-based settings (UTF-8 aware for Windows).
 - **`core/`** — Domain model (`EmailData`).
@@ -75,7 +76,7 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 ## Configuration
 
 - **`pyproject.toml`** — Package metadata, dependencies, Ruff config (line-length=100, target py311). Build backend: hatchling.
-- **`.env`** (in `ufpr_automation/`) — LLM API keys and Outlook credentials. See `.env.example`.
+- **`.env`** (in `ufpr_automation/`) — OWA credentials, Telegram bot token/chat ID, LLM API keys. See `.env.example`.
 - **`docker-compose.yml`** — Two services: `nanobot-gateway` (port 18790, 1 CPU) and `nanobot-cli`.
 - **`nanobot/templates/`** — Default config templates copied during `nanobot onboard`.
 
@@ -84,4 +85,4 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 - `main` — Production releases
 - `nightly` — Experimental / breaking changes
 - Feature branches: `feat/<name>`
-- Current branch `feat/soul-internship-regulations` adds internship regulation ICL knowledge to UFPR automation.
+- Current branch `feat/marco-i-unified` — Marco I unified implementation with auto-login + MFA via Telegram.

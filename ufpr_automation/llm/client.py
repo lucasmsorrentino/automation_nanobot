@@ -6,7 +6,6 @@ so PensarAgent can run multiple classifications concurrently.
 """
 
 import json
-from pathlib import Path
 from typing import Optional
 
 from google import genai
@@ -14,7 +13,8 @@ from google.genai import types
 from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings
-from ufpr_automation.core.models import EmailData, EmailClassification
+from ufpr_automation.core.models import EmailClassification, EmailData
+from ufpr_automation.utils.logging import logger
 
 
 class GeminiClient:
@@ -108,9 +108,9 @@ class GeminiClient:
             return adapter.validate_python(json.loads(response.text))
 
         except Exception as e:
-            print(f"  ⚠️  Erro ao classificar '{email.subject}': {e}")
+            logger.warning("Erro ao classificar '%s': %s", email.subject, e)
             return EmailClassification(
-                categoria="Erro",
+                categoria="Outros",
                 resumo=f"Erro na análise LLM: {e}",
                 acao_necessaria="Revisão Manual",
                 sugestao_resposta="",
@@ -125,21 +125,14 @@ class GeminiClient:
 
         Uses the google-genai async interface so multiple emails can be
         classified concurrently via asyncio.gather().
-        """
-        try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model_id,
-                contents=self._build_prompt(email),
-                config=self._generation_config(),
-            )
-            adapter = TypeAdapter(EmailClassification)
-            return adapter.validate_python(json.loads(response.text))
 
-        except Exception as e:
-            print(f"  ⚠️  Erro ao classificar '{email.subject}': {e}")
-            return EmailClassification(
-                categoria="Erro",
-                resumo=f"Erro na análise LLM: {e}",
-                acao_necessaria="Revisão Manual",
-                sugestao_resposta="",
-            )
+        Raises on failure — partial failure handling in run_pensar_concurrently()
+        ensures that individual errors don't break the whole pipeline.
+        """
+        response = await self.client.aio.models.generate_content(
+            model=self.model_id,
+            contents=self._build_prompt(email),
+            config=self._generation_config(),
+        )
+        adapter = TypeAdapter(EmailClassification)
+        return adapter.validate_python(json.loads(response.text))

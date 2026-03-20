@@ -24,6 +24,7 @@ from playwright.async_api import Page
 from ufpr_automation.agents.agir import AgirAgent
 from ufpr_automation.agents.pensar import run_pensar_concurrently
 from ufpr_automation.agents.perceber import PerceberAgent
+from ufpr_automation.utils.logging import logger
 
 
 async def run_pipeline(page: Page) -> dict:
@@ -55,19 +56,19 @@ async def run_pipeline(page: Page) -> dict:
         }
 
     # ------------------------------------------------------------------ #
-    # Phase 2 — PENSAR  (concurrent LLM calls)                            #
+    # Phase 2 — PENSAR  (concurrent LLM calls, partial failures handled)  #
     # ------------------------------------------------------------------ #
-    classifications = await run_pensar_concurrently(emails)
+    classified_emails, classifications = await run_pensar_concurrently(emails)
 
     # Attach classifications back to EmailData objects for the summary
-    for email, cls in zip(emails, classifications):
+    for email, cls in zip(classified_emails, classifications):
         email.classification = cls
 
     # ------------------------------------------------------------------ #
-    # Phase 3 — AGIR                                                       #
+    # Phase 3 — AGIR  (only for successfully classified emails)            #
     # ------------------------------------------------------------------ #
     agir = AgirAgent(page)
-    results = await agir.run(emails, classifications)
+    results = await agir.run(classified_emails, classifications)
 
     drafts_saved = sum(results)
 
@@ -80,27 +81,32 @@ async def run_pipeline(page: Page) -> dict:
 
 
 def print_summary(result: dict) -> None:
-    """Print a human-readable pipeline summary."""
-    print("\n" + "=" * 60)
-    print("📊 RESUMO DO PIPELINE")
-    print("=" * 60)
-    print(f"  E-mails não lidos processados : {result['total_unread']}")
-    print(f"  Classificações geradas        : {result['classified']}")
-    print(f"  Rascunhos salvos              : {result['drafts_saved']}")
-    print("=" * 60)
+    """Log a human-readable pipeline summary."""
+    logger.info("=" * 60)
+    logger.info("RESUMO DO PIPELINE")
+    logger.info("=" * 60)
+    logger.info(
+        "Pipeline concluído",
+        extra={
+            "total_unread": result["total_unread"],
+            "classified": result["classified"],
+            "drafts_saved": result["drafts_saved"],
+        },
+    )
+    logger.info("  E-mails não lidos processados : %d", result["total_unread"])
+    logger.info("  Classificações geradas        : %d", result["classified"])
+    logger.info("  Rascunhos salvos              : %d", result["drafts_saved"])
 
     if result["emails"]:
-        print("\n  Detalhes por e-mail:")
+        logger.info("  Detalhes por e-mail:")
         for i, email in enumerate(result["emails"], 1):
             cls = email.classification
             cat = cls.categoria if cls else "—"
             action = cls.acao_necessaria if cls else "—"
-            has_draft = "✅ rascunho salvo" if (cls and cls.sugestao_resposta) else "⏭️  sem resposta"
-            print(f"\n  {i}. {email.subject[:55]}")
-            print(f"     Categoria: {cat}  |  Ação: {action}")
-            print(f"     Status  : {has_draft}")
+            has_draft = "rascunho salvo" if (cls and cls.sugestao_resposta) else "sem resposta"
+            logger.info("  %d. %s | %s | %s | %s", i, email.subject[:55], cat, action, has_draft)
 
-    print(
-        "\n🔔 Revise os rascunhos no OWA (pasta Rascunhos) antes de enviar."
-        "\n   Nenhum e-mail foi enviado automaticamente."
+    logger.info(
+        "Revise os rascunhos no OWA (pasta Rascunhos) antes de enviar. "
+        "Nenhum e-mail foi enviado automaticamente."
     )

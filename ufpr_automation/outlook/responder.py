@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from playwright.async_api import Page
 
+from ufpr_automation.utils.logging import logger
 
 # ---------------------------------------------------------------------------
 # Selector banks
@@ -91,8 +92,12 @@ async def _clear_compose_area(page: Page, el) -> None:
 
 async def _close_and_save_draft(page: Page) -> None:
     """Close the compose pane.  OWA auto-saves as draft when you close."""
-    # Wait for OWA to register the content (auto-save delay)
-    await page.wait_for_timeout(2_500)
+    # Wait for OWA auto-save (fires after ~2 s of typing inactivity).
+    # Use networkidle as an adaptive signal, with a fixed fallback.
+    try:
+        await page.wait_for_load_state("networkidle", timeout=5_000)
+    except Exception:
+        await page.wait_for_timeout(2_000)
 
     # Try "Discard / Close" button — OWA will prompt to save as draft
     for selector in _CLOSE_COMPOSE_SELECTORS:
@@ -100,8 +105,15 @@ async def _close_and_save_draft(page: Page) -> None:
             el = await page.query_selector(selector)
             if el and await el.is_visible():
                 await el.click()
-                await page.wait_for_timeout(800)
-                # OWA may show a "Save as draft?" dialog
+                # Wait for save dialog to appear (or compose to close)
+                try:
+                    await page.wait_for_selector(
+                        ", ".join(f"button:has-text('{t}')" for t in ["Save", "Salvar", "Sim", "Yes"]),
+                        state="visible",
+                        timeout=3_000,
+                    )
+                except Exception:
+                    pass
                 await _handle_save_dialog(page)
                 return
         except Exception:
@@ -148,15 +160,15 @@ async def save_draft_reply(page: Page, reply_text: str) -> bool:
     # 1. Click Reply
     reply_clicked = await _click_reply_button(page)
     if not reply_clicked:
-        print("  ⚠️  Botão Reply não encontrado — verifique se o e-mail está aberto")
+        logger.warning("Botão Reply não encontrado — verifique se o e-mail está aberto")
         return False
 
-    await page.wait_for_timeout(1_000)
+    # _get_compose_area already waits for the compose element to appear
 
     # 2. Get compose area
     compose = await _get_compose_area(page)
     if not compose:
-        print("  ⚠️  Área de composição não encontrada após clicar em Reply")
+        logger.warning("Área de composição não encontrada após clicar em Reply")
         return False
 
     # 3. Clear existing content and type the reply
@@ -166,5 +178,5 @@ async def save_draft_reply(page: Page, reply_text: str) -> bool:
     # 4. Close and let OWA save the draft
     await _close_and_save_draft(page)
 
-    print("  ✅ Rascunho salvo — aguardando revisão humana antes do envio")
+    logger.info("Rascunho salvo — aguardando revisão humana antes do envio")
     return True

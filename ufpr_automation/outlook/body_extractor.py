@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from playwright.async_api import Page
 
+from ufpr_automation.core.models import EmailData
+from ufpr_automation.utils.logging import logger
 
 # ---------------------------------------------------------------------------
 # Reading-pane body selectors (in preference order)
@@ -61,11 +63,19 @@ async def extract_email_body(page: Page, email_index: int) -> str:
     """
     clicked = await _click_email_at_index(page, email_index)
     if not clicked:
-        print(f"  ⚠️  Não foi possível clicar no e-mail {email_index}")
+        logger.warning("Não foi possível clicar no e-mail %d", email_index)
         return ""
 
-    # Give OWA a moment to fully render the body
-    await page.wait_for_timeout(1_500)
+    # Wait for a body element to become visible instead of a fixed delay
+    try:
+        await page.wait_for_selector(
+            ", ".join(_BODY_SELECTORS[:4]),
+            state="visible",
+            timeout=8_000,
+        )
+    except Exception:
+        # Fallback: short wait if no body selector matched
+        await page.wait_for_timeout(1_000)
 
     # Try each body selector
     for selector in _BODY_SELECTORS:
@@ -98,7 +108,51 @@ async def extract_email_body(page: Page, email_index: int) -> str:
         if text:
             return text
     except Exception as e:
-        print(f"  ⚠️  Erro na extração JS do corpo: {e}")
+        logger.warning("Erro na extração JS do corpo: %s", e)
 
-    print(f"  ⚠️  Corpo vazio para o e-mail {email_index} — use --debug para inspecionar")
+    logger.warning("Corpo vazio para o e-mail %d — use --debug para inspecionar", email_index)
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Reading-pane subject selectors (for identity verification)
+# ---------------------------------------------------------------------------
+_SUBJECT_SELECTORS = [
+    "div[class*='SubjectLine'] span",
+    "[aria-label*='Assunto'] span",
+    "[aria-label*='Subject'] span",
+    "span[class*='subject']",
+    "span[class*='Subject']",
+]
+
+
+async def verify_opened_email(page: Page, expected: EmailData) -> bool:
+    """Check that the email currently open in the reading pane matches *expected*.
+
+    Compares the subject line visible in the reading pane against the expected
+    email's subject. This guards against the inbox shifting between pipeline
+    phases, which would cause the positional index to point to the wrong email.
+
+    Returns True if the subject matches (or if verification cannot be performed),
+    False if a definite mismatch is detected.
+    """
+    for selector in _SUBJECT_SELECTORS:
+        try:
+            el = await page.query_selector(selector)
+            if el:
+                visible_subject = (await el.inner_text()).strip()
+                if visible_subject and expected.subject:
+                    # Normalize: compare lowered, trimmed first 50 chars
+                    if visible_subject[:50].lower() == expected.subject[:50].lower():
+                        return True
+                    # Definite mismatch
+                    logger.warning(
+                        "MISMATCH: esperado '%s' mas encontrou '%s'",
+                        expected.subject[:50], visible_subject[:50],
+                    )
+                    return False
+        except Exception:
+            continue
+
+    # Could not verify — allow to proceed (best-effort)
+    return True

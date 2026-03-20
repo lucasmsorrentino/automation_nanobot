@@ -18,6 +18,7 @@ from playwright.async_api import Page
 
 from ufpr_automation.config.settings import BROWSER_TIMEOUT_MS
 from ufpr_automation.core.models import EmailData
+from ufpr_automation.utils.logging import logger
 
 
 async def wait_for_inbox_load(page: Page) -> bool:
@@ -42,18 +43,18 @@ async def wait_for_inbox_load(page: Page) -> bool:
                 await page.wait_for_selector(
                     selector, state="visible", timeout=15_000
                 )
-                print(f"✅ Inbox carregada (selector: {selector})")
+                logger.info("Inbox carregada (selector: %s)", selector)
                 return True
             except Exception:
                 continue
 
         # Fallback: wait for any substantial content to load
-        print("⚠️ Nenhum selector padrão encontrado — tentando fallback genérico...")
+        logger.warning("Nenhum selector padrão encontrado — tentando fallback genérico...")
         await page.wait_for_load_state("networkidle", timeout=BROWSER_TIMEOUT_MS)
         return True
 
     except Exception as e:
-        print(f"❌ Erro ao aguardar carregamento da inbox: {e}")
+        logger.error("Erro ao aguardar carregamento da inbox: %s", e)
         return False
 
 
@@ -71,39 +72,41 @@ async def scrape_inbox(page: Page) -> list[EmailData]:
     """
     emails: list[EmailData] = []
 
-    print("\n📬 Iniciando varredura da caixa de entrada...")
+    logger.info("Iniciando varredura da caixa de entrada...")
 
     loaded = await wait_for_inbox_load(page)
     if not loaded:
-        print("❌ Não foi possível carregar a caixa de entrada.")
+        logger.error("Não foi possível carregar a caixa de entrada.")
         return emails
 
-    # Give dynamic content a moment to settle
-    await page.wait_for_timeout(2000)
+    # Wait for dynamic content to settle (network-based, with fixed fallback)
+    try:
+        await page.wait_for_load_state("networkidle", timeout=5_000)
+    except Exception:
+        await page.wait_for_timeout(1_500)
 
     # Strategy 1: Modern OWA selectors (React-based)
     emails = await _scrape_modern_owa(page)
 
     # Strategy 2: Aria-label attribute parsing
     if not emails:
-        print("🔄 Tentando seletores alternativos...")
+        logger.info("Tentando seletores alternativos...")
         emails = await _scrape_generic_owa(page)
 
     # Strategy 3: JavaScript DOM extraction
     if not emails:
-        print("🔄 Tentando extração via JavaScript...")
+        logger.info("Tentando extração via JavaScript...")
         emails = await _scrape_via_javascript(page)
 
     if emails:
-        print(f"\n✅ {len(emails)} e-mail(s) encontrado(s) na caixa de entrada:")
-        print("-" * 60)
+        logger.info("%d e-mail(s) encontrado(s) na caixa de entrada", len(emails))
         for i, email in enumerate(emails, 1):
-            print(f"  {i}. {email}")
-        print("-" * 60)
+            logger.info("  %d. %s", i, email)
     else:
-        print("\n⚠️ Nenhum e-mail encontrado. A caixa de entrada pode estar vazia")
-        print("   ou os seletores do OWA podem ter mudado.")
-        print("   Execute com --debug para capturar o DOM atual.")
+        logger.warning(
+            "Nenhum e-mail encontrado. A caixa de entrada pode estar vazia "
+            "ou os seletores do OWA podem ter mudado. Execute com --debug."
+        )
 
     return emails
 
@@ -159,7 +162,7 @@ async def _scrape_modern_owa(page: Page) -> list[EmailData]:
                 emails.append(email)
 
     except Exception as e:
-        print(f"⚠️ Erro na extração moderna: {e}")
+        logger.warning("Erro na extração moderna: %s", e)
 
     return emails
 
@@ -198,7 +201,7 @@ async def _scrape_generic_owa(page: Page) -> list[EmailData]:
                 emails.append(email)
 
     except Exception as e:
-        print(f"⚠️ Erro na extração genérica: {e}")
+        logger.warning("Erro na extração genérica: %s", e)
 
     return emails
 
@@ -248,6 +251,6 @@ async def _scrape_via_javascript(page: Page) -> list[EmailData]:
                 )
 
     except Exception as e:
-        print(f"⚠️ Erro na extração via JavaScript: {e}")
+        logger.warning("Erro na extração via JavaScript: %s", e)
 
     return emails

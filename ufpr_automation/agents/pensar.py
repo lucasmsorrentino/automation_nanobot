@@ -14,6 +14,10 @@ import asyncio
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.llm.client import GeminiClient
+from ufpr_automation.utils.logging import logger
+
+# Maximum concurrent LLM calls to avoid Gemini quota exhaustion
+MAX_CONCURRENT_LLM_CALLS = 5
 
 
 class PensarAgent:
@@ -32,47 +36,76 @@ class PensarAgent:
         self._client = client
         self._email = email
 
-    async def run(self) -> EmailClassification:
+    async def run(self, semaphore: asyncio.Semaphore) -> EmailClassification:
         """Classify the email and return a structured classification + draft."""
-        return await self._client.classify_email_async(self._email)
+        async with semaphore:
+            return await self._client.classify_email_async(self._email)
 
 
-async def run_pensar_concurrently(emails: list[EmailData]) -> list[EmailClassification]:
+async def run_pensar_concurrently(
+    emails: list[EmailData],
+) -> tuple[list[EmailData], list[EmailClassification]]:
     """Run one PensarAgent per email, all concurrently.
 
     This is the multi-agent heart of the pipeline: each email gets its own
-    independent LLM call, all fired at the same time.
+    independent LLM call, all fired at the same time.  Individual failures
+    are caught and reported, and the pipeline continues with the successful
+    classifications.
 
     Args:
         emails: Unread emails with fully populated ``body`` fields.
 
     Returns:
-        List of EmailClassification objects in the same order as *emails*.
+        Tuple of (successful_emails, classifications) — same order, with
+        failed emails filtered out.
     """
     if not emails:
-        return []
+        return [], []
 
-    print("\n" + "=" * 60)
-    print(f"🧠 PENSAR — {len(emails)} agente(s) classificando em paralelo")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("PENSAR — %d agente(s) classificando em paralelo", len(emails))
+    logger.info("=" * 60)
 
     # One shared client (one HTTP connection pool, one API key auth)
     client = GeminiClient()
 
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
     agents = [PensarAgent(client, email) for email in emails]
-    tasks = [agent.run() for agent in agents]
+    tasks = [agent.run(semaphore) for agent in agents]
 
-    print(f"  ⏳ Disparando {len(tasks)} chamada(s) assíncronas ao Gemini...")
-    classifications = await asyncio.gather(*tasks)
+    logger.info(
+        "Disparando %d chamada(s) assíncronas ao Gemini (máx %d simultâneas)...",
+        len(tasks), MAX_CONCURRENT_LLM_CALLS,
+    )
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for email, cls in zip(emails, classifications):
-        print(f"\n  📧 {email.subject[:55]}")
-        print(f"     Categoria : {cls.categoria}")
-        print(f"     Resumo    : {cls.resumo}")
-        print(f"     Ação      : {cls.acao_necessaria}")
+    # Separate successes from failures
+    successful_emails: list[EmailData] = []
+    classifications: list[EmailClassification] = []
+    failures: list[tuple[EmailData, Exception]] = []
+
+    for email, result in zip(emails, results):
+        if isinstance(result, Exception):
+            failures.append((email, result))
+        else:
+            successful_emails.append(email)
+            classifications.append(result)
+
+    # Report successes
+    for email, cls in zip(successful_emails, classifications):
+        logger.info("  %s | %s | %s", email.subject[:55], cls.categoria, cls.acao_necessaria)
         if cls.sugestao_resposta:
             lines = cls.sugestao_resposta.split("\n")
-            print(f"     Rascunho  : {lines[0][:70]}{'…' if len(lines) > 1 else ''}")
+            logger.debug("     Rascunho: %s", lines[0][:70])
 
-    print(f"\n✅ PensarAgent concluído — {len(classifications)} classificação(ões)")
-    return list(classifications)
+    # Report failures
+    if failures:
+        logger.warning("%d classificação(ões) falharam:", len(failures))
+        for email, exc in failures:
+            logger.warning("  %s — %s: %s", email.subject[:55], type(exc).__name__, exc)
+
+    logger.info(
+        "PensarAgent concluído — %d/%d classificação(ões) bem-sucedidas",
+        len(classifications), len(emails),
+    )
+    return successful_emails, classifications

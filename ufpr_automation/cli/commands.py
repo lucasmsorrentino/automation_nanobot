@@ -28,12 +28,13 @@ import asyncio
 from ufpr_automation.config.settings import OWA_INBOX_URL, OWA_URL
 from ufpr_automation.orchestrator import print_summary, run_pipeline
 from ufpr_automation.outlook.browser import (
+    auto_login,
     create_browser_context,
+    has_credentials,
     has_saved_session,
     is_logged_in,
     launch_browser,
     save_session_state,
-    wait_for_login,
 )
 from ufpr_automation.utils.debug import capture_debug_info
 
@@ -95,12 +96,18 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
     print("=" * 60)
 
     session_exists = has_saved_session()
-    use_headless = session_exists and not headed
+    credentials_ok = has_credentials()
+
+    # With credentials, we can always run headless (auto-login handles MFA via Telegram).
+    # Without credentials, we need a visible window for manual login.
+    use_headless = (session_exists or credentials_ok) and not headed
 
     if session_exists:
         print("🔑 Sessão salva detectada.")
         if headed:
             print("   (--headed: usando modo com janela visível)")
+    elif credentials_ok:
+        print("🤖 Credenciais configuradas — login automático disponível.")
     else:
         print("🆕 Primeira execução — login manual necessário.")
         use_headless = False
@@ -118,10 +125,10 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
 
         logged_in = await is_logged_in(page)
         if not logged_in:
-            if use_headless:
-                print("⚠️  Sessão expirada! Delete session_data/state.json e execute novamente.")
-                return
-            login_success = await wait_for_login(page)
+            if use_headless and session_exists:
+                # Session expired — auto-retry with credentials instead of failing
+                print("⚠️  Sessão expirada! Tentando login automático...")
+            login_success = await auto_login(page)
             if not login_success:
                 print("❌ Login não completado dentro do tempo limite.")
                 return
