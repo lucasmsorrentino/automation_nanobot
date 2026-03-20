@@ -1,4 +1,4 @@
-"""Client to interact with Gemini 1.5 Pro via Google GenAI SDK.
+"""Client to interact with LLMs via LiteLLM (currently MiniMax).
 
 Used by PensarAgent to classify emails and generate draft responses.
 Supports both sync (classify_email) and async (classify_email_async) calls
@@ -6,10 +6,10 @@ so PensarAgent can run multiple classifications concurrently.
 """
 
 import json
+import re
 from typing import Optional
 
-from google import genai
-from google.genai import types
+import litellm
 from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings
@@ -17,8 +17,8 @@ from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.utils.logging import logger
 
 
-class GeminiClient:
-    """Client for generating email classifications using Gemini.
+class LLMClient:
+    """Client for generating email classifications using LiteLLM.
 
     Args:
         system_instruction: Override the default system instruction.
@@ -26,18 +26,15 @@ class GeminiClient:
     """
 
     def __init__(self, system_instruction: Optional[str] = None):
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not set in settings or .env!")
+        # LiteLLM reads API keys from env vars (MINIMAX_API_KEY, GEMINI_API_KEY, etc.)
+        # Validate that *some* key is configured for the chosen provider.
+        provider = settings.LLM_PROVIDER
+        key_map = {"minimax": settings.MINIMAX_API_KEY, "gemini": settings.GEMINI_API_KEY}
+        api_key = key_map.get(provider, "")
+        if not api_key:
+            raise ValueError(f"No API key found for provider '{provider}'. Set the appropriate env var.")
 
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
-        # Strip the "gemini/" prefix that nanobot config adds
-        self.model_id = (
-            settings.LLM_MODEL.replace("gemini/", "", 1)
-            if settings.LLM_MODEL.startswith("gemini/")
-            else settings.LLM_MODEL
-        )
-
+        self.model_id = settings.LLM_MODEL
         self.system_instruction = system_instruction or self._build_system_instruction()
 
     # ------------------------------------------------------------------
@@ -68,29 +65,35 @@ class GeminiClient:
         )
 
     # ------------------------------------------------------------------
-    # Shared config factory
+    # Shared helpers
     # ------------------------------------------------------------------
 
-    def _generation_config(self) -> types.GenerateContentConfig:
-        return types.GenerateContentConfig(
-            system_instruction=self.system_instruction,
-            response_mime_type="application/json",
-            response_schema=EmailClassification,
-            temperature=0.2,
-        )
+    @staticmethod
+    def _extract_json(text: str) -> str:
+        """Strip markdown code fences (```json ... ```) if present."""
+        m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+        return m.group(1).strip() if m else text.strip()
 
-    def _build_prompt(self, email: EmailData) -> str:
-        """Build the classification prompt, preferring full body over preview."""
+    def _build_messages(self, email: EmailData) -> list[dict]:
+        """Build the messages list for litellm completion."""
         content = email.body if email.body else email.preview
         content_label = "Corpo completo" if email.body else "Preview"
-        return (
+        user_prompt = (
             "Por favor, analise o seguinte e-mail recebido na caixa de entrada:\n\n"
             f"Remetente: {email.sender}\n"
             f"Assunto: {email.subject}\n"
             f"{content_label}:\n{content}\n\n"
             "Classifique o e-mail e redija uma resposta adequada seguindo as normas "
-            "da UFPR contidas no seu contexto."
+            "da UFPR contidas no seu contexto.\n\n"
+            "Responda SOMENTE com um JSON válido contendo as chaves: "
+            '"categoria", "resumo", "acao_necessaria", "sugestao_resposta".\n'
+            "Categorias válidas: Estágios, Ofícios, Memorandos, Requerimentos, "
+            "Portarias, Informes, Urgente, Correio Lixo, Outros."
         )
+        return [
+            {"role": "system", "content": self.system_instruction},
+            {"role": "user", "content": user_prompt},
+        ]
 
     # ------------------------------------------------------------------
     # Sync classification
@@ -99,13 +102,15 @@ class GeminiClient:
     def classify_email(self, email: EmailData) -> EmailClassification:
         """Classify and draft a reply for *email* (synchronous)."""
         try:
-            response = self.client.models.generate_content(
+            response = litellm.completion(
                 model=self.model_id,
-                contents=self._build_prompt(email),
-                config=self._generation_config(),
+                messages=self._build_messages(email),
+                temperature=0.2,
             )
+            raw = response.choices[0].message.content
+            text = self._extract_json(raw)
             adapter = TypeAdapter(EmailClassification)
-            return adapter.validate_python(json.loads(response.text))
+            return adapter.validate_python(json.loads(text))
 
         except Exception as e:
             logger.warning("Erro ao classificar '%s': %s", email.subject, e)
@@ -123,16 +128,22 @@ class GeminiClient:
     async def classify_email_async(self, email: EmailData) -> EmailClassification:
         """Classify and draft a reply for *email* (asynchronous).
 
-        Uses the google-genai async interface so multiple emails can be
+        Uses litellm.acompletion() so multiple emails can be
         classified concurrently via asyncio.gather().
 
         Raises on failure — partial failure handling in run_pensar_concurrently()
         ensures that individual errors don't break the whole pipeline.
         """
-        response = await self.client.aio.models.generate_content(
+        response = await litellm.acompletion(
             model=self.model_id,
-            contents=self._build_prompt(email),
-            config=self._generation_config(),
+            messages=self._build_messages(email),
+            temperature=0.2,
         )
+        raw = response.choices[0].message.content
+        text = self._extract_json(raw)
         adapter = TypeAdapter(EmailClassification)
-        return adapter.validate_python(json.loads(response.text))
+        return adapter.validate_python(json.loads(text))
+
+
+# Backward-compatible alias
+GeminiClient = LLMClient

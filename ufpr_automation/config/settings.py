@@ -96,10 +96,11 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # API Key for the LLM provider (NEVER hardcode this!)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 
 # Model to use for classification and response generation
-# Easily swappable: change this to any model supported by nanobot
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemini-2.0-flash")
+# Easily swappable: change this to any model supported by LiteLLM
+LLM_MODEL = os.getenv("LLM_MODEL", "minimax/MiniMax-M2")
 
 # Provider name (matches nanobot config.json providers key)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")

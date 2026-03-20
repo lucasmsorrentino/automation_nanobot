@@ -66,7 +66,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 **Packages under `ufpr_automation/`:**
 
 - **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access). Includes automated login with credential filling and MFA number-match notification via Telegram Bot.
-- **`llm/`** — LLM client for email classification and draft generation (ICL: UFPR regulations in system prompt). Migrating from Gemini (google-genai) to LiteLLM + MiniMax.
+- **`llm/`** — LLM client for email classification and draft generation (ICL: UFPR regulations in system prompt). Uses LiteLLM (provider-agnostic); currently configured for MiniMax-M2.
 - **`config/`** — `.env`-based settings (UTF-8 aware for Windows).
 - **`core/`** — Domain model (`EmailData`).
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.

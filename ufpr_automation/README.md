@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/python-≥3.12-blue" alt="Python">
     <img src="https://img.shields.io/badge/framework-nanobot-orange" alt="nanobot">
     <img src="https://img.shields.io/badge/RPA-Playwright-green" alt="Playwright">
-    <img src="https://img.shields.io/badge/LLM-Gemini_1.5_Pro-violet" alt="Gemini">
+    <img src="https://img.shields.io/badge/LLM-LiteLLM_%2B_MiniMax-violet" alt="LiteLLM + MiniMax">
     <img src="https://img.shields.io/badge/MFA-Telegram_Bot-blue" alt="Telegram MFA">
   </p>
 </div>
@@ -24,7 +24,7 @@ Sistema de automação burocrática para a **Universidade Federal do Paraná (UF
 | Fase | Descrição | Status |
 |------|-----------|--------|
 | **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos com corpo completo | ✅ Implementado |
-| **Pensar** | Gemini classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
+| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
 | **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
 | **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
 
@@ -49,13 +49,13 @@ ufpr_automation/
 │
 ├── agents/                  # 🤖 Agentes do pipeline
 │   ├── perceber.py          # PerceberAgent — scraping + corpo completo
-│   ├── pensar.py            # PensarAgent — classificação Gemini (paralelo)
+│   ├── pensar.py            # PensarAgent — classificação LLM via LiteLLM (paralelo)
 │   └── agir.py              # AgirAgent — salva rascunhos no OWA
 │
 ├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
 │
 ├── llm/                     # 🧠 Integração LLM
-│   └── client.py            # GeminiClient (sync + async)
+│   └── client.py            # LLMClient via LiteLLM (sync + async)
 │
 ├── outlook/                 # 📧 Integração OWA via Playwright
 │   ├── browser.py           # Ciclo de vida do navegador + sessão
@@ -72,7 +72,7 @@ ufpr_automation/
 ├── workspace/               # 🐈 Integração com nanobot
 │   ├── AGENTS.md            # Personalidade do agente
 │   ├── SOUL.md              # Normas UFPR — ICL context (19 seções)
-│   ├── config.json          # Config do provider Gemini
+│   ├── config.json          # Config do provider LLM
 │   └── skills/
 │       └── ufpr-outlook/
 │           └── SKILL.md     # Skill do nanobot
@@ -115,8 +115,8 @@ OWA_PASSWORD=sua_senha_aqui
 TELEGRAM_BOT_TOKEN=token_do_botfather
 TELEGRAM_CHAT_ID=seu_chat_id
 
-# LLM
-GEMINI_API_KEY=sua_chave_aqui
+# LLM (MiniMax via LiteLLM)
+MINIMAX_API_KEY=sua_chave_aqui
 ```
 
 ### 3. Primeiro Uso — Login Automático com MFA via Telegram
@@ -169,7 +169,7 @@ O script detecta a sessão salva e executa em background (headless). Se a sessã
 - **Python** ≥ 3.12
 - **Playwright** — Automação de navegador (RPA)
 - **nanobot** — Framework de agente AI (loop Perceber-Pensar-Agir)
-- **Gemini 1.5 Pro** — Motor cognitivo (facilmente cambiável)
+- **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
 - **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
 

@@ -13,7 +13,7 @@ Executa um pipeline de três agentes especializados para processar e-mails insti
 | Fase | Agente | Responsabilidade |
 |------|--------|-----------------|
 | **Perceber** | `PerceberAgent` | Abre o OWA via Playwright, varre a inbox e extrai o corpo **completo** de cada e-mail não lido |
-| **Pensar**   | `PensarAgent × N` | Classifica cada e-mail e gera rascunho de resposta com Gemini (N chamadas **em paralelo**) |
+| **Pensar**   | `PensarAgent × N` | Classifica cada e-mail e gera rascunho de resposta via LiteLLM (N chamadas **em paralelo**) |
 | **Agir**     | `AgirAgent` | Salva as respostas geradas como **rascunhos** no OWA — nunca envia automaticamente |
 
 ## Comandos disponíveis
@@ -46,7 +46,7 @@ ufpr_automation/
 ├── orchestrator.py          # Coordenador multi-agente
 ├── agents/
 │   ├── perceber.py          # PerceberAgent (Playwright, sequencial)
-│   ├── pensar.py            # PensarAgent (Gemini, paralelo via asyncio)
+│   ├── pensar.py            # PensarAgent (LiteLLM, paralelo via asyncio)
 │   └── agir.py              # AgirAgent (Playwright, sequencial)
 ├── outlook/
 │   ├── browser.py           # Ciclo de vida do navegador + sessão
@@ -54,7 +54,7 @@ ufpr_automation/
 │   ├── body_extractor.py    # Abertura e extração do corpo completo
 │   └── responder.py         # Clica Reply + digita + salva rascunho
 ├── llm/
-│   └── client.py            # GeminiClient (sync + async)
+│   └── client.py            # LLMClient via LiteLLM (sync + async)
 ├── core/models.py           # EmailData, EmailClassification
 └── workspace/               # Contexto nanobot (AGENTS.md, SOUL.md)
 ```

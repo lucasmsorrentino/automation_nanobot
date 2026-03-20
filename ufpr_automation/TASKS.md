@@ -37,10 +37,10 @@
   - [x] `AGENTS.md` — Personalidade do agente UFPR
   - [x] `SOUL.md` — Template de normas institucionais (ICL)
   - [x] `SKILL.md` — Skill do Outlook
-  - [x] `config.json` — Provider Gemini
+  - [x] `config.json` — Provider LLM (LiteLLM)
 
-- [x] **Integração com Gemini (Pensar)**
-  - [x] Criar módulo `llm/` com cliente Gemini (via nanobot provider)
+- [x] **Integração com LLM (Pensar)**
+  - [x] Criar módulo `llm/` com cliente LiteLLM (provider-agnostic)
   - [x] System prompt com normas da UFPR (ICL do `SOUL.md`)
   - [x] Classificação de e-mails: departamento, urgência, tipo
   - [x] Geração de resposta/ofício conforme normas
@@ -53,7 +53,7 @@
 
 - [x] **Arquitetura Multi-Agente**
   - [x] `agents/perceber.py` — PerceberAgent (scraping + corpo completo)
-  - [x] `agents/pensar.py` — PensarAgent com chamadas Gemini **concorrentes**
+  - [x] `agents/pensar.py` — PensarAgent com chamadas LLM **concorrentes** (via LiteLLM)
   - [x] `agents/agir.py` — AgirAgent (salvar rascunhos)
   - [x] `orchestrator.py` — coordenador do pipeline Perceber → Pensar → Agir
   - [x] `outlook/body_extractor.py` — extração do corpo completo (não apenas preview)
@@ -85,7 +85,7 @@
 
 - [x] **3. Rate limiting nas chamadas LLM paralelas**
   - [x] Adicionar `asyncio.Semaphore(max_concurrent=5)` no Pensar
-  - [x] Evitar exaustão de quota Gemini com muitos e-mails não lidos
+  - [x] Evitar exaustão de quota LLM com muitos e-mails não lidos
 
 - [x] **4. Substituir hard-coded `wait_for_timeout()` por waits adaptativos**
   - [x] Usar `wait_for_selector()` / `expect()` do Playwright onde possível
@@ -97,7 +97,7 @@
 
 - [x] **6. Testes unitários mínimos**
   - [x] Testes para `core/models.py` (EmailData, EmailClassification)
-  - [x] Testes para `llm/client.py` (mock Gemini, validar schema)
+  - [x] Testes para `llm/client.py` (mock LiteLLM, validar schema)
   - [x] Teste end-to-end do pipeline com dados mock
 
 - [x] **7. Logging persistente (structured)**
@@ -168,68 +168,48 @@ Verificar as 3 estratégias de fallback em `scraper.py` e os seletores em `body_
 - [x] `scraper.py` extrai lista de e-mails não lidos
 - [x] `body_extractor.py` extrai corpo completo de cada e-mail
 
-#### Etapa 2.5 — Migrar LLM de Gemini direto para LiteLLM + MiniMax
+#### Etapa 2.5 — Migrar LLM de Gemini direto para LiteLLM + MiniMax ✅
 
-> **Bloqueio:** Gemini free tier esgotado. Substituir `google-genai` SDK direto por LiteLLM
-> (já integrado no nanobot) com MiniMax como provider (já registrado no registry).
+> **Concluído em 2026-03-20.** Gemini free tier esgotado → migrado para LiteLLM + MiniMax-M2.
 
-**Mudanças necessárias:**
-1. Reescrever `llm/client.py` para usar `litellm.acompletion()` em vez de `google.genai`
-2. Atualizar `config/settings.py`: trocar `GEMINI_API_KEY` por `MINIMAX_API_KEY`, modelo padrão `minimax/<model>`
-3. Atualizar `.env.example` com as novas variáveis
-4. Ajustar `_generation_config()` → parâmetros compatíveis com LiteLLM (response_format JSON)
-5. Garantir que `classify_email_async` continue funcionando com `asyncio.gather()`
-6. Atualizar testes em `tests/test_llm_client.py` para mockar `litellm` em vez de `google.genai`
+**Mudanças realizadas:**
+1. `llm/client.py` reescrito: `GeminiClient` → `LLMClient` usando `litellm.completion()`/`acompletion()`
+2. `config/settings.py` atualizado: `MINIMAX_API_KEY`, modelo padrão `minimax/MiniMax-M2`
+3. `.env.example` atualizado com novas variáveis
+4. JSON output via prompt instruction + `_extract_json()` (MiniMax não suporta `response_format`)
+5. `classify_email_async` funciona com `asyncio.gather()` via `litellm.acompletion()`
+6. Testes atualizados para mockar `litellm` — 17/17 passam
 
-**Referência:** `nanobot/providers/registry.py` linhas 384-401 (MiniMax ProviderSpec) e
-`nanobot/providers/litellm_provider.py` (padrão de uso do LiteLLM).
+- [x] `llm/client.py` usa `litellm.acompletion()` em vez de `google.genai`
+- [x] `config/settings.py` com `MINIMAX_API_KEY` e modelo padrão MiniMax
+- [x] `.env.example` atualizado
+- [x] Testes unitários passam com mock LiteLLM
+- [x] Classificação funciona end-to-end com MiniMax API
 
-- [ ] `llm/client.py` usa `litellm.acompletion()` em vez de `google.genai`
-- [ ] `config/settings.py` com `MINIMAX_API_KEY` e modelo padrão MiniMax
-- [ ] `.env.example` atualizado
-- [ ] Testes unitários passam com mock LiteLLM
-- [ ] Classificação funciona end-to-end com MiniMax API
+#### Etapa 3 — Validar classificação LLM (Pensar) ✅
 
-#### Etapa 3 — Validar classificação LLM (Pensar)
+> **Concluído em 2026-03-20.** MiniMax-M2 via LiteLLM classifica corretamente.
 
-**Pré-requisito:** Etapa 2 concluída (e-mails extraídos com corpo).
+**Resultado:** 3/3 e-mails classificados com sucesso (Estágios, Informes, Estágios).
+- JSON válido retornado após stripping de markdown code fences
+- Categorias corretas para e-mails institucionais
+- Respostas sugeridas seguem normas UFPR do SOUL.md
 
-```bash
-# Teste 3: Pipeline completo (Perceber + Pensar), sem salvar rascunhos
-# Observar o output de classificação no terminal
-python -m ufpr_automation --perceber-only  # depois rodar sem --perceber-only
-```
+- [x] LLM classifica e-mails corretamente (JSON válido)
+- [x] Categorias fazem sentido para e-mails institucionais
+- [x] Respostas sugeridas seguem normas UFPR do SOUL.md
 
-**O que verificar:**
-- Gemini retorna JSON válido para cada e-mail
-- `categoria` é um valor válido do Literal enum
-- `sugestao_resposta` faz sentido dado o conteúdo do e-mail e as normas UFPR
+#### Etapa 4 — Validar rascunhos (Agir) ✅
 
-- [ ] Gemini classifica e-mails corretamente (JSON válido)
-- [ ] Categorias fazem sentido para e-mails institucionais
-- [ ] Respostas sugeridas seguem normas UFPR do SOUL.md
+> **Concluído em 2026-03-20.** Pipeline end-to-end funcional: 3/3 rascunhos salvos.
 
-#### Etapa 4 — Validar rascunhos (Agir)
+**Resultado:** Pipeline completo executado com sucesso.
+- Bug fix: adicionado `dismiss_owa_dialog()` para fechar modal "Descartar mensagem" que bloqueava entre rascunhos.
 
-**Pré-requisito:** Etapa 3 concluída (classificações OK).
-
-```bash
-# Teste 4: Pipeline completo end-to-end
-python -m ufpr_automation --headed
-
-# O que observar:
-#   ✅ Playwright clica "Responder" no e-mail correto
-#   ✅ Texto gerado é digitado no campo de resposta
-#   ✅ Rascunho é salvo (NÃO enviado)
-#   ✅ Verificar pasta Rascunhos no OWA manualmente
-```
-
-**Se falhar:** Seletores de Reply/Draft mudaram. Verificar `responder.py`.
-
-- [ ] Playwright abre o e-mail correto (validação por hash sender+subject)
-- [ ] Resposta é digitada no campo de Reply
-- [ ] Rascunho é salvo na pasta Rascunhos
-- [ ] Pipeline end-to-end completo sem erros
+- [x] Playwright abre o e-mail correto (validação por hash sender+subject)
+- [x] Resposta é digitada no campo de Reply
+- [x] Rascunho é salvo na pasta Rascunhos
+- [x] Pipeline end-to-end completo sem erros
 
 #### Etapa 5 — Validar re-login automático
 

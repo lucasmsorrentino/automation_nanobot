@@ -14,7 +14,7 @@ from playwright.async_api import Page
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.outlook.body_extractor import _click_email_at_index, verify_opened_email
-from ufpr_automation.outlook.responder import save_draft_reply
+from ufpr_automation.outlook.responder import dismiss_owa_dialog, save_draft_reply
 from ufpr_automation.utils.logging import logger
 
 
@@ -76,6 +76,10 @@ class AgirAgent:
 
             success = await save_draft_reply(self._page, cls.sugestao_resposta)
             results.append(success)
+
+            # Dismiss any lingering OWA dialog (e.g. "Descartar mensagem")
+            # before moving to the next email
+            await dismiss_owa_dialog(self._page)
 
         saved = sum(results)
         logger.info("AgirAgent concluído — %d/%d rascunho(s) salvo(s)", saved, len(emails))

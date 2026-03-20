@@ -1,20 +1,13 @@
-"""Integration test for the Pensar pipeline with mocked Gemini responses."""
+"""Integration test for the Pensar pipeline with mocked LiteLLM responses."""
 
 from __future__ import annotations
 
 import json
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from ufpr_automation.core.models import EmailClassification, EmailData
-
-# Ensure google.genai is mockable even if not installed
-if "google.genai" not in sys.modules:
-    sys.modules["google"] = MagicMock()
-    sys.modules["google.genai"] = MagicMock()
-    sys.modules["google.genai.types"] = MagicMock()
 
 
 def _make_email(sender: str, subject: str) -> EmailData:
@@ -32,6 +25,13 @@ def _make_classification_json(categoria: str = "Estágios") -> str:
     })
 
 
+def _mock_completion_response(text: str) -> MagicMock:
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = text
+    return response
+
+
 class TestRunPensarConcurrently:
     @pytest.mark.asyncio
     async def test_all_succeed(self):
@@ -39,17 +39,17 @@ class TestRunPensarConcurrently:
 
         with (
             patch("ufpr_automation.llm.client.settings") as mock_settings,
-            patch("ufpr_automation.llm.client.genai") as mock_genai,
+            patch("ufpr_automation.llm.client.litellm") as mock_litellm,
         ):
-            mock_settings.GEMINI_API_KEY = "fake"
-            mock_settings.LLM_MODEL = "gemini-1.5-pro"
+            mock_settings.MINIMAX_API_KEY = "fake"
+            mock_settings.GEMINI_API_KEY = ""
+            mock_settings.LLM_PROVIDER = "minimax"
+            mock_settings.LLM_MODEL = "minimax/MiniMax-Text-01"
             mock_settings.PACKAGE_ROOT = MagicMock()
             mock_settings.ASSINATURA_EMAIL = None
 
-            mock_response = MagicMock()
-            mock_response.text = _make_classification_json()
-            mock_genai.Client.return_value.aio.models.generate_content = AsyncMock(
-                return_value=mock_response
+            mock_litellm.acompletion = AsyncMock(
+                return_value=_mock_completion_response(_make_classification_json())
             )
 
             from ufpr_automation.agents.pensar import run_pensar_concurrently
@@ -70,23 +70,21 @@ class TestRunPensarConcurrently:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
-                raise RuntimeError("Gemini quota exceeded")
-            resp = MagicMock()
-            resp.text = _make_classification_json()
-            return resp
+                raise RuntimeError("API quota exceeded")
+            return _mock_completion_response(_make_classification_json())
 
         with (
             patch("ufpr_automation.llm.client.settings") as mock_settings,
-            patch("ufpr_automation.llm.client.genai") as mock_genai,
+            patch("ufpr_automation.llm.client.litellm") as mock_litellm,
         ):
-            mock_settings.GEMINI_API_KEY = "fake"
-            mock_settings.LLM_MODEL = "gemini-1.5-pro"
+            mock_settings.MINIMAX_API_KEY = "fake"
+            mock_settings.GEMINI_API_KEY = ""
+            mock_settings.LLM_PROVIDER = "minimax"
+            mock_settings.LLM_MODEL = "minimax/MiniMax-Text-01"
             mock_settings.PACKAGE_ROOT = MagicMock()
             mock_settings.ASSINATURA_EMAIL = None
 
-            mock_genai.Client.return_value.aio.models.generate_content = AsyncMock(
-                side_effect=side_effect
-            )
+            mock_litellm.acompletion = AsyncMock(side_effect=side_effect)
 
             from ufpr_automation.agents.pensar import run_pensar_concurrently
 

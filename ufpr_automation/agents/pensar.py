@@ -1,7 +1,7 @@
 """PensarAgent — Think phase of the Perceber → Pensar → Agir loop.
 
 Responsibilities:
-    Classify each email and generate a draft reply using the Gemini LLM.
+    Classify each email and generate a draft reply using the LLM (via LiteLLM).
 
 Key design decision: classification calls are made **concurrently** via
 asyncio.gather(), so N unread emails result in N parallel API calls rather
@@ -13,10 +13,10 @@ from __future__ import annotations
 import asyncio
 
 from ufpr_automation.core.models import EmailClassification, EmailData
-from ufpr_automation.llm.client import GeminiClient
+from ufpr_automation.llm.client import LLMClient
 from ufpr_automation.utils.logging import logger
 
-# Maximum concurrent LLM calls to avoid Gemini quota exhaustion
+# Maximum concurrent LLM calls to avoid API quota exhaustion
 MAX_CONCURRENT_LLM_CALLS = 5
 
 
@@ -28,11 +28,11 @@ class PensarAgent:
     asyncio.gather().
 
     Args:
-        client: Shared GeminiClient instance (thread-safe for concurrent calls).
+        client: Shared LLMClient instance (thread-safe for concurrent calls).
         email: The EmailData to classify.
     """
 
-    def __init__(self, client: GeminiClient, email: EmailData) -> None:
+    def __init__(self, client: LLMClient, email: EmailData) -> None:
         self._client = client
         self._email = email
 
@@ -67,14 +67,14 @@ async def run_pensar_concurrently(
     logger.info("=" * 60)
 
     # One shared client (one HTTP connection pool, one API key auth)
-    client = GeminiClient()
+    client = LLMClient()
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
     agents = [PensarAgent(client, email) for email in emails]
     tasks = [agent.run(semaphore) for agent in agents]
 
     logger.info(
-        "Disparando %d chamada(s) assíncronas ao Gemini (máx %d simultâneas)...",
+        "Disparando %d chamada(s) assíncronas ao LLM (máx %d simultâneas)...",
         len(tasks), MAX_CONCURRENT_LLM_CALLS,
     )
     results = await asyncio.gather(*tasks, return_exceptions=True)

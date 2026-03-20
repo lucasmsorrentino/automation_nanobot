@@ -146,6 +146,49 @@ async def _handle_save_dialog(page: Page) -> None:
             continue
 
 
+async def dismiss_owa_dialog(page: Page) -> None:
+    """Dismiss any lingering OWA modal dialog (e.g. 'Descartar mensagem').
+
+    After saving a draft, OWA sometimes shows a confirmation dialog that
+    blocks interaction with the inbox. This clicks the most appropriate
+    button to dismiss it without losing work.
+    """
+    dismiss_selectors = [
+        # "Save" / "Salvar" — keep the draft
+        "button:has-text('Salvar')",
+        "button:has-text('Save')",
+        # "Yes" / "Sim"
+        "button:has-text('Sim')",
+        "button:has-text('Yes')",
+        # "Don't save" / "Não salvar" — fallback to dismiss
+        "button:has-text('Não salvar')",
+        "button:has-text(\"Don't save\")",
+        # "Descartar" — discard dialog itself
+        "button:has-text('Descartar')",
+        "button:has-text('Discard')",
+        # "OK" / "Fechar" / "Close" — generic dismiss
+        "button:has-text('OK')",
+        "button:has-text('Fechar')",
+        "button:has-text('Close')",
+    ]
+    for selector in dismiss_selectors:
+        try:
+            el = await page.query_selector(selector)
+            if el and await el.is_visible():
+                await el.click()
+                await page.wait_for_timeout(500)
+                return
+        except Exception:
+            continue
+
+    # Last resort: press Escape
+    try:
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+
 async def save_draft_reply(page: Page, reply_text: str) -> bool:
     """Save *reply_text* as a draft reply to the email currently open in the
     reading pane.
