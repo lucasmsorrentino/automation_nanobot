@@ -20,17 +20,19 @@ graph TB
 
         subgraph P1_PERCEPCAO["Perceber (Playwright RPA)"]
             BROWSER1["🌐 Playwright (Headless)<br/>Browser Context + Session State"]
+            AUTOLOGIN["🤖 Auto-Login<br/>Credenciais .env + MFA via Telegram"]
             OWA1["📧 Outlook Web Access (OWA)<br/>UFPR Microsoft 365"]
+            AUTOLOGIN -->|"E-mail + Senha + MFA"| OWA1
             BROWSER1 -->|"Web Scraping DOM"| OWA1
             OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo"| EXTRACT1["📋 Extração de Dados"]
         end
 
-        subgraph P1_COGNICAO["Pensar (Gemini ICL)"]
-            GEMINI1["🧠 API Gemini 1.5 Pro"]
+        subgraph P1_COGNICAO["Pensar (LiteLLM + MiniMax)"]
+            LLM1["🧠 LiteLLM → MiniMax API"]
             ICL["📝 In-Context Learning<br/>Normas UFPR no System Prompt"]
-            EXTRACT1 -->|"Conteúdo do e-mail"| GEMINI1
-            ICL -->|"Contexto institucional"| GEMINI1
-            GEMINI1 -->|"Classificação + Resposta"| DRAFT1["✍️ Ofício / Resposta Gerada"]
+            EXTRACT1 -->|"Conteúdo do e-mail"| LLM1
+            ICL -->|"Contexto institucional"| LLM1
+            LLM1 -->|"Classificação + Resposta"| DRAFT1["✍️ Ofício / Resposta Gerada"]
         end
 
         subgraph P1_ACAO["Agir (Human-in-the-Loop)"]
@@ -123,10 +125,11 @@ graph TB
 |-------------------|-----------------------------|------------------------------|-------------------------------|
 | **Linguagem**     | Python                      | Python                       | Python                        |
 | **Orquestrador**  | Nanobot (loop nativo)       | LangGraph                    | LangGraph (Fleet)             |
-| **Motor Cognitivo** | Gemini 1.5 Pro (ICL)      | Gemini 1.5 Pro (RAG)         | Gemini 1.5 Pro (GraphRAG)     |
+| **Motor Cognitivo** | LiteLLM → MiniMax (ICL)   | LiteLLM → MiniMax (RAG)      | LiteLLM → MiniMax (GraphRAG)  |
 | **Memória**       | System Prompt (In-Context)  | LanceDB / Chroma (Vetorial)  | Neo4j (Grafo de Conhecimento) |
 | **Interface I/O** | Playwright → OWA            | Playwright → OWA             | Playwright → OWA + SIGA + SEI |
 | **Autonomia**     | Rascunho + Revisão Humana   | Auto (baixo risco) + Humano  | Totalmente autônomo           |
+| **Autenticação**  | Auto-login + MFA Telegram   | Auto-login + MFA Telegram    | Auto-login + MFA Telegram     |
 | **Tratamento Erro** | Logs no terminal          | Recovery nodes (LangGraph)   | Auto-healing + alertas        |
 
 ## Fluxo de Dados — Marco I (Detalhado)
@@ -137,12 +140,26 @@ sequenceDiagram
     participant N as 🐈 Nanobot Loop
     participant P as 🌐 Playwright
     participant O as 📧 OWA (UFPR)
-    participant G as 🧠 Gemini API
+    participant M as 🔐 Microsoft Login
+    participant T as 📲 Telegram Bot
+    participant G as 🧠 LiteLLM (MiniMax)
     participant H as 👤 Humano
 
     C->>N: Trigger ciclo
     N->>P: Abrir browser (headless)
     P->>O: Navegar → Caixa de Entrada
+
+    alt Sessão expirada ou primeiro uso
+        P->>M: Preencher e-mail + senha (.env)
+        M-->>P: Desafio MFA (number matching)
+        P->>P: Extrair número de 2 dígitos
+        P->>T: Enviar número MFA
+        T->>H: 📲 "Número MFA: 42"
+        H->>M: Aprovar no Authenticator (celular)
+        M-->>P: Login concluído
+        P->>P: Salvar sessão (cookies + storage)
+    end
+
     O-->>P: DOM carregado
     P->>P: Extrair e-mails não lidos<br/>(remetente, assunto, corpo)
     P-->>N: Lista de e-mails

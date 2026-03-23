@@ -6,7 +6,8 @@
     <img src="https://img.shields.io/badge/python-≥3.12-blue" alt="Python">
     <img src="https://img.shields.io/badge/framework-nanobot-orange" alt="nanobot">
     <img src="https://img.shields.io/badge/RPA-Playwright-green" alt="Playwright">
-    <img src="https://img.shields.io/badge/LLM-Gemini_1.5_Pro-violet" alt="Gemini">
+    <img src="https://img.shields.io/badge/LLM-LiteLLM_%2B_MiniMax-violet" alt="LiteLLM + MiniMax">
+    <img src="https://img.shields.io/badge/MFA-Telegram_Bot-blue" alt="Telegram MFA">
   </p>
 </div>
 
@@ -22,10 +23,10 @@ Sistema de automação burocrática para a **Universidade Federal do Paraná (UF
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos (remetente, assunto, corpo) | ✅ Implementado |
-| **Pensar** | Gemini classifica o e-mail e redige resposta seguindo normas UFPR (ICL) | 🔜 Próximo passo |
-| **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | 🔜 Próximo passo |
-| **Notificar** | Alerta no terminal que há ações pendentes para revisão humana | ✅ Implementado |
+| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos com corpo completo | ✅ Implementado |
+| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
+| **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
+| **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
 
 ---
 
@@ -46,27 +47,32 @@ ufpr_automation/
 │   ├── __init__.py
 │   └── models.py            # EmailData dataclass
 │
+├── agents/                  # 🤖 Agentes do pipeline
+│   ├── perceber.py          # PerceberAgent — scraping + corpo completo
+│   ├── pensar.py            # PensarAgent — classificação LLM via LiteLLM (paralelo)
+│   └── agir.py              # AgirAgent — salva rascunhos no OWA
+│
+├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
+│
+├── llm/                     # 🧠 Integração LLM
+│   └── client.py            # LLMClient via LiteLLM (sync + async)
+│
 ├── outlook/                 # 📧 Integração OWA via Playwright
-│   ├── __init__.py
 │   ├── browser.py           # Ciclo de vida do navegador + sessão
-│   └── scraper.py           # Extração de e-mails (3 estratégias)
+│   ├── scraper.py           # Extração de e-mails (3 estratégias)
+│   ├── body_extractor.py    # Abertura e extração do corpo completo
+│   └── responder.py         # Clica Reply + digita + salva rascunho
 │
 ├── cli/                     # 💻 Interface de linha de comando
-│   ├── __init__.py
 │   └── commands.py          # Entry point com argparse
 │
 ├── utils/                   # 🔧 Utilitários
-│   ├── __init__.py
 │   └── debug.py             # Captura DOM + screenshot para debug
 │
-├── docs/                    # 📚 Documentação complementar
-│   └── CHANNEL_PLUGIN_GUIDE.md
-│
 ├── workspace/               # 🐈 Integração com nanobot
-
 │   ├── AGENTS.md            # Personalidade do agente
-│   ├── SOUL.md              # Normas UFPR (ICL context)
-│   ├── config.json          # Config do provider Gemini
+│   ├── SOUL.md              # Normas UFPR — ICL context (19 seções)
+│   ├── config.json          # Config do provider LLM
 │   └── skills/
 │       └── ufpr-outlook/
 │           └── SKILL.md     # Skill do nanobot
@@ -98,20 +104,30 @@ python -m playwright install chromium
 cp ufpr_automation/.env.example ufpr_automation/.env
 ```
 
-Edite o `.env` com sua API key do Gemini e URLs do OWA:
+Edite o `.env` com suas credenciais e chaves:
 
 ```env
-GEMINI_API_KEY=sua_chave_aqui
-OWA_URL=https://outlook.office365.com/mail/
+# Login automático
+OWA_EMAIL=seu.email@ufpr.br
+OWA_PASSWORD=sua_senha_aqui
+
+# Notificação MFA via Telegram
+TELEGRAM_BOT_TOKEN=token_do_botfather
+TELEGRAM_CHAT_ID=seu_chat_id
+
+# LLM (MiniMax via LiteLLM)
+MINIMAX_API_KEY=sua_chave_aqui
 ```
 
-### 3. Primeiro Uso — Login Manual
+### 3. Primeiro Uso — Login Automático com MFA via Telegram
 
 ```bash
 python -m ufpr_automation
 ```
 
-O navegador abrirá em modo visível. Faça login no OWA da UFPR manualmente. A sessão será salva automaticamente em `session_data/state.json`.
+O sistema preenche e-mail e senha automaticamente na página da Microsoft. Quando o MFA de **number matching** aparecer, o número de 2 dígitos é enviado para o seu **Telegram** — basta aprovar no Microsoft Authenticator pelo celular. A sessão é salva em `session_data/state.json`.
+
+> **Sem credenciais?** Se `OWA_EMAIL`/`OWA_PASSWORD` não estiverem configurados, o sistema abre o navegador para login manual (comportamento legado).
 
 ### 4. Execuções Seguintes — Headless
 
@@ -119,7 +135,7 @@ O navegador abrirá em modo visível. Faça login no OWA da UFPR manualmente. A 
 python -m ufpr_automation
 ```
 
-O script detecta a sessão salva e executa em background (headless), imprimindo os e-mails no terminal.
+O script detecta a sessão salva e executa em background (headless). Se a sessão expirar, o login automático é executado novamente — sem necessidade de intervenção manual.
 
 ---
 
@@ -127,10 +143,11 @@ O script detecta a sessão salva e executa em background (headless), imprimindo 
 
 | Comando | Descrição |
 |---------|-----------|
-| `python -m ufpr_automation` | Execução padrão (auto-detecta sessão) |
-| `python -m ufpr_automation --dry-run` | Testa Playwright sem login |
+| `python -m ufpr_automation` | Pipeline completo (scraping + LLM + rascunhos) |
+| `python -m ufpr_automation --perceber-only` | Apenas scraping + extração de corpo, sem LLM |
 | `python -m ufpr_automation --headed` | Força modo com janela visível |
 | `python -m ufpr_automation --debug` | Captura DOM + screenshot para debug |
+| `python -m ufpr_automation --dry-run` | Testa Playwright sem login |
 
 ---
 
@@ -152,14 +169,16 @@ O script detecta a sessão salva e executa em background (headless), imprimindo 
 - **Python** ≥ 3.12
 - **Playwright** — Automação de navegador (RPA)
 - **nanobot** — Framework de agente AI (loop Perceber-Pensar-Agir)
-- **Gemini 1.5 Pro** — Motor cognitivo (facilmente cambiável)
+- **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
+- **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
 
 ---
 
 ## 📝 Notas Importantes
 
-- **Sessão do browser**: Salva em `session_data/state.json`. Se expirar, delete o arquivo e execute novamente.
+- **Login automático**: Credenciais são lidas do `.env`. O número MFA é enviado via Telegram para aprovação remota no Microsoft Authenticator.
+- **Sessão do browser**: Salva em `session_data/state.json`. Se expirar, o login automático é re-executado automaticamente.
 - **Seletores OWA**: O scraper usa 3 estratégias de fallback. Use `--debug` quando seletores pararem de funcionar.
 - **Segurança**: Nunca comite o `.env` — ele já está no `.gitignore`.
 - **Human-in-the-loop**: O sistema **nunca** envia e-mails automaticamente — sempre salva como rascunho.

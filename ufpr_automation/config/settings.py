@@ -16,7 +16,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent  # ufpr_automation/
 _ENV_FILE = _PACKAGE_DIR / ".env"
 if not _ENV_FILE.exists():
     _ENV_FILE = _PACKAGE_DIR.parent / ".env"  # project root
-load_dotenv(_ENV_FILE, override=False)
+load_dotenv(_ENV_FILE, override=False, encoding="utf-8")
 
 
 # ============================================================================
@@ -42,6 +42,10 @@ DEBUG_OUTPUT_DIR = _PACKAGE_DIR / "debug_output"
 # ============================================================================
 # Outlook Web Access (OWA)
 # ============================================================================
+
+# Credentials for automated login (loaded from .env — NEVER hardcode)
+OWA_EMAIL = os.getenv("OWA_EMAIL", "")
+OWA_PASSWORD = os.getenv("OWA_PASSWORD", "")
 
 # Base URL for UFPR's Outlook Web Access
 OWA_URL = os.getenv("OWA_URL", "https://outlook.office365.com/mail/")
@@ -86,12 +90,17 @@ ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL")
 # LLM Provider (for future Marco I Gemini integration)
 # ============================================================================
 
+# Telegram notification for MFA number matching
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
 # API Key for the LLM provider (NEVER hardcode this!)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 
 # Model to use for classification and response generation
-# Easily swappable: change this to any model supported by nanobot
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemini-1.5-pro")
+# Easily swappable: change this to any model supported by LiteLLM
+LLM_MODEL = os.getenv("LLM_MODEL", "minimax/MiniMax-M2")
 
 # Provider name (matches nanobot config.json providers key)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")
