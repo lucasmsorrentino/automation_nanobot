@@ -28,3 +28,4 @@ uv.lock
 session_data/
 debug_output/
 ufpr_automation/docs/
+ufpr_automation/rag/store/

@@ -77,6 +77,21 @@ ufpr_automation/
 │       └── ufpr-outlook/
 │           └── SKILL.md     # Skill do nanobot
 │
+├── rag/                     # 🔍 RAG — Retrieval-Augmented Generation
+│   ├── __init__.py
+│   ├── ingest.py            # Pipeline: PDF → texto → chunks → embeddings → LanceDB
+│   ├── retriever.py         # Busca vetorial semântica com filtros
+│   ├── chat.py              # CLI interativo (REPL) para consultas
+│   ├── web.py               # Interface web (Streamlit) para consultas
+│   └── store/               # Dados LanceDB (git-ignored, gerado automaticamente)
+│
+├── docs/                    # 📜 Corpus de documentos institucionais (git-ignored)
+│   ├── cepe/                # CEPE: atas, resoluções, instruções normativas
+│   ├── coun/                # COUN: atas, resoluções, instruções normativas
+│   ├── coplad/              # COPLAD: atas, resoluções, instruções normativas
+│   ├── concur/              # CONCUR: atas, resoluções
+│   └── estagio/             # Manuais, leis e regulamentos de estágio
+│
 ├── INICIO.md                # Especificação da arquitetura
 └── TASKS.md                 # Tarefas e roadmap
 ```
@@ -151,12 +166,91 @@ O script detecta a sessão salva e executa em background (headless). Se a sessã
 
 ---
 
+## 🔍 RAG — Base de Conhecimento Vetorial
+
+O módulo RAG indexa os documentos institucionais da UFPR (resoluções, atas, instruções normativas, manuais de estágio) em um banco vetorial local (LanceDB) para busca semântica.
+
+### Instalação
+
+```bash
+pip install -e ".[rag]"
+```
+
+### Uso
+
+```bash
+# Indexar todos os documentos
+python -m ufpr_automation.rag.ingest
+
+# Indexar apenas um subset
+python -m ufpr_automation.rag.ingest --subset estagio
+python -m ufpr_automation.rag.ingest --subset cepe/resolucoes
+
+# Ver estatísticas sem indexar
+python -m ufpr_automation.rag.ingest --dry-run
+
+# Busca semântica via CLI
+python -m ufpr_automation.rag.retriever "prazo máximo para estágio obrigatório"
+python -m ufpr_automation.rag.retriever "rescisão de contrato" --conselho cepe --top-k 5
+
+# Interface interativa (terminal)
+python -m ufpr_automation.rag.chat
+python -m ufpr_automation.rag.chat --conselho cepe    # com filtro pré-definido
+
+# Interface web (Streamlit)
+streamlit run ufpr_automation/rag/web.py               # abre em http://localhost:8501
+```
+
+### Uso via Python
+
+```python
+from ufpr_automation.rag.retriever import Retriever
+
+r = Retriever()
+results = r.search("regulamento de estágio", conselho="cepe", top_k=3)
+context = r.search_formatted("prazo de estágio obrigatório")  # texto pronto para LLM
+```
+
+### Como adicionar novos documentos
+
+1. **Coloque os PDFs** na estrutura de pastas `ufpr_automation/docs/`:
+
+```
+docs/
+├── {conselho}/              # cepe, coun, coplad, concur (ou novo conselho)
+│   ├── atas/
+│   ├── resolucoes/
+│   └── instrucoes-normativas/
+└── estagio/                 # ou qualquer pasta temática
+```
+
+Os metadados (conselho, tipo) são extraídos automaticamente do caminho:
+- `docs/cepe/resolucoes/res-42.pdf` → conselho=cepe, tipo=resolucoes
+- `docs/estagio/manual.pdf` → conselho=estagio, tipo=estagio
+- `docs/prograd/portarias/port-01.pdf` → conselho=prograd, tipo=portarias
+
+2. **Rode o ingest** — o sistema é idempotente (pula arquivos já indexados):
+
+```bash
+# Só o subset novo
+python -m ufpr_automation.rag.ingest --subset prograd/portarias
+
+# Ou tudo (detecta e pula os já indexados)
+python -m ufpr_automation.rag.ingest
+```
+
+3. **Pronto** — os novos documentos já aparecem nas buscas.
+
+> **Nota:** Para reindexar um documento atualizado, apague a pasta `ufpr_automation/rag/store/` e rode o ingest novamente.
+
+---
+
 ## 🏗️ Fases de Maturidade
 
-| | Marco I (Atual) | Marco II | Marco III |
+| | Marco I | Marco II (Atual) | Marco III |
 |---|---|---|---|
 | **Orquestrador** | nanobot | LangGraph | LangGraph Fleet |
-| **Memória** | ICL (System Prompt) | Vector RAG | GraphRAG (Neo4j) |
+| **Memória** | ICL (System Prompt) | Vector RAG (LanceDB) | GraphRAG (Neo4j) |
 | **Autonomia** | Rascunho + Humano | Auto (baixo risco) | Totalmente autônomo |
 | **Sistemas** | OWA | OWA | OWA + SIGA + SEI |
 
@@ -172,6 +266,10 @@ O script detecta a sessão salva e executa em background (headless). Se a sessã
 - **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
 - **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
+- **PyMuPDF** — Extração de texto de PDFs
+- **LanceDB** — Banco vetorial local (zero servidor)
+- **sentence-transformers** — Embeddings multilíngue (`multilingual-e5-large`)
+- **LangChain Text Splitters** — Chunking semântico para documentos legais
 
 ---
 

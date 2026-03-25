@@ -119,6 +119,51 @@ graph TB
     style LEGEND fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px
 ```
 
+## Módulo RAG — Vector Store (Marco II, Fase Inicial)
+
+```mermaid
+graph LR
+    subgraph INGEST["📥 Pipeline de Ingestão"]
+        PDF["📄 PDFs<br/>(3.316 documentos)"]
+        EXTRACT["📝 PyMuPDF<br/>Extração de Texto"]
+        CHUNK["✂️ LangChain Splitter<br/>Chunking Semântico"]
+        EMBED["🧮 multilingual-e5-large<br/>Embeddings (1024 dim)"]
+        STORE["🗄️ LanceDB<br/>Vector Store Local"]
+
+        PDF --> EXTRACT --> CHUNK --> EMBED --> STORE
+    end
+
+    subgraph RETRIEVE["🔍 Pipeline de Busca"]
+        QUERY["❓ Query (PT-BR)"]
+        QEMBED["🧮 query: prefix<br/>Embedding"]
+        SEARCH["🔎 Busca Vetorial<br/>+ Filtros Metadata"]
+        RESULTS["📋 Top-K Resultados<br/>com Score + Fonte"]
+
+        QUERY --> QEMBED --> SEARCH --> RESULTS
+    end
+
+    STORE -.->|"cosine similarity"| SEARCH
+
+    style INGEST fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style RETRIEVE fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+```
+
+### Estrutura do Corpus
+
+| Conselho | Atas | Resoluções | Instruções Normativas |
+|----------|------|------------|----------------------|
+| CEPE     | 731  | 648        | 8                    |
+| COPLAD   | 630  | 474        | 1                    |
+| COUN     | 217  | 435        | 1                    |
+| CONCUR   | 143  | 10         | —                    |
+| Estágio  | —    | —          | 18 (manuais, leis)   |
+
+### Pacote `ufpr_automation/rag/`
+
+- **`ingest.py`** — Pipeline de ingestão: PDF → texto (PyMuPDF) → chunks (LangChain RecursiveCharacterTextSplitter com separadores para documentos legais PT-BR) → embeddings (E5 multilingual) → LanceDB. Suporta `--subset`, `--dry-run`, skip de arquivos já indexados (idempotente).
+- **`retriever.py`** — Busca vetorial semântica com filtros por `conselho` e `tipo`. Retorna `SearchResult` com texto, score, metadados. Método `search_formatted()` gera contexto pronto para injeção no system prompt do LLM.
+- **`store/`** — Diretório do LanceDB (gerado automaticamente, não versionado no git).
+
 ## Stack Tecnológica por Fase
 
 | Componente        | Marco I (Protótipo)         | Marco II (Intermediário)     | Marco III (Avançado)          |

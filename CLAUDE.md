@@ -32,6 +32,21 @@ python -m ufpr_automation               # full pipeline (headless, auto-login)
 python -m ufpr_automation --debug       # capture DOM + screenshot
 python -m ufpr_automation --headed      # force visible browser
 python -m ufpr_automation --perceber-only  # scrape only, no LLM
+
+# RAG — Vector store for institutional documents
+pip install -e ".[rag]"                                        # install RAG deps
+python -m ufpr_automation.rag.ingest                           # ingest all docs
+python -m ufpr_automation.rag.ingest --subset estagio          # ingest only estágio
+python -m ufpr_automation.rag.ingest --subset cepe/resolucoes  # ingest specific subset
+python -m ufpr_automation.rag.ingest --dry-run                 # extract + chunk stats only
+python -m ufpr_automation.rag.retriever "query em português"   # semantic search CLI
+python -m ufpr_automation.rag.retriever "query" --conselho cepe --top-k 5
+python -m ufpr_automation.rag.chat                             # interactive CLI (REPL)
+python -m ufpr_automation.rag.chat --conselho cepe             # with pre-filter
+streamlit run ufpr_automation/rag/web.py                        # Streamlit web UI (port 8501)
+
+# Run UFPR automation tests
+pytest ufpr_automation/tests/ -v
 ```
 
 ## Architecture
@@ -69,6 +84,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 - **`llm/`** — LLM client for email classification and draft generation (ICL: UFPR regulations in system prompt). Uses LiteLLM (provider-agnostic); currently configured for MiniMax-M2.
 - **`config/`** — `.env`-based settings (UTF-8 aware for Windows).
 - **`core/`** — Domain model (`EmailData`).
+- **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). Idempotent ingestion (skips already-indexed files). Store in `rag/store/` (git-ignored).
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.
 
 The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I → LangGraph → GraphRAG/multi-agent).
