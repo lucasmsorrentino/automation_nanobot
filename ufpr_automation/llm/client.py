@@ -95,11 +95,31 @@ class LLMClient:
                 "Cite a resolução ou documento específico quando aplicável.\n"
             )
 
+        # Build attachment context if available
+        attachment_section = ""
+        if email.attachments:
+            attachment_section = "\n\n=== ANEXOS DO E-MAIL ===\n"
+            for att in email.attachments:
+                if att.extracted_text:
+                    truncated = att.extracted_text[:3000]
+                    attachment_section += f"\n[Anexo: {att.filename}]\n{truncated}\n"
+                elif att.needs_ocr:
+                    attachment_section += (
+                        f"\n[Anexo: {att.filename} — documento escaneado, "
+                        "texto nao disponivel]\n"
+                    )
+                else:
+                    attachment_section += (
+                        f"\n[Anexo: {att.filename} ({att.mime_type}) — "
+                        "tipo nao suportado para extracao]\n"
+                    )
+
         user_prompt = (
             "Por favor, analise o seguinte e-mail recebido na caixa de entrada:\n\n"
             f"Remetente: {email.sender}\n"
             f"Assunto: {email.subject}\n"
             f"{content_label}:\n{content}\n"
+            f"{attachment_section}"
             f"{rag_section}\n"
             "Classifique o e-mail e redija uma resposta adequada seguindo as normas "
             "da UFPR contidas no seu contexto.\n\n"

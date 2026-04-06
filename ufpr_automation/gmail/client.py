@@ -21,7 +21,7 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 from ufpr_automation.config import settings
-from ufpr_automation.core.models import EmailData
+from ufpr_automation.core.models import AttachmentData, EmailData
 from ufpr_automation.utils.logging import logger
 
 IMAP_HOST = "imap.gmail.com"
@@ -69,6 +69,71 @@ def _extract_text(msg: email.message.Message) -> str:
             charset = msg.get_content_charset() or "utf-8"
             return payload.decode(charset, errors="replace")
     return ""
+
+
+def _extract_attachments(
+    msg: email.message.Message, email_stable_id: str
+) -> list[AttachmentData]:
+    """Extract and save attachments from a MIME message.
+
+    Saves files to ATTACHMENTS_DIR/{email_stable_id}_{filename}.
+    Skips attachments larger than ATTACHMENT_MAX_SIZE_MB.
+    """
+    attachments: list[AttachmentData] = []
+    max_bytes = settings.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024
+
+    if not msg.is_multipart():
+        return attachments
+
+    save_dir = settings.ATTACHMENTS_DIR
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    for part in msg.walk():
+        content_disp = str(part.get("Content-Disposition", ""))
+        filename = part.get_filename()
+
+        if not filename and "attachment" not in content_disp:
+            continue
+        if not filename:
+            continue
+
+        # Decode RFC 2047 encoded filenames
+        filename = _decode_header(filename)
+
+        mime_type = part.get_content_type()
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            continue
+
+        size = len(payload)
+        if size > max_bytes:
+            logger.warning(
+                "Gmail: anexo '%s' excede limite (%d MB) — ignorado",
+                filename, settings.ATTACHMENT_MAX_SIZE_MB,
+            )
+            continue
+
+        # Sanitize filename for filesystem
+        safe_name = "".join(c if c.isalnum() or c in ".-_ " else "_" for c in filename)
+        local_name = f"{email_stable_id}_{safe_name}"
+        local_path = save_dir / local_name
+
+        try:
+            local_path.write_bytes(payload)
+        except OSError as e:
+            logger.warning("Gmail: falha ao salvar anexo '%s': %s", filename, e)
+            continue
+
+        att = AttachmentData(
+            filename=filename,
+            mime_type=mime_type,
+            size_bytes=size,
+            local_path=str(local_path),
+        )
+        attachments.append(att)
+        logger.debug("Gmail: anexo salvo — %s (%d bytes, %s)", filename, size, mime_type)
+
+    return attachments
 
 
 class GmailClient:
@@ -152,11 +217,19 @@ class GmailClient:
                     gmail_message_id=message_id,
                 )
                 ed.compute_stable_id()
+
+                # Extract attachments
+                atts = _extract_attachments(msg, ed.stable_id)
+                if atts:
+                    ed.attachments = atts
+                    ed.has_attachments = True
+
                 emails.append(ed)
 
+                att_info = f", {len(atts)} anexo(s)" if atts else ""
                 logger.info(
-                    "  [%d/%d] %s (id: %s)",
-                    idx + 1, len(msg_ids), subject[:60], ed.stable_id[:8],
+                    "  [%d/%d] %s (id: %s%s)",
+                    idx + 1, len(msg_ids), subject[:60], ed.stable_id[:8], att_info,
                 )
 
             return emails

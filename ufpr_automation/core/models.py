@@ -6,7 +6,7 @@ Contains data classes representing the core entities the system works with.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -51,6 +51,27 @@ class EmailClassification(BaseModel):
 
 
 @dataclass
+class AttachmentData:
+    """Represents a single email attachment.
+
+    Attributes:
+        filename: Original filename of the attachment.
+        mime_type: MIME type (e.g. application/pdf, image/jpeg).
+        size_bytes: File size in bytes.
+        local_path: Path where the file was saved locally after download.
+        extracted_text: Text content extracted from the attachment.
+        needs_ocr: True if text extraction failed (scanned PDF, image).
+    """
+
+    filename: str = ""
+    mime_type: str = ""
+    size_bytes: int = 0
+    local_path: str = ""
+    extracted_text: str = ""
+    needs_ocr: bool = False
+
+
+@dataclass
 class EmailData:
     """Represents a single email extracted from the OWA inbox.
 
@@ -78,6 +99,9 @@ class EmailData:
     # Gmail-specific fields (populated when using Gmail channel)
     gmail_msg_id: str = ""         # IMAP UID for mark_read / fetch
     gmail_message_id: str = ""     # RFC Message-ID header for threading
+    # Attachments
+    attachments: list[AttachmentData] = field(default_factory=list)
+    has_attachments: bool = False
 
     def compute_stable_id(self) -> str:
         """Generate a stable hash from sender + subject + timestamp.
@@ -106,6 +130,16 @@ class EmailData:
             "timestamp": self.timestamp,
             "stable_id": self.stable_id,
             "classification": self.classification.model_dump() if self.classification is not None else None,
+            "has_attachments": self.has_attachments,
+            "attachments": [
+                {
+                    "filename": a.filename,
+                    "mime_type": a.mime_type,
+                    "size_bytes": a.size_bytes,
+                    "needs_ocr": a.needs_ocr,
+                }
+                for a in self.attachments
+            ],
         }
 
 

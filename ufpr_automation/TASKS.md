@@ -104,6 +104,21 @@
   - [x] Adicionar logging estruturado (JSON) para arquivo em `logs/`
   - [x] Substituir `print()` por `logger.info()` nos módulos principais
 
+- [x] **8. Suporte a anexos de e-mail**
+  - [x] Modelo `AttachmentData` (filename, mime_type, size, local_path, extracted_text, needs_ocr)
+  - [x] Campos `attachments` e `has_attachments` em `EmailData`
+  - [x] Download de anexos via Gmail IMAP (`_extract_attachments` em `gmail/client.py`)
+  - [x] Extração de texto: PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), texto plano
+  - [x] Injeção do texto dos anexos no prompt do LLM (`llm/client.py`)
+  - [x] Integração no pipeline Gmail (`orchestrator.py`)
+  - [x] Configuração via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB`
+  - [x] Imagens e PDFs escaneados marcados com `needs_ocr=True` (OCR na Fase 2)
+  - [x] 11 testes unitários passando (`tests/test_attachments.py`)
+
+- [x] **9. Correção de testes existentes**
+  - [x] `test_partial_failure` — mock baseado em conteúdo ao invés de call_count (compatível com Self-Refine)
+  - [x] `test_all_pdfs` — skip quando pasta docs está vazia
+
 ### 🔜 Pendente — Validação Manual (requer sessão OWA)
 
 > **Próxima tarefa.** Executar na ordem abaixo. Cada etapa depende da anterior.
@@ -239,6 +254,9 @@ python -m ufpr_automation
 
 ## Marco II — Roteamento Agêntico (Futuro)
 
+- [ ] **OCR para anexos** — PDFs escaneados e imagens (Tesseract/EasyOCR)
+  - [ ] Detecção automática de PDF escaneado (pouco texto por página)
+  - [ ] `ocr_image()` e `ocr_pdf_scanned()` em `attachments/extractor.py`
 - [ ] Migrar orquestrador para LangGraph
 - [ ] Implementar Vector RAG (LanceDB/Chroma) para portarias e memorandos
 - [ ] Roteamento condicional: auto-envio para risco baixo

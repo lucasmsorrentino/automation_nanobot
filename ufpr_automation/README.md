@@ -23,8 +23,8 @@ Sistema de automação burocrática para a **Universidade Federal do Paraná (UF
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos com corpo completo | ✅ Implementado |
-| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
+| **Perceber** | Playwright/Gmail IMAP extrai e-mails com corpo completo + anexos (PDF, DOCX, XLSX) | ✅ Implementado |
+| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail (com contexto dos anexos) e redige resposta em paralelo | ✅ Implementado |
 | **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
 | **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
 
@@ -45,7 +45,7 @@ ufpr_automation/
 │
 ├── core/                    # 🧩 Modelos de domínio
 │   ├── __init__.py
-│   └── models.py            # EmailData dataclass
+│   └── models.py            # EmailData, AttachmentData dataclasses
 │
 ├── agents/                  # 🤖 Agentes do pipeline
 │   ├── perceber.py          # PerceberAgent — scraping + corpo completo
@@ -53,6 +53,10 @@ ufpr_automation/
 │   └── agir.py              # AgirAgent — salva rascunhos no OWA
 │
 ├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
+│
+├── attachments/             # 📎 Processamento de anexos de e-mail
+│   ├── __init__.py
+│   └── extractor.py         # Extração de texto: PDF, DOCX, XLSX, texto
 │
 ├── llm/                     # 🧠 Integração LLM
 │   └── client.py            # LLMClient via LiteLLM (sync + async)
@@ -245,6 +249,25 @@ python -m ufpr_automation.rag.ingest
 
 ---
 
+## 📎 Anexos de E-mail
+
+O sistema baixa e extrai texto dos anexos automaticamente durante a leitura dos e-mails (Gmail IMAP). O conteudo extraido e injetado no prompt do LLM para que ele entenda o contexto completo da solicitacao.
+
+### Tipos suportados
+
+| Tipo | Biblioteca | Status |
+|------|-----------|--------|
+| PDF | PyMuPDF | ✅ |
+| DOCX (Word) | python-docx | ✅ |
+| XLSX (Excel) | openpyxl | ✅ |
+| Texto (TXT, CSV) | built-in | ✅ |
+| Imagens (JPG, PNG) | OCR (Tesseract) | Fase 2 |
+| PDFs escaneados | OCR (Tesseract) | Fase 2 |
+
+Os anexos sao salvos em `ufpr_automation/attachments_data/` para referencia e fluxos posteriores (ex: upload ao SEI). Configuravel via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB` no `.env`.
+
+---
+
 ## 🏗️ Fases de Maturidade
 
 | | Marco I | Marco II (Atual) | Marco III |
@@ -266,7 +289,9 @@ python -m ufpr_automation.rag.ingest
 - **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
 - **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
-- **PyMuPDF** — Extração de texto de PDFs
+- **PyMuPDF** — Extração de texto de PDFs (anexos + RAG ingest)
+- **python-docx** — Extração de texto de documentos Word
+- **openpyxl** — Extração de texto de planilhas Excel
 - **LanceDB** — Banco vetorial local (zero servidor)
 - **sentence-transformers** — Embeddings multilíngue (`multilingual-e5-large`)
 - **LangChain Text Splitters** — Chunking semântico para documentos legais

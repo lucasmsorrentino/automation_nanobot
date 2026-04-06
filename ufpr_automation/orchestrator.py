@@ -36,8 +36,19 @@ async def run_pipeline_gmail() -> dict:
     """
     from ufpr_automation.gmail.client import GmailClient
 
+    from ufpr_automation.attachments import extract_text_from_attachment
+
     gmail = GmailClient()
     emails = gmail.list_unread()
+
+    # Extract text from attachments
+    total_atts = 0
+    for email_obj in emails:
+        for att in email_obj.attachments:
+            extract_text_from_attachment(att)
+            total_atts += 1
+    if total_atts:
+        logger.info("Anexos: %d arquivo(s) processado(s) para extracao de texto", total_atts)
 
     if not emails:
         return {

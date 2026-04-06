@@ -38,6 +38,12 @@ SESSION_STATE_FILE = SESSION_DIR / "state.json"
 # Debug output directory
 DEBUG_OUTPUT_DIR = _PACKAGE_DIR / "debug_output"
 
+# Directory where downloaded email attachments are stored
+ATTACHMENTS_DIR = Path(os.getenv("ATTACHMENTS_DIR", str(_PACKAGE_DIR / "attachments_data")))
+
+# Max attachment size to download (in MB)
+ATTACHMENT_MAX_SIZE_MB = int(os.getenv("ATTACHMENT_MAX_SIZE_MB", "25"))
+
 
 # ============================================================================
 # RAG — Vector store and documents directories
@@ -108,7 +114,8 @@ EMAIL_CHANNEL = os.getenv("EMAIL_CHANNEL", "gmail")
 # ============================================================================
 
 GMAIL_EMAIL = os.getenv("GMAIL_EMAIL", "")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # App Password for IMAP/SMTP
+GMAIL_API_KEY = os.getenv("GMAIL_API_KEY", "")        # Primary credential for IMAP/SMTP
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # Fallback credential
 
 
 # ============================================================================

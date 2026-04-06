@@ -24,13 +24,13 @@ graph TB
             OWA1["📧 Outlook Web Access (OWA)<br/>UFPR Microsoft 365"]
             AUTOLOGIN -->|"E-mail + Senha + MFA"| OWA1
             BROWSER1 -->|"Web Scraping DOM"| OWA1
-            OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo"| EXTRACT1["📋 Extração de Dados"]
+            OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo, anexos"| EXTRACT1["📋 Extração de Dados<br/>+ Download de Anexos"]
         end
 
         subgraph P1_COGNICAO["Pensar (LiteLLM + MiniMax)"]
             LLM1["🧠 LiteLLM → MiniMax API"]
             ICL["📝 In-Context Learning<br/>Normas UFPR no System Prompt"]
-            EXTRACT1 -->|"Conteúdo do e-mail"| LLM1
+            EXTRACT1 -->|"Conteúdo do e-mail<br/>+ texto dos anexos"| LLM1
             ICL -->|"Contexto institucional"| LLM1
             LLM1 -->|"Classificação + Resposta"| DRAFT1["✍️ Ofício / Resposta Gerada"]
         end

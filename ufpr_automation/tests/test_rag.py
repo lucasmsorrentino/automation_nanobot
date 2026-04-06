@@ -179,8 +179,8 @@ class TestCollectPdfs:
         assert all("cepe" in str(p) for p in pdfs)
 
     def test_all_pdfs(self):
-        if not DOCS_DIR.exists():
-            pytest.skip("docs folder not available")
+        if not DOCS_DIR.exists() or not list(DOCS_DIR.rglob("*.pdf")):
+            pytest.skip("docs folder empty or not available")
         pdfs = _collect_pdfs(None)
         assert len(pdfs) > 0
 
