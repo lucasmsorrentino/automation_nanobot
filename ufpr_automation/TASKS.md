@@ -114,6 +114,13 @@
   - [x] Configuração via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB`
   - [x] Imagens e PDFs escaneados marcados com `needs_ocr=True` (OCR na Fase 2)
   - [x] 11 testes unitários passando (`tests/test_attachments.py`)
+  - [x] **Teste end-to-end validado (2026-04-06):**
+    - 20 emails lidos, 7 com anexos (20 arquivos: PDFs, PNGs, JPGs)
+    - PDFs com texto: extração OK (ex: despachos SEI, formulário horas formativas)
+    - PDFs escaneados e imagens: marcados `needs_ocr=True` (10+ arquivos, aguardando Fase 2 OCR)
+    - Texto dos anexos injetado no LLM — classificação correta (ex: "Problemas com Estágio" com despachos SEI → Estágios)
+    - 20/20 classificações, 8 rascunhos salvos
+    - 53 testes passando (0 falhas)
 
 - [x] **9. Correção de testes existentes**
   - [x] `test_partial_failure` — mock baseado em conteúdo ao invés de call_count (compatível com Self-Refine)
