@@ -25,8 +25,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from ufpr_automation.config import settings
 from ufpr_automation.config.settings import OWA_INBOX_URL, OWA_URL
-from ufpr_automation.orchestrator import print_summary, run_pipeline
+from ufpr_automation.orchestrator import print_summary, run_pipeline, run_pipeline_gmail
 from ufpr_automation.outlook.browser import (
     auto_login,
     create_browser_context,
@@ -63,6 +64,13 @@ def parse_args() -> argparse.Namespace:
         "--perceber-only",
         action="store_true",
         help="Only run PerceberAgent (scrape + body extraction), skip LLM and drafts.",
+    )
+    parser.add_argument(
+        "--channel",
+        choices=["gmail", "owa"],
+        default=None,
+        help="Email channel to use. Overrides EMAIL_CHANNEL from .env. "
+             "gmail = IMAP API (no MFA), owa = Playwright scraping.",
     )
     return parser.parse_args()
 
@@ -160,11 +168,29 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
     print("\n👋 Execução finalizada.")
 
 
+async def run_gmail_channel() -> None:
+    """Run the pipeline using Gmail IMAP as the email source."""
+    print("\n" + "=" * 60)
+    print("🤖 UFPR Automation — Marco I — Canal Gmail (IMAP)")
+    print("    Ler e-mails → Pensar (paralelo) → Salvar rascunho")
+    print("=" * 60)
+
+    result = await run_pipeline_gmail()
+    print_summary(result)
+    print("\n👋 Execução finalizada.")
+
+
 def main() -> None:
     """CLI entry point."""
     args = parse_args()
+
+    # Determine channel: CLI flag overrides .env setting
+    channel = args.channel or settings.EMAIL_CHANNEL
+
     if args.dry_run:
         asyncio.run(run_dry_run())
+    elif channel == "gmail":
+        asyncio.run(run_gmail_channel())
     else:
         asyncio.run(
             run_main(

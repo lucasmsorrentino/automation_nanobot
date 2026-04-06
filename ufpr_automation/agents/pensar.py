@@ -2,6 +2,7 @@
 
 Responsibilities:
     Classify each email and generate a draft reply using the LLM (via LiteLLM).
+    Optionally retrieves relevant normative documents via RAG before classification.
 
 Key design decision: classification calls are made **concurrently** via
 asyncio.gather(), so N unread emails result in N parallel API calls rather
@@ -11,6 +12,7 @@ than N sequential ones.  This is the "multi-agent" parallelism in Marco I.
 from __future__ import annotations
 
 import asyncio
+from typing import Optional
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.llm.client import LLMClient
@@ -30,16 +32,59 @@ class PensarAgent:
     Args:
         client: Shared LLMClient instance (thread-safe for concurrent calls).
         email: The EmailData to classify.
+        rag_context: Pre-fetched RAG context for this email (if available).
     """
 
-    def __init__(self, client: LLMClient, email: EmailData) -> None:
+    def __init__(
+        self, client: LLMClient, email: EmailData, rag_context: str | None = None
+    ) -> None:
         self._client = client
         self._email = email
+        self._rag_context = rag_context
 
     async def run(self, semaphore: asyncio.Semaphore) -> EmailClassification:
-        """Classify the email and return a structured classification + draft."""
+        """Classify the email, then apply Self-Refine critique+refinement."""
         async with semaphore:
-            return await self._client.classify_email_async(self._email)
+            classification = await self._client.classify_email_async(
+                self._email, rag_context=self._rag_context
+            )
+            # Self-Refine: critique and refine if issues are found
+            try:
+                classification = await self._client.self_refine_async(
+                    self._email, classification, rag_context=self._rag_context
+                )
+            except Exception as e:
+                logger.warning(
+                    "  Self-Refine falhou para '%s': %s (usando classificação original)",
+                    self._email.subject[:40], e,
+                )
+            return classification
+
+
+def _fetch_rag_contexts(emails: list[EmailData]) -> dict[int, str]:
+    """Fetch RAG context for each email using the vector store.
+
+    Returns a dict mapping email index to formatted RAG context string.
+    Silently returns empty dict if the RAG store is not available.
+    """
+    try:
+        from ufpr_automation.rag.retriever import Retriever
+        retriever = Retriever()
+    except Exception as e:
+        logger.debug("RAG não disponível, prosseguindo sem contexto normativo: %s", e)
+        return {}
+
+    contexts: dict[int, str] = {}
+    for i, email in enumerate(emails):
+        query = f"{email.subject} {email.body[:300] if email.body else email.preview}"
+        try:
+            ctx = retriever.search_formatted(query, top_k=5)
+            if ctx and ctx != "Nenhum documento relevante encontrado.":
+                contexts[i] = ctx
+                logger.debug("  RAG: %d resultado(s) para '%s'", ctx.count("["), email.subject[:40])
+        except Exception as e:
+            logger.debug("  RAG falhou para '%s': %s", email.subject[:40], e)
+    return contexts
 
 
 async def run_pensar_concurrently(
@@ -51,6 +96,9 @@ async def run_pensar_concurrently(
     independent LLM call, all fired at the same time.  Individual failures
     are caught and reported, and the pipeline continues with the successful
     classifications.
+
+    Before classification, retrieves relevant normative documents via RAG
+    for each email and injects them into the LLM context.
 
     Args:
         emails: Unread emails with fully populated ``body`` fields.
@@ -66,11 +114,20 @@ async def run_pensar_concurrently(
     logger.info("PENSAR — %d agente(s) classificando em paralelo", len(emails))
     logger.info("=" * 60)
 
+    # Fetch RAG context (synchronous — embedding model runs locally)
+    rag_contexts = _fetch_rag_contexts(emails)
+    if rag_contexts:
+        logger.info("RAG: contexto normativo recuperado para %d/%d e-mail(s)",
+                     len(rag_contexts), len(emails))
+
     # One shared client (one HTTP connection pool, one API key auth)
     client = LLMClient()
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
-    agents = [PensarAgent(client, email) for email in emails]
+    agents = [
+        PensarAgent(client, email, rag_context=rag_contexts.get(i))
+        for i, email in enumerate(emails)
+    ]
     tasks = [agent.run(semaphore) for agent in agents]
 
     logger.info(

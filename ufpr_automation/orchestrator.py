@@ -21,10 +21,67 @@ from __future__ import annotations
 
 from playwright.async_api import Page
 
-from ufpr_automation.agents.agir import AgirAgent
 from ufpr_automation.agents.pensar import run_pensar_concurrently
-from ufpr_automation.agents.perceber import PerceberAgent
 from ufpr_automation.utils.logging import logger
+
+
+async def run_pipeline_gmail() -> dict:
+    """Execute the pipeline using Gmail IMAP as the email source.
+
+    Reads forwarded emails from Gmail, classifies them via LLM,
+    and saves draft replies back to Gmail's Drafts folder.
+
+    Returns:
+        Summary dict matching run_pipeline() format.
+    """
+    from ufpr_automation.gmail.client import GmailClient
+
+    gmail = GmailClient()
+    emails = gmail.list_unread()
+
+    if not emails:
+        return {
+            "total_unread": 0,
+            "classified": 0,
+            "drafts_saved": 0,
+            "emails": [],
+        }
+
+    # Phase 2 — PENSAR (concurrent LLM calls)
+    classified_emails, classifications = await run_pensar_concurrently(emails)
+
+    for email_obj, cls in zip(classified_emails, classifications):
+        email_obj.classification = cls
+
+    # Phase 3 — AGIR (save drafts to Gmail)
+    drafts_saved = 0
+    for email_obj, cls in zip(classified_emails, classifications):
+        if not cls.sugestao_resposta.strip():
+            logger.info("  [%s] Sem sugestão de resposta — pulando", email_obj.subject[:55])
+            continue
+
+        # Extract sender email address for the reply
+        sender = email_obj.sender
+        # Handle "Name <email@addr>" format
+        if "<" in sender and ">" in sender:
+            sender = sender.split("<")[1].rstrip(">")
+
+        ok = gmail.save_draft(
+            to_addr=sender,
+            subject=email_obj.subject,
+            body=cls.sugestao_resposta,
+            in_reply_to=email_obj.gmail_message_id,
+        )
+        if ok:
+            drafts_saved += 1
+            gmail.mark_read(email_obj.gmail_msg_id)
+
+    return {
+        "total_unread": len(emails),
+        "classified": len(classifications),
+        "drafts_saved": drafts_saved,
+        "emails": emails,
+    }
 
 
 async def run_pipeline(page: Page) -> dict:
@@ -40,6 +97,9 @@ async def run_pipeline(page: Page) -> dict:
             - drafts_saved: int
             - emails: List[EmailData]  (with classification attached)
     """
+
+    from ufpr_automation.agents.agir import AgirAgent
+    from ufpr_automation.agents.perceber import PerceberAgent
 
     # ------------------------------------------------------------------ #
     # Phase 1 — PERCEBER                                                   #

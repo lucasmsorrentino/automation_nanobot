@@ -27,11 +27,17 @@ nanobot agent -m "..."   # send a message
 nanobot gateway          # start the gateway server
 nanobot status           # show current status
 
-# Run UFPR automation (auto-login + MFA via Telegram)
-python -m ufpr_automation               # full pipeline (headless, auto-login)
-python -m ufpr_automation --debug       # capture DOM + screenshot
-python -m ufpr_automation --headed      # force visible browser
-python -m ufpr_automation --perceber-only  # scrape only, no LLM
+# Run UFPR automation
+python -m ufpr_automation               # full pipeline (uses EMAIL_CHANNEL from .env)
+python -m ufpr_automation --channel gmail  # force Gmail IMAP channel
+python -m ufpr_automation --channel owa    # force OWA Playwright channel
+python -m ufpr_automation --debug       # capture DOM + screenshot (OWA only)
+python -m ufpr_automation --headed      # force visible browser (OWA only)
+python -m ufpr_automation --perceber-only  # scrape only, no LLM (OWA only)
+
+# Feedback — human corrections store (feeds DSPy in Marco II)
+python -m ufpr_automation.feedback stats    # show feedback statistics
+python -m ufpr_automation.feedback export   # export as JSON for DSPy training
 
 # RAG — Vector store for institutional documents
 pip install -e ".[rag]"                                        # install RAG deps
@@ -80,19 +86,21 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 
 **Packages under `ufpr_automation/`:**
 
-- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access). Includes automated login with credential filling and MFA number-match notification via Telegram Bot.
-- **`llm/`** — LLM client for email classification and draft generation (ICL: UFPR regulations in system prompt). Uses LiteLLM (provider-agnostic); currently configured for MiniMax-M2.
-- **`config/`** — `.env`-based settings (UTF-8 aware for Windows).
-- **`core/`** — Domain model (`EmailData`).
-- **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). Idempotent ingestion (skips already-indexed files). Store in `rag/store/` (git-ignored).
+- **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()`, `save_draft()`, `send_reply()`, `mark_read()`.
+- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot.
+- **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle) and RAG context injection.
+- **`config/`** — `.env`-based settings (UTF-8 aware for Windows). Centralized credentials for Gmail, OWA, SIGA, SEI.
+- **`core/`** — Domain model (`EmailData`, `EmailClassification` with confidence score).
+- **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). RAG context is automatically injected into the LLM classification pipeline. Idempotent ingestion (skips already-indexed files). Store in `rag/store/` (git-ignored).
+- **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for future DSPy prompt optimization (Marco II). CLI for stats and export.
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.
 
-The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I → LangGraph → GraphRAG/multi-agent).
+The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I -> LangGraph -> GraphRAG/multi-agent).
 
 ## Configuration
 
 - **`pyproject.toml`** — Package metadata, dependencies, Ruff config (line-length=100, target py311). Build backend: hatchling.
-- **`.env`** (in `ufpr_automation/`) — OWA credentials, Telegram bot token/chat ID, LLM API keys. See `.env.example`.
+- **`.env`** (in `ufpr_automation/`) — Centralized credentials: Gmail (IMAP), OWA, SIGA, SEI, Telegram, LLM API keys. See `.env.example`.
 - **`docker-compose.yml`** — Two services: `nanobot-gateway` (port 18790, 1 CPU) and `nanobot-cli`.
 - **`nanobot/templates/`** — Default config templates copied during `nanobot onboard`.
 

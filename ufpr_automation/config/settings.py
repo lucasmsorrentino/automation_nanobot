@@ -87,12 +87,50 @@ ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL")
 
 
 # ============================================================================
-# LLM Provider (for future Marco I Gemini integration)
+# Email Channel Selection
 # ============================================================================
 
-# Telegram notification for MFA number matching
+# Which channel to use for reading emails: "gmail" (API, no MFA) or "owa" (Playwright)
+EMAIL_CHANNEL = os.getenv("EMAIL_CHANNEL", "gmail")
+
+
+# ============================================================================
+# Gmail (primary channel — receives forwarded emails from OWA)
+# ============================================================================
+
+GMAIL_EMAIL = os.getenv("GMAIL_EMAIL", "")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # App Password for IMAP/SMTP
+
+
+# ============================================================================
+# Telegram (MFA notification for OWA login)
+# ============================================================================
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+
+# ============================================================================
+# SIGA (Sistema de Gestão Acadêmica)
+# ============================================================================
+
+SIGA_URL = os.getenv("SIGA_URL", "https://www.prppg.ufpr.br/siga/")
+SIGA_USERNAME = os.getenv("SIGA_USERNAME", "")
+SIGA_PASSWORD = os.getenv("SIGA_PASSWORD", "")
+
+
+# ============================================================================
+# SEI (Sistema Eletrônico de Informações)
+# ============================================================================
+
+SEI_URL = os.getenv("SEI_URL", "https://sei.ufpr.br/")
+SEI_USERNAME = os.getenv("SEI_USERNAME", "")
+SEI_PASSWORD = os.getenv("SEI_PASSWORD", "")
+
+
+# ============================================================================
+# LLM Provider
+# ============================================================================
 
 # API Key for the LLM provider (NEVER hardcode this!)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

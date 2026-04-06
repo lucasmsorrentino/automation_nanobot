@@ -40,6 +40,14 @@ class EmailClassification(BaseModel):
     sugestao_resposta: str = Field(
         description="Sugestão de resposta formal redigida em nome do setor para ser enviada, seguindo os templates disponíveis e a assinatura da equipe. Vazio se não for necessário responder."
     )
+    confianca: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Nível de confiança na classificação e resposta (0.0 = baixa, 1.0 = alta). "
+                    "Considere: clareza da demanda, certeza da regulamentação aplicável, "
+                    "e adequação da resposta sugerida.",
+    )
 
 
 @dataclass
@@ -67,6 +75,9 @@ class EmailData:
     timestamp: str = ""
     stable_id: str = ""
     classification: Optional[EmailClassification] = None
+    # Gmail-specific fields (populated when using Gmail channel)
+    gmail_msg_id: str = ""         # IMAP UID for mark_read / fetch
+    gmail_message_id: str = ""     # RFC Message-ID header for threading
 
     def compute_stable_id(self) -> str:
         """Generate a stable hash from sender + subject + timestamp.

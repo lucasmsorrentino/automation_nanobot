@@ -1,0 +1,263 @@
+"""Gmail client for reading forwarded UFPR emails via IMAP.
+
+Uses App Password authentication (no OAuth, no extra dependencies).
+The Gmail account receives auto-forwarded emails from the UFPR Outlook
+mailbox, so the system never needs to interact with OWA directly.
+
+Usage:
+    client = GmailClient()
+    emails = client.list_unread()
+    client.mark_read(emails[0].gmail_msg_id)
+"""
+
+from __future__ import annotations
+
+import email
+import email.header
+import email.utils
+import imaplib
+import smtplib
+from email.mime.text import MIMEText
+from typing import Optional
+
+from ufpr_automation.config import settings
+from ufpr_automation.core.models import EmailData
+from ufpr_automation.utils.logging import logger
+
+IMAP_HOST = "imap.gmail.com"
+IMAP_PORT = 993
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+
+
+def _decode_header(raw: str) -> str:
+    """Decode RFC 2047 encoded email header into a plain string."""
+    if not raw:
+        return ""
+    parts = email.header.decode_header(raw)
+    decoded = []
+    for data, charset in parts:
+        if isinstance(data, bytes):
+            decoded.append(data.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(data)
+    return " ".join(decoded)
+
+
+def _extract_text(msg: email.message.Message) -> str:
+    """Extract the plain-text body from a MIME message."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            ct = part.get_content_type()
+            disp = str(part.get("Content-Disposition", ""))
+            if ct == "text/plain" and "attachment" not in disp:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace")
+        # Fallback: try text/html if no plain text found
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if ct == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace")
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            return payload.decode(charset, errors="replace")
+    return ""
+
+
+class GmailClient:
+    """Read and respond to emails via Gmail IMAP/SMTP with App Password."""
+
+    def __init__(
+        self,
+        email_addr: Optional[str] = None,
+        app_password: Optional[str] = None,
+    ):
+        self.email_addr = email_addr or settings.GMAIL_EMAIL
+        self.app_password = app_password or settings.GMAIL_APP_PASSWORD
+        if not self.email_addr or not self.app_password:
+            raise ValueError(
+                "Gmail credentials not configured. "
+                "Set GMAIL_EMAIL and GMAIL_APP_PASSWORD in .env"
+            )
+
+    # ------------------------------------------------------------------
+    # IMAP connection
+    # ------------------------------------------------------------------
+
+    def _connect_imap(self) -> imaplib.IMAP4_SSL:
+        """Open an authenticated IMAP connection."""
+        conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        conn.login(self.email_addr, self.app_password)
+        return conn
+
+    # ------------------------------------------------------------------
+    # Read emails
+    # ------------------------------------------------------------------
+
+    def list_unread(self, folder: str = "INBOX", limit: int = 20) -> list[EmailData]:
+        """Fetch unread emails and return as EmailData objects.
+
+        Args:
+            folder: IMAP folder to read from.
+            limit: Max number of unread emails to fetch.
+
+        Returns:
+            List of EmailData with body populated.
+        """
+        conn = self._connect_imap()
+        try:
+            conn.select(folder, readonly=True)
+            _, data = conn.search(None, "UNSEEN")
+            msg_ids = data[0].split() if data[0] else []
+
+            if not msg_ids:
+                logger.info("Gmail: nenhum e-mail não lido encontrado.")
+                return []
+
+            # Most recent first, respect limit
+            msg_ids = msg_ids[-limit:][::-1]
+            logger.info("Gmail: %d e-mail(s) não lido(s) encontrado(s).", len(msg_ids))
+
+            emails: list[EmailData] = []
+            for idx, msg_id in enumerate(msg_ids):
+                _, msg_data = conn.fetch(msg_id, "(RFC822)")
+                if not msg_data or not msg_data[0]:
+                    continue
+
+                raw = msg_data[0][1]
+                msg = email.message_from_bytes(raw)
+
+                sender = _decode_header(msg.get("From", ""))
+                subject = _decode_header(msg.get("Subject", ""))
+                date_str = msg.get("Date", "")
+                body = _extract_text(msg)
+                message_id = msg.get("Message-ID", "")
+
+                ed = EmailData(
+                    sender=sender,
+                    subject=subject,
+                    preview=body[:200] if body else "",
+                    body=body,
+                    email_index=idx,
+                    is_unread=True,
+                    timestamp=date_str,
+                    gmail_msg_id=msg_id.decode("utf-8"),
+                    gmail_message_id=message_id,
+                )
+                ed.compute_stable_id()
+                emails.append(ed)
+
+                logger.info(
+                    "  [%d/%d] %s (id: %s)",
+                    idx + 1, len(msg_ids), subject[:60], ed.stable_id[:8],
+                )
+
+            return emails
+        finally:
+            conn.logout()
+
+    # ------------------------------------------------------------------
+    # Mark as read
+    # ------------------------------------------------------------------
+
+    def mark_read(self, gmail_msg_id: str, folder: str = "INBOX") -> bool:
+        """Mark a specific email as read (Seen) by its IMAP message ID."""
+        conn = self._connect_imap()
+        try:
+            conn.select(folder)
+            conn.store(gmail_msg_id.encode(), "+FLAGS", "\\Seen")
+            logger.debug("Gmail: marcou msg %s como lido.", gmail_msg_id)
+            return True
+        except Exception as e:
+            logger.warning("Gmail: falha ao marcar msg %s como lido: %s", gmail_msg_id, e)
+            return False
+        finally:
+            conn.logout()
+
+    # ------------------------------------------------------------------
+    # Send reply (save as draft or send directly)
+    # ------------------------------------------------------------------
+
+    def send_reply(
+        self,
+        to_addr: str,
+        subject: str,
+        body: str,
+        in_reply_to: str = "",
+    ) -> bool:
+        """Send a reply email via SMTP.
+
+        For now this is used to save responses. In Marco II with confidence
+        routing, high-confidence replies can be sent directly.
+
+        Args:
+            to_addr: Recipient email address.
+            subject: Email subject (will prepend "Re: " if not present).
+            body: Plain text body of the reply.
+            in_reply_to: Message-ID of the original email for threading.
+
+        Returns:
+            True if sent successfully.
+        """
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["From"] = self.email_addr
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+            msg["References"] = in_reply_to
+
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                server.login(self.email_addr, self.app_password)
+                server.send_message(msg)
+            logger.info("Gmail: resposta enviada para %s — %s", to_addr, subject[:50])
+            return True
+        except Exception as e:
+            logger.error("Gmail: falha ao enviar resposta: %s", e)
+            return False
+
+    def save_draft(self, to_addr: str, subject: str, body: str, in_reply_to: str = "") -> bool:
+        """Save a reply as a draft in Gmail's Drafts folder via IMAP APPEND.
+
+        Args:
+            to_addr: Recipient email address.
+            subject: Email subject.
+            body: Plain text body.
+            in_reply_to: Message-ID of the original email.
+
+        Returns:
+            True if draft saved successfully.
+        """
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["From"] = self.email_addr
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+            msg["References"] = in_reply_to
+
+        conn = self._connect_imap()
+        try:
+            conn.append("[Gmail]/Drafts", "\\Draft", None, msg.as_bytes())
+            logger.info("Gmail: rascunho salvo para %s — %s", to_addr, subject[:50])
+            return True
+        except Exception as e:
+            logger.error("Gmail: falha ao salvar rascunho: %s", e)
+            return False
+        finally:
+            conn.logout()

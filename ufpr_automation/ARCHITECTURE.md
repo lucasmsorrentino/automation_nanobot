@@ -170,9 +170,9 @@ graph LR
 |-------------------|-----------------------------|------------------------------|-------------------------------|
 | **Linguagem**     | Python                      | Python                       | Python                        |
 | **Orquestrador**  | Nanobot (loop nativo)       | LangGraph                    | LangGraph (Fleet)             |
-| **Motor Cognitivo** | LiteLLM → MiniMax (ICL)   | LiteLLM → MiniMax (RAG)      | LiteLLM → MiniMax (GraphRAG)  |
-| **Memória**       | System Prompt (In-Context)  | LanceDB / Chroma (Vetorial)  | Neo4j (Grafo de Conhecimento) |
-| **Interface I/O** | Playwright → OWA            | Playwright → OWA             | Playwright → OWA + SIGA + SEI |
+| **Motor Cognitivo** | LiteLLM → MiniMax (RAG + Self-Refine) | LiteLLM → MiniMax (DSPy) | LiteLLM → MiniMax (GraphRAG)  |
+| **Memória**       | LanceDB (Vetorial) + SOUL.md | LanceDB + RAPTOR (Hierárquico) | Neo4j (Grafo de Conhecimento) |
+| **Interface I/O** | Gmail API (IMAP) / Playwright OWA | Gmail API / Playwright OWA | Gmail + SIGA + SEI |
 | **Autonomia**     | Rascunho + Revisão Humana   | Auto (baixo risco) + Humano  | Totalmente autônomo           |
 | **Autenticação**  | Auto-login + MFA Telegram   | Auto-login + MFA Telegram    | Auto-login + MFA Telegram     |
 | **Tratamento Erro** | Logs no terminal          | Recovery nodes (LangGraph)   | Auto-healing + alertas        |
