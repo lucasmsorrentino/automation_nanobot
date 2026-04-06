@@ -40,6 +40,15 @@ DEBUG_OUTPUT_DIR = _PACKAGE_DIR / "debug_output"
 
 
 # ============================================================================
+# RAG — Vector store and documents directories
+# ============================================================================
+
+# Override to share the store via network/cloud (e.g. OneDrive, NAS)
+RAG_STORE_DIR = Path(os.getenv("RAG_STORE_DIR", str(_PACKAGE_DIR / "rag" / "store")))
+RAG_DOCS_DIR = Path(os.getenv("RAG_DOCS_DIR", str(_PACKAGE_DIR / "docs")))
+
+
+# ============================================================================
 # Outlook Web Access (OWA)
 # ============================================================================
 

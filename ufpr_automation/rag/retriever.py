@@ -19,7 +19,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STORE_DIR = Path(__file__).resolve().parent / "store"
+from ufpr_automation.config import settings
+
+STORE_DIR = settings.RAG_STORE_DIR
 TABLE_NAME = "ufpr_docs"
 
 

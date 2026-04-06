@@ -17,8 +17,10 @@ from pathlib import Path
 
 import pymupdf  # PyMuPDF
 
-DOCS_DIR = Path(__file__).resolve().parent.parent / "docs"
-STORE_DIR = Path(__file__).resolve().parent / "store"
+from ufpr_automation.config import settings
+
+DOCS_DIR = settings.RAG_DOCS_DIR
+STORE_DIR = settings.RAG_STORE_DIR
 
 # Councils and doc types that map to folder structure
 COUNCILS = ("cepe", "coun", "coplad", "concur")

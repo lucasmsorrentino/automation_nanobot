@@ -51,6 +51,20 @@ python -m ufpr_automation.rag.chat                             # interactive CLI
 python -m ufpr_automation.rag.chat --conselho cepe             # with pre-filter
 streamlit run ufpr_automation/rag/web.py                        # Streamlit web UI (port 8501)
 
+# RAPTOR — hierarchical RAG index (requires rag extras)
+python -m ufpr_automation.rag.raptor                            # build RAPTOR tree
+python -m ufpr_automation.rag.raptor --max-levels 3             # custom depth
+python -m ufpr_automation.rag.raptor --dry-run                  # cluster stats only
+
+# DSPy — prompt optimization (requires marco2 extras)
+pip install -e ".[marco2]"
+python -m ufpr_automation.dspy_modules.optimize --strategy gepa  # bootstrap (no data)
+python -m ufpr_automation.dspy_modules.optimize --strategy mipro # requires 20+ feedback
+python -m ufpr_automation.dspy_modules.optimize --evaluate-only  # evaluate current prompts
+
+# LangGraph pipeline (Marco II)
+python -m ufpr_automation --channel gmail --langgraph           # use LangGraph orchestrator
+
 # Run UFPR automation tests
 pytest ufpr_automation/tests/ -v
 ```
@@ -82,17 +96,19 @@ An ultra-lightweight AI agent framework. The agent implements a simple sense →
 
 ### ufpr_automation (sub-project)
 
-A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco I (Prototype)** phase (~600 lines).
+A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco II (LangGraph + DSPy)** phase.
 
 **Packages under `ufpr_automation/`:**
 
 - **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()`, `save_draft()`, `send_reply()`, `mark_read()`.
-- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot.
+- **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot. `locators.py` provides resilient locator fallback chains (semantic -> text -> ID -> CSS).
 - **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle) and RAG context injection.
-- **`config/`** — `.env`-based settings (UTF-8 aware for Windows). Centralized credentials for Gmail, OWA, SIGA, SEI.
+- **`config/`** — `.env`-based settings (UTF-8 aware for Windows). Centralized credentials for Gmail, OWA, SIGA, SEI. Configurable RAG store/docs paths (`RAG_STORE_DIR`, `RAG_DOCS_DIR`).
 - **`core/`** — Domain model (`EmailData`, `EmailClassification` with confidence score).
-- **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). RAG context is automatically injected into the LLM classification pipeline. Idempotent ingestion (skips already-indexed files). Store in `rag/store/` (git-ignored).
-- **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for future DSPy prompt optimization (Marco II). CLI for stats and export.
+- **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). `raptor.py` provides hierarchical RAPTOR indexing (GMM clustering + recursive summarization) with collapsed tree retrieval. RAG context is automatically injected into the LLM classification pipeline. Store path configurable via `RAG_STORE_DIR` env var for sharing across machines.
+- **`graph/`** — LangGraph StateGraph orchestrator (Marco II). Nodes: perceber (Gmail/OWA) -> rag_retrieve (RAPTOR/flat + Reflexion) -> classificar (DSPy/LiteLLM) -> rotear (confidence routing) -> agir (save drafts). SQLite checkpointing for fault tolerance.
+- **`dspy_modules/`** — DSPy Signatures and Modules for programmatic prompt optimization. `signatures.py` declares EmailClassifier, DraftCritic, DraftRefiner. `modules.py` composes them into SelfRefineModule. `metrics.py` provides quality metrics. `optimize.py` runs GEPA bootstrap or MIPROv2 optimization.
+- **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for DSPy prompt optimization. `reflexion.py` implements Reflexion pattern: auto-analyzes errors, stores in vector store, retrieves past mistakes as negative context. CLI for stats and export.
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.
 
 The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I -> LangGraph -> GraphRAG/multi-agent).

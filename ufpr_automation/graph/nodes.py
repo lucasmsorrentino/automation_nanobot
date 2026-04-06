@@ -45,15 +45,59 @@ def perceber_owa(state: EmailState) -> dict[str, Any]:
     return {"emails": [], "errors": state.get("errors", [])}
 
 
+def _get_reflexion_context(emails: list) -> dict[str, str]:
+    """Retrieve past error reflections for each email (Reflexion pattern)."""
+    try:
+        from ufpr_automation.feedback.reflexion import ReflexionMemory
+        memory = ReflexionMemory()
+        if memory.count() == 0:
+            return {}
+        contexts = {}
+        for email in emails:
+            query = f"{email.subject} {(email.body or email.preview)[:200]}"
+            ctx = memory.retrieve_formatted(query, top_k=3)
+            if ctx:
+                contexts[email.stable_id] = ctx
+        if contexts:
+            logger.info("Reflexion: contexto de erros anteriores para %d e-mail(s)", len(contexts))
+        return contexts
+    except Exception as e:
+        logger.debug("Reflexion nao disponivel: %s", e)
+        return {}
+
+
+def _get_retriever():
+    """Get the best available retriever (RAPTOR > flat)."""
+    try:
+        from ufpr_automation.rag.raptor import RAPTOR_TABLE, STORE_DIR, RaptorRetriever
+
+        import lancedb
+
+        db_path = STORE_DIR / "ufpr.lance"
+        if db_path.exists():
+            db = lancedb.connect(str(db_path))
+            if RAPTOR_TABLE in db.list_tables().tables:
+                logger.info("RAG: usando RAPTOR (collapsed tree retrieval)")
+                return RaptorRetriever()
+    except Exception:
+        pass
+
+    from ufpr_automation.rag.retriever import Retriever
+
+    return Retriever()
+
+
 def rag_retrieve(state: EmailState) -> dict[str, Any]:
-    """Fetch RAG context for each email from the vector store."""
+    """Fetch RAG context for each email from the vector store.
+
+    Uses RAPTOR collapsed tree retrieval if available, otherwise flat search.
+    """
     emails = state.get("emails", [])
     if not emails:
         return {"rag_contexts": {}}
 
     try:
-        from ufpr_automation.rag.retriever import Retriever
-        retriever = Retriever()
+        retriever = _get_retriever()
     except Exception as e:
         logger.debug("RAG nao disponivel: %s", e)
         return {"rag_contexts": {}}
@@ -68,18 +112,63 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
         except Exception as e:
             logger.debug("RAG falhou para '%s': %s", email.subject[:40], e)
 
+    # Append Reflexion (past error) contexts
+    reflexion_contexts = _get_reflexion_context(emails)
+    for sid, ref_ctx in reflexion_contexts.items():
+        if sid in contexts:
+            contexts[sid] += f"\n\n{ref_ctx}"
+        else:
+            contexts[sid] = ref_ctx
+
     logger.info("RAG: contexto recuperado para %d/%d e-mail(s)", len(contexts), len(emails))
     return {"rag_contexts": contexts}
 
 
-def classificar(state: EmailState) -> dict[str, Any]:
-    """Classify emails using LLM with RAG context and Self-Refine."""
-    emails = state.get("emails", [])
-    rag_contexts = state.get("rag_contexts", {})
-    if not emails:
-        return {"classifications": {}}
+def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
+    """Classify emails using DSPy modules (optimizable prompts)."""
+    import dspy as _dspy
 
+    from ufpr_automation.config import settings
+    from ufpr_automation.dspy_modules.modules import (
+        SelfRefineModule,
+        prediction_to_classification,
+    )
+
+    # Configure DSPy LM
+    lm = _dspy.LM(model=f"litellm/{settings.LLM_MODEL}", temperature=0.2)
+    _dspy.configure(lm=lm)
+
+    # Try loading optimized module
+    from ufpr_automation.dspy_modules.optimize import OPTIMIZED_DIR
+
+    module = SelfRefineModule()
+    for name in ("mipro_optimized.json", "gepa_optimized.json"):
+        path = OPTIMIZED_DIR / name
+        if path.exists():
+            module.load(str(path))
+            logger.info("DSPy: loaded optimized module from %s", path.name)
+            break
+
+    results = {}
+    for email in emails:
+        try:
+            rag_ctx = rag_contexts.get(email.stable_id, "")
+            pred = module(
+                email_subject=email.subject,
+                email_body=email.body or email.preview,
+                email_sender=email.sender,
+                rag_context=rag_ctx,
+            )
+            results[email.stable_id] = prediction_to_classification(pred)
+        except Exception as e:
+            logger.warning("DSPy classificacao falhou para '%s': %s", email.subject[:40], e)
+    return results
+
+
+def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
+    """Classify emails using direct LiteLLM calls (original approach)."""
     from ufpr_automation.llm.client import LLMClient
+
     client = LLMClient()
 
     async def _classify_all():
@@ -89,7 +178,6 @@ def classificar(state: EmailState) -> dict[str, Any]:
             try:
                 rag_ctx = rag_contexts.get(email.stable_id)
                 cls = await client.classify_email_async(email, rag_context=rag_ctx)
-                # Self-Refine
                 try:
                     cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
                 except Exception as e:
@@ -99,7 +187,28 @@ def classificar(state: EmailState) -> dict[str, Any]:
                 logger.warning("Classificacao falhou para '%s': %s", email.subject[:40], e)
         return results
 
-    classifications = asyncio.run(_classify_all())
+    return asyncio.run(_classify_all())
+
+
+def classificar(state: EmailState) -> dict[str, Any]:
+    """Classify emails using LLM with RAG context and Self-Refine.
+
+    Uses DSPy modules if available (pip install dspy), otherwise falls back
+    to direct LiteLLM calls.
+    """
+    emails = state.get("emails", [])
+    rag_contexts = state.get("rag_contexts", {})
+    if not emails:
+        return {"classifications": {}}
+
+    try:
+        import dspy as _dspy  # noqa: F401
+        logger.info("Classificar: usando DSPy modules")
+        classifications = _classify_with_dspy(emails, rag_contexts)
+    except ImportError:
+        logger.info("Classificar: DSPy nao disponivel, usando LiteLLM direto")
+        classifications = _classify_with_litellm(emails, rag_contexts)
+
     logger.info("Classificar: %d/%d e-mail(s) classificados", len(classifications), len(emails))
     return {"classifications": classifications}
 
