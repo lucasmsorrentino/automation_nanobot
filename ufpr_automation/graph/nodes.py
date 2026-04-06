@@ -1,0 +1,171 @@
+"""Node functions for the LangGraph email processing pipeline.
+
+Each function takes the current state and returns a partial state update.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from typing import Any
+
+from ufpr_automation.core.models import EmailClassification, EmailData
+from ufpr_automation.graph.state import EmailState
+from ufpr_automation.utils.logging import logger
+
+# Confidence thresholds for routing
+CONFIDENCE_HIGH = 0.95   # auto-draft
+CONFIDENCE_MEDIUM = 0.70  # human review
+
+
+def perceber_gmail(state: EmailState) -> dict[str, Any]:
+    """Read unread emails from Gmail IMAP."""
+    from ufpr_automation.gmail.client import GmailClient
+
+    try:
+        client = GmailClient()
+        emails = client.list_unread()
+        logger.info("Perceber (Gmail): %d e-mail(s) nao lido(s)", len(emails))
+        return {"emails": emails, "errors": state.get("errors", [])}
+    except Exception as e:
+        logger.error("Perceber (Gmail) falhou: %s", e)
+        return {
+            "emails": [],
+            "errors": state.get("errors", []) + [{"node": "perceber_gmail", "error": str(e)}],
+        }
+
+
+def perceber_owa(state: EmailState) -> dict[str, Any]:
+    """Read unread emails from OWA via Playwright.
+
+    Note: This node requires a Playwright page passed via state or
+    initialized here. For now, delegates to the existing PerceberAgent.
+    """
+    logger.warning("Perceber OWA via LangGraph not yet implemented — use CLI --channel owa")
+    return {"emails": [], "errors": state.get("errors", [])}
+
+
+def rag_retrieve(state: EmailState) -> dict[str, Any]:
+    """Fetch RAG context for each email from the vector store."""
+    emails = state.get("emails", [])
+    if not emails:
+        return {"rag_contexts": {}}
+
+    try:
+        from ufpr_automation.rag.retriever import Retriever
+        retriever = Retriever()
+    except Exception as e:
+        logger.debug("RAG nao disponivel: %s", e)
+        return {"rag_contexts": {}}
+
+    contexts: dict[str, str] = {}
+    for email in emails:
+        query = f"{email.subject} {(email.body or email.preview)[:300]}"
+        try:
+            ctx = retriever.search_formatted(query, top_k=5)
+            if ctx and ctx != "Nenhum documento relevante encontrado.":
+                contexts[email.stable_id] = ctx
+        except Exception as e:
+            logger.debug("RAG falhou para '%s': %s", email.subject[:40], e)
+
+    logger.info("RAG: contexto recuperado para %d/%d e-mail(s)", len(contexts), len(emails))
+    return {"rag_contexts": contexts}
+
+
+def classificar(state: EmailState) -> dict[str, Any]:
+    """Classify emails using LLM with RAG context and Self-Refine."""
+    emails = state.get("emails", [])
+    rag_contexts = state.get("rag_contexts", {})
+    if not emails:
+        return {"classifications": {}}
+
+    from ufpr_automation.llm.client import LLMClient
+    client = LLMClient()
+
+    async def _classify_all():
+        import litellm  # noqa: F401
+        results = {}
+        for email in emails:
+            try:
+                rag_ctx = rag_contexts.get(email.stable_id)
+                cls = await client.classify_email_async(email, rag_context=rag_ctx)
+                # Self-Refine
+                try:
+                    cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
+                except Exception as e:
+                    logger.warning("Self-Refine falhou para '%s': %s", email.subject[:40], e)
+                results[email.stable_id] = cls
+            except Exception as e:
+                logger.warning("Classificacao falhou para '%s': %s", email.subject[:40], e)
+        return results
+
+    classifications = asyncio.run(_classify_all())
+    logger.info("Classificar: %d/%d e-mail(s) classificados", len(classifications), len(emails))
+    return {"classifications": classifications}
+
+
+def rotear(state: EmailState) -> dict[str, Any]:
+    """Route emails by confidence score into auto/review/escalation buckets."""
+    classifications = state.get("classifications", {})
+
+    auto_draft: list[str] = []
+    human_review: list[str] = []
+    manual_escalation: list[str] = []
+
+    for sid, cls in classifications.items():
+        if cls.confianca >= CONFIDENCE_HIGH:
+            auto_draft.append(sid)
+        elif cls.confianca >= CONFIDENCE_MEDIUM:
+            human_review.append(sid)
+        else:
+            manual_escalation.append(sid)
+
+    logger.info(
+        "Roteamento: %d auto | %d revisao | %d escalacao",
+        len(auto_draft), len(human_review), len(manual_escalation),
+    )
+    return {
+        "auto_draft": auto_draft,
+        "human_review": human_review,
+        "manual_escalation": manual_escalation,
+    }
+
+
+def agir_gmail(state: EmailState) -> dict[str, Any]:
+    """Save drafts to Gmail for emails routed to auto_draft or human_review."""
+    from ufpr_automation.gmail.client import GmailClient
+
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+    # Save drafts for both auto and review — human reviews the draft
+    eligible = set(state.get("auto_draft", []) + state.get("human_review", []))
+
+    if not eligible:
+        return {"drafts_saved": []}
+
+    email_map = {e.stable_id: e for e in emails}
+    gmail = GmailClient()
+    saved: list[str] = []
+
+    for sid in eligible:
+        email = email_map.get(sid)
+        cls = classifications.get(sid)
+        if not email or not cls or not cls.sugestao_resposta.strip():
+            continue
+
+        sender = email.sender
+        if "<" in sender and ">" in sender:
+            sender = sender.split("<")[1].rstrip(">")
+
+        ok = gmail.save_draft(
+            to_addr=sender,
+            subject=email.subject,
+            body=cls.sugestao_resposta,
+            in_reply_to=email.gmail_message_id,
+        )
+        if ok:
+            saved.append(sid)
+            gmail.mark_read(email.gmail_msg_id)
+
+    logger.info("Agir (Gmail): %d rascunho(s) salvo(s)", len(saved))
+    return {"drafts_saved": saved}

@@ -72,6 +72,11 @@ def parse_args() -> argparse.Namespace:
         help="Email channel to use. Overrides EMAIL_CHANNEL from .env. "
              "gmail = IMAP API (no MFA), owa = Playwright scraping.",
     )
+    parser.add_argument(
+        "--langgraph",
+        action="store_true",
+        help="Use LangGraph pipeline (Marco II) instead of sequential orchestrator.",
+    )
     return parser.parse_args()
 
 
@@ -168,15 +173,40 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
     print("\n👋 Execução finalizada.")
 
 
-async def run_gmail_channel() -> None:
+async def run_gmail_channel(use_langgraph: bool = False) -> None:
     """Run the pipeline using Gmail IMAP as the email source."""
     print("\n" + "=" * 60)
-    print("🤖 UFPR Automation — Marco I — Canal Gmail (IMAP)")
-    print("    Ler e-mails → Pensar (paralelo) → Salvar rascunho")
+    if use_langgraph:
+        print("🤖 UFPR Automation — Marco II — LangGraph Pipeline")
+        print("    Perceber → RAG → Classificar → Rotear → Agir")
+    else:
+        print("🤖 UFPR Automation — Marco I — Canal Gmail (IMAP)")
+        print("    Ler e-mails → Pensar (paralelo) → Salvar rascunho")
     print("=" * 60)
 
-    result = await run_pipeline_gmail()
-    print_summary(result)
+    if use_langgraph:
+        from ufpr_automation.graph.builder import build_graph
+        graph = build_graph(channel="gmail")
+        result = graph.invoke({"channel": "gmail"})
+        # Adapt LangGraph state to summary format
+        emails = result.get("emails", [])
+        classifications = result.get("classifications", {})
+        drafts = result.get("drafts_saved", [])
+        # Attach classifications to emails for print_summary
+        for e in emails:
+            if e.stable_id in classifications:
+                e.classification = classifications[e.stable_id]
+        summary = {
+            "total_unread": len(emails),
+            "classified": len(classifications),
+            "drafts_saved": len(drafts),
+            "emails": emails,
+        }
+        print_summary(summary)
+    else:
+        result = await run_pipeline_gmail()
+        print_summary(result)
+
     print("\n👋 Execução finalizada.")
 
 
@@ -190,7 +220,7 @@ def main() -> None:
     if args.dry_run:
         asyncio.run(run_dry_run())
     elif channel == "gmail":
-        asyncio.run(run_gmail_channel())
+        asyncio.run(run_gmail_channel(use_langgraph=args.langgraph))
     else:
         asyncio.run(
             run_main(
