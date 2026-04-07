@@ -134,10 +134,24 @@ def _extract_xlsx(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _configure_tesseract():
+    """Set Tesseract path on Windows if not already on PATH."""
+    import sys
+    if sys.platform == "win32":
+        import shutil
+        if not shutil.which("tesseract"):
+            import pytesseract
+            win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+            from pathlib import Path
+            if Path(win_path).exists():
+                pytesseract.pytesseract.tesseract_cmd = win_path
+
+
 def _is_tesseract_available() -> bool:
     """Check if Tesseract OCR is installed and accessible."""
     try:
         import pytesseract
+        _configure_tesseract()
         pytesseract.get_tesseract_version()
         return True
     except Exception:

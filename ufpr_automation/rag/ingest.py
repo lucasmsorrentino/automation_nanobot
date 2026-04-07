@@ -18,6 +18,7 @@ from pathlib import Path
 import pymupdf  # PyMuPDF
 
 from ufpr_automation.config import settings
+from ufpr_automation.utils.logging import logger
 
 DOCS_DIR = settings.RAG_DOCS_DIR
 STORE_DIR = settings.RAG_STORE_DIR
@@ -31,16 +32,74 @@ DOC_TYPES = ("atas", "resolucoes", "instrucoes-normativas")
 # PDF text extraction
 # ---------------------------------------------------------------------------
 
-def extract_text(pdf_path: Path) -> str:
-    """Extract text from a PDF using PyMuPDF."""
+def extract_text(pdf_path: Path, use_ocr: bool = True) -> str:
+    """Extract text from a PDF using PyMuPDF, with OCR fallback for scanned pages.
+
+    Args:
+        pdf_path: Path to the PDF file.
+        use_ocr: If True and PyMuPDF returns no text, try Tesseract OCR.
+    """
     doc = pymupdf.open(str(pdf_path))
     pages = []
     for page in doc:
         text = page.get_text()
         if text.strip():
             pages.append(text)
+    num_pages = len(doc)
     doc.close()
-    return "\n\n".join(pages)
+
+    full_text = "\n\n".join(pages)
+
+    # If we got enough text, return it
+    if full_text.strip():
+        return full_text
+
+    # OCR fallback for scanned PDFs
+    if use_ocr and num_pages > 0:
+        return _ocr_pdf(pdf_path)
+
+    return ""
+
+
+def _ocr_pdf(pdf_path: Path) -> str:
+    """Extract text from a scanned PDF via Tesseract OCR."""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        logger.debug("pytesseract/Pillow not installed — skipping OCR")
+        return ""
+
+    # Auto-detect Tesseract on Windows
+    if sys.platform == "win32":
+        import shutil
+        if not shutil.which("tesseract"):
+            win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+            if Path(win_path).exists():
+                pytesseract.pytesseract.tesseract_cmd = win_path
+
+    try:
+        pytesseract.get_tesseract_version()
+    except Exception:
+        logger.debug("Tesseract not found on system — skipping OCR")
+        return ""
+
+    import io
+
+    doc = pymupdf.open(str(pdf_path))
+    pages_text = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=300)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        text = pytesseract.image_to_string(img, lang="por+eng")
+        if text.strip():
+            pages_text.append(text.strip())
+    doc.close()
+
+    full_text = "\n\n".join(pages_text)
+    if full_text:
+        logger.info("OCR: %d chars from '%s' (%d pages)", len(full_text), pdf_path.name, len(pages_text))
+    return full_text
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +214,8 @@ def ingest_docs(
     chunk_overlap: int = 200,
     dry_run: bool = False,
     table_name: str = "ufpr_docs",
+    ocr_only: bool = False,
+    use_ocr: bool = True,
 ) -> dict:
     """Main ingestion pipeline: PDF -> text -> chunks -> embeddings -> LanceDB.
 
@@ -164,9 +225,11 @@ def ingest_docs(
         chunk_overlap: Overlap between consecutive chunks.
         dry_run: If True, extract and chunk but don't embed or index.
         table_name: Name of the LanceDB table.
+        ocr_only: If True, only process PDFs that were previously empty (not indexed).
+        use_ocr: If True, use Tesseract OCR for scanned PDFs (default True).
 
     Returns:
-        Dict with stats: {pdfs, chunks, indexed, skipped, errors}.
+        Dict with stats: {pdfs, chunks, indexed, skipped, errors, ocr_recovered}.
     """
     import lancedb
     import pyarrow as pa
@@ -176,7 +239,7 @@ def ingest_docs(
     print(f"Found {len(pdf_paths)} PDFs to process.")
 
     if not pdf_paths:
-        return {"pdfs": 0, "chunks": 0, "indexed": 0, "skipped": 0, "errors": 0}
+        return {"pdfs": 0, "chunks": 0, "indexed": 0, "skipped": 0, "errors": 0, "ocr_recovered": 0}
 
     # Open/create LanceDB
     STORE_DIR.mkdir(parents=True, exist_ok=True)
@@ -192,25 +255,39 @@ def ingest_docs(
         except Exception:
             pass
 
-    stats = {"pdfs": len(pdf_paths), "chunks": 0, "indexed": 0, "skipped": 0, "errors": 0}
+    # In ocr_only mode, filter to just the PDFs not yet indexed
+    if ocr_only:
+        pdf_paths = [p for p in pdf_paths if p.name not in existing_files]
+        print(f"OCR-only mode: {len(pdf_paths)} PDFs not yet indexed.")
+
+    stats = {
+        "pdfs": len(pdf_paths), "chunks": 0, "indexed": 0,
+        "skipped": 0, "errors": 0, "ocr_recovered": 0,
+    }
 
     all_records = []
 
     for i, pdf_path in enumerate(pdf_paths, 1):
         meta = metadata_from_path(pdf_path)
 
-        if meta["arquivo"] in existing_files:
+        if not ocr_only and meta["arquivo"] in existing_files:
             stats["skipped"] += 1
             continue
 
         print(f"[{i}/{len(pdf_paths)}] {meta['caminho']} ...", end=" ", flush=True)
 
         try:
-            text = extract_text(pdf_path)
+            text = extract_text(pdf_path, use_ocr=use_ocr)
             if not text.strip():
                 print("(empty)")
                 stats["errors"] += 1
                 continue
+
+            # Track OCR recoveries
+            text_direct = _extract_text_only(pdf_path)
+            if not text_direct.strip() and text.strip():
+                stats["ocr_recovered"] += 1
+                print("(OCR) ", end="", flush=True)
 
             chunks = chunk_text(text, chunk_size, chunk_overlap)
             stats["chunks"] += len(chunks)
@@ -256,6 +333,14 @@ def ingest_docs(
     return stats
 
 
+def _extract_text_only(pdf_path: Path) -> str:
+    """Extract text from PDF using PyMuPDF only (no OCR). For detecting OCR recoveries."""
+    doc = pymupdf.open(str(pdf_path))
+    pages = [page.get_text() for page in doc if page.get_text().strip()]
+    doc.close()
+    return "\n\n".join(pages)
+
+
 def _collect_pdfs(subset: str | None) -> list[Path]:
     """Collect PDF file paths, optionally filtered by subset."""
     if subset:
@@ -281,6 +366,10 @@ def main():
     parser.add_argument("--chunk-overlap", type=int, default=200)
     parser.add_argument("--dry-run", action="store_true",
                         help="Extract and chunk without embedding/indexing")
+    parser.add_argument("--ocr-only", action="store_true",
+                        help="Only process PDFs not yet indexed (OCR recovery)")
+    parser.add_argument("--no-ocr", action="store_true",
+                        help="Disable OCR fallback for scanned PDFs")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -289,6 +378,8 @@ def main():
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
         dry_run=args.dry_run,
+        ocr_only=args.ocr_only,
+        use_ocr=not args.no_ocr,
     )
     elapsed = time.time() - t0
     print(f"Elapsed: {elapsed:.1f}s")

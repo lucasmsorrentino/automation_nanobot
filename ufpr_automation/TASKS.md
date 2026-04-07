@@ -329,20 +329,22 @@ python -m ufpr_automation
 ### 🔜 Pendente — Completar Marco II
 
 - [x] **RAPTOR tree** — árvore hierárquica construída (2 níveis, 12 sumários, 34.231 nós totais)
-- [ ] **OCR para anexos** — PDFs escaneados e imagens
+- [x] **OCR para anexos** — PDFs escaneados e imagens (2026-04-07)
   - [x] Detecção automática de PDF escaneado (pouco texto por página) em `attachments/extractor.py`
   - [x] Marcação com `needs_ocr=True` (10+ arquivos no teste e2e)
-  - [ ] `ocr_image()` e `ocr_pdf_scanned()` com Tesseract ou EasyOCR
+  - [x] `_ocr_pdf_scanned()` e `_ocr_image()` com Tesseract (por+eng, 300 DPI) em `attachments/extractor.py`
+  - [x] OCR integrado ao pipeline de ingestão RAG (`rag/ingest.py --ocr-only`)
+  - [x] 70 PDFs escaneados recuperados (404 chunks), 10 irrecuperáveis (7 vazios, 2 corrompidos, 1 ilegível)
+  - [x] Cobertura RAG: 3.288/3.316 = 99,2%
 - [ ] **Feedback loop completo** — conectar store ao pipeline
   - [x] FeedbackStore com `add()`, `list_all()`, `count()` implementados
   - [ ] Comando `review` interativo no CLI de feedback
   - [ ] Integração: pipeline chama `FeedbackStore.add()` e `ReflexionMemory.add_reflection()` após revisão
 - [x] **perceber_owa no LangGraph** — implementação completa em `graph/nodes.py`
 - [ ] **Testes para módulos novos** — graph, router, reflexion, dspy sem cobertura
-- [x] **Ingestão completa do RAG** — 3.316 PDFs → 33.881 chunks indexados no LanceDB (2026-04-07)
-  - [x] 3.218 documentos indexados com sucesso (97,6%)
-  - [x] 71 PDFs vazios (escaneados sem texto) — recuperáveis via OCR
-  - [x] 9 PDFs com erro (7 vazios 0 bytes + 2 corrompidos)
+- [x] **Ingestão completa do RAG** — 3.316 PDFs → 34.285 chunks indexados no LanceDB (2026-04-07)
+  - [x] 3.288 documentos indexados com sucesso (99,2%) — 3.218 PyMuPDF + 70 OCR
+  - [x] 10 PDFs irrecuperáveis (7 vazios 0 bytes, 2 corrompidos, 1 ilegível)
   - [x] Relatório completo em `RAG_INGESTION_REPORT.md`
   - [x] Store compartilhado via Google Drive (`G:/Meu Drive/ufpr_rag/`)
 

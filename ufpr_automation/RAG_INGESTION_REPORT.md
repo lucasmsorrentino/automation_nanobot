@@ -1,24 +1,33 @@
 # Relatório de Ingestão RAG
 
-**Data:** 2026-04-07
+**Data:** 2026-04-07 (atualizado com OCR)
 **Branch:** `feat/marco-i-unified`
-**Comando:** `python -m ufpr_automation.rag.ingest`
+**Comando:** `python -m ufpr_automation.rag.ingest` + `--ocr-only`
 
 ---
 
 ## Resumo Geral
 
-| Métrica             | Valor   |
-|---------------------|---------|
-| PDFs encontrados    | 3.316   |
-| PDFs indexados      | 3.218   |
-| PDFs vazios (empty) | 71      |
-| PDFs com erro       | 9       |
-| Não processados     | 18 (*)  |
-| Chunks gerados      | 33.881  |
-| Média chunks/doc    | 10,5    |
+| Métrica              | Valor   |
+|----------------------|---------|
+| PDFs encontrados     | 3.316   |
+| PDFs indexados       | 3.288   |
+| — via PyMuPDF        | 3.218   |
+| — via OCR (Tesseract)| 70      |
+| PDFs irrecuperáveis  | 10      |
+| Não processados      | 18 (*)  |
+| Chunks gerados       | 34.285  |
+| — chunks originais   | 33.881  |
+| — chunks OCR         | 404     |
+| Média chunks/doc     | 10,4    |
+| Cobertura            | 99,2%   |
 
 (*) O script reporta `skipped: 18` — são documentos ignorados por lógica interna (possivelmente duplicados ou já existentes no índice).
+
+### OCR Recovery (2026-04-07)
+
+Tesseract 5.5.0 (por+eng) a 300 DPI recuperou 70 dos 80 PDFs pendentes em ~16 min.
+Os 10 restantes são irrecuperáveis: 7 arquivos vazios (0 bytes), 2 PDFs corrompidos, 1 imagem ilegível.
 
 ---
 

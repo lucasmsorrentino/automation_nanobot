@@ -158,16 +158,17 @@ graph LR
 | CONCUR   | 143  | 10         | —                    |
 | Estágio  | —    | —          | 18 (manuais, leis)   |
 
-### Estatísticas da Ingestão (2026-04-07)
+### Estatísticas da Ingestão (2026-04-07, com OCR)
 
-| Métrica             | Valor   |
-|---------------------|---------|
-| PDFs processados    | 3.316   |
-| PDFs indexados      | 3.218   |
-| Chunks gerados      | 33.881  |
-| Média chunks/doc    | 10,5    |
-| PDFs vazios (OCR)   | 71      |
-| PDFs com erro       | 9       |
+| Métrica              | Valor   |
+|----------------------|---------|
+| PDFs processados     | 3.316   |
+| PDFs indexados       | 3.288   |
+| — via PyMuPDF        | 3.218   |
+| — via OCR (Tesseract)| 70      |
+| Chunks gerados       | 34.285  |
+| PDFs irrecuperáveis  | 10      |
+| Cobertura            | 99,2%   |
 
 Relatório completo: [`RAG_INGESTION_REPORT.md`](RAG_INGESTION_REPORT.md)
 
