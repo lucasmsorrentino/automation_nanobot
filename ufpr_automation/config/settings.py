@@ -152,9 +152,32 @@ SEI_PASSWORD = os.getenv("SEI_PASSWORD", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 
-# Model to use for classification and response generation
+# Default model (used when cascading models are not configured)
 # Easily swappable: change this to any model supported by LiteLLM
 LLM_MODEL = os.getenv("LLM_MODEL", "minimax/MiniMax-M2")
 
 # Provider name (matches nanobot config.json providers key)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")
+
+
+# ============================================================================
+# Model Cascading (Marco III) — route tasks to optimal models
+# ============================================================================
+
+# Classification model: cheaper/local model for categorization (e.g. ollama/qwen3:8b)
+# Empty = use LLM_MODEL for everything (no cascading)
+LLM_CLASSIFY_MODEL = os.getenv("LLM_CLASSIFY_MODEL", "")
+
+# Drafting model: higher-quality model for response generation
+# Empty = use LLM_MODEL
+LLM_DRAFT_MODEL = os.getenv("LLM_DRAFT_MODEL", "")
+
+# Fallback model: used when primary model fails (timeout, rate limit, down)
+# Empty = no fallback (error propagates)
+LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "")
+
+# Max retries before falling back to the next model
+LLM_CASCADE_RETRIES = int(os.getenv("LLM_CASCADE_RETRIES", "2"))
+
+# Timeout per LLM call in seconds (local models may need longer)
+LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "120"))

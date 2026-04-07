@@ -38,11 +38,60 @@ def perceber_gmail(state: EmailState) -> dict[str, Any]:
 def perceber_owa(state: EmailState) -> dict[str, Any]:
     """Read unread emails from OWA via Playwright.
 
-    Note: This node requires a Playwright page passed via state or
-    initialized here. For now, delegates to the existing PerceberAgent.
+    Manages its own browser lifecycle: launches Playwright, handles login
+    (auto-login with MFA via Telegram if credentials configured), scrapes
+    inbox, and closes the browser.
     """
-    logger.warning("Perceber OWA via LangGraph not yet implemented — use CLI --channel owa")
-    return {"emails": [], "errors": state.get("errors", [])}
+    try:
+        emails = asyncio.run(_perceber_owa_async())
+        logger.info("Perceber (OWA): %d e-mail(s) nao lido(s)", len(emails))
+        return {"emails": emails, "errors": state.get("errors", [])}
+    except Exception as e:
+        logger.error("Perceber (OWA) falhou: %s", e)
+        return {
+            "emails": [],
+            "errors": state.get("errors", []) + [{"node": "perceber_owa", "error": str(e)}],
+        }
+
+
+async def _perceber_owa_async() -> list:
+    """Internal async implementation for OWA scraping with full browser lifecycle."""
+    from ufpr_automation.agents.perceber import PerceberAgent
+    from ufpr_automation.config.settings import OWA_INBOX_URL
+    from ufpr_automation.outlook.browser import (
+        auto_login,
+        create_browser_context,
+        has_credentials,
+        has_saved_session,
+        is_logged_in,
+        launch_browser,
+        save_session_state,
+    )
+
+    session_exists = has_saved_session()
+    credentials_ok = has_credentials()
+    use_headless = session_exists or credentials_ok
+
+    pw, browser = await launch_browser(headless=use_headless)
+    try:
+        context = await create_browser_context(browser, headless=use_headless)
+        page = await context.new_page()
+
+        await page.goto(OWA_INBOX_URL, wait_until="domcontentloaded")
+
+        logged_in = await is_logged_in(page)
+        if not logged_in:
+            login_success = await auto_login(page)
+            if not login_success:
+                logger.error("OWA login falhou dentro do tempo limite")
+                return []
+            await save_session_state(context)
+
+        agent = PerceberAgent(page)
+        return await agent.run()
+    finally:
+        await browser.close()
+        await pw.stop()
 
 
 def _get_reflexion_context(emails: list) -> dict[str, str]:
@@ -194,12 +243,17 @@ def classificar(state: EmailState) -> dict[str, Any]:
     """Classify emails using LLM with RAG context and Self-Refine.
 
     Uses DSPy modules if available (pip install dspy), otherwise falls back
-    to direct LiteLLM calls.
+    to direct LiteLLM calls. Model cascading routes classification to a
+    cheaper/local model when configured (see llm/router.py).
     """
+    from ufpr_automation.llm.router import log_cascade_config
+
     emails = state.get("emails", [])
     rag_contexts = state.get("rag_contexts", {})
     if not emails:
         return {"classifications": {}}
+
+    log_cascade_config()
 
     try:
         import dspy as _dspy  # noqa: F401
@@ -240,12 +294,46 @@ def rotear(state: EmailState) -> dict[str, Any]:
     }
 
 
+def _save_run_results(emails: list, classifications: dict) -> None:
+    """Save classification results for feedback review CLI.
+
+    Writes a JSONL file that `python -m ufpr_automation.feedback review` reads
+    to let the human reviewer accept or correct each classification.
+    """
+    from ufpr_automation.feedback.store import FEEDBACK_DIR
+
+    results_file = FEEDBACK_DIR / "last_run.jsonl"
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+    email_map = {e.stable_id: e for e in emails}
+    with open(results_file, "w", encoding="utf-8") as f:
+        for sid, cls in classifications.items():
+            email = email_map.get(sid)
+            if not email:
+                continue
+            entry = {
+                "email_hash": sid,
+                "sender": email.sender,
+                "subject": email.subject,
+                "body": (email.body or email.preview)[:500],
+                "classification": cls.model_dump(),
+            }
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    logger.debug("Run results saved to %s (%d entries)", results_file, len(classifications))
+
+
 def agir_gmail(state: EmailState) -> dict[str, Any]:
     """Save drafts to Gmail for emails routed to auto_draft or human_review."""
     from ufpr_automation.gmail.client import GmailClient
 
     emails = state.get("emails", [])
     classifications = state.get("classifications", {})
+
+    # Save run results for feedback review CLI
+    if classifications:
+        _save_run_results(emails, classifications)
+
     # Save drafts for both auto and review — human reviews the draft
     eligible = set(state.get("auto_draft", []) + state.get("human_review", []))
 

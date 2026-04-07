@@ -3,6 +3,10 @@
 Used by PensarAgent to classify emails and generate draft responses.
 Supports both sync (classify_email) and async (classify_email_async) calls
 so PensarAgent can run multiple classifications concurrently.
+
+Model cascading (Marco III): when configured, routes classification to a
+cheap/local model (e.g. Ollama/Qwen3) and drafting to an API model.
+See llm/router.py for details.
 """
 
 import json
@@ -14,6 +18,7 @@ from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings
 from ufpr_automation.core.models import EmailClassification, EmailData
+from ufpr_automation.llm.router import TaskType, cascaded_completion, cascaded_completion_sync
 from ufpr_automation.utils.logging import logger
 
 
@@ -142,10 +147,14 @@ class LLMClient:
     def classify_email(
         self, email: EmailData, rag_context: str | None = None
     ) -> EmailClassification:
-        """Classify and draft a reply for *email* (synchronous)."""
+        """Classify and draft a reply for *email* (synchronous).
+
+        Uses model cascading: classification task routes to the classify model
+        (cheaper/local), with automatic fallback to the default model.
+        """
         try:
-            response = litellm.completion(
-                model=self.model_id,
+            response = cascaded_completion_sync(
+                TaskType.CLASSIFY,
                 messages=self._build_messages(email, rag_context),
                 temperature=0.2,
             )
@@ -172,14 +181,14 @@ class LLMClient:
     ) -> EmailClassification:
         """Classify and draft a reply for *email* (asynchronous).
 
-        Uses litellm.acompletion() so multiple emails can be
-        classified concurrently via asyncio.gather().
+        Uses cascaded_completion() for automatic model fallback.
+        Multiple emails can be classified concurrently via asyncio.gather().
 
         Raises on failure — partial failure handling in run_pensar_concurrently()
         ensures that individual errors don't break the whole pipeline.
         """
-        response = await litellm.acompletion(
-            model=self.model_id,
+        response = await cascaded_completion(
+            TaskType.CLASSIFY,
             messages=self._build_messages(email, rag_context),
             temperature=0.2,
         )
@@ -240,8 +249,8 @@ class LLMClient:
             "Se houver problemas, liste-os de forma concisa."
         )
 
-        critique_response = await litellm.acompletion(
-            model=self.model_id,
+        critique_response = await cascaded_completion(
+            TaskType.CRITIQUE,
             messages=[
                 {"role": "system", "content": self.system_instruction},
                 {"role": "user", "content": critique_prompt},
@@ -279,8 +288,8 @@ class LLMClient:
             "Corrija os problemas apontados na crítica."
         )
 
-        refine_response = await litellm.acompletion(
-            model=self.model_id,
+        refine_response = await cascaded_completion(
+            TaskType.REFINE,
             messages=[
                 {"role": "system", "content": self.system_instruction},
                 {"role": "user", "content": refine_prompt},

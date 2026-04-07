@@ -270,12 +270,14 @@ Os anexos sao salvos em `ufpr_automation/attachments_data/` para referencia e fl
 
 ## 🏗️ Fases de Maturidade
 
-| | Marco I | Marco II (Atual) | Marco III |
+| | Marco I (Completo) | Marco II (Atual ~85%) | Marco III (Futuro) |
 |---|---|---|---|
-| **Orquestrador** | nanobot | LangGraph | LangGraph Fleet |
-| **Memória** | ICL (System Prompt) | Vector RAG (LanceDB) | GraphRAG (Neo4j) |
-| **Autonomia** | Rascunho + Humano | Auto (baixo risco) | Totalmente autônomo |
-| **Sistemas** | OWA | OWA | OWA + SIGA + SEI |
+| **Orquestrador** | nanobot (sequential) | LangGraph (StateGraph) | LangGraph Fleet |
+| **Motor Cognitivo** | LiteLLM + MiniMax (ICL) | LiteLLM + DSPy + Self-Refine | LiteLLM + GraphRAG |
+| **Memória** | SOUL.md (System Prompt) | LanceDB + RAPTOR + Reflexion | Neo4j (Grafo de Conhecimento) |
+| **Canal E-mail** | OWA (Playwright) | Gmail IMAP (primário) + OWA (fallback) | Gmail + SIGA + SEI |
+| **Autonomia** | Rascunho + Humano | Roteamento por confiança (auto/review/escala) | Totalmente autônomo |
+| **Modelos** | MiniMax-M2 (único) | Model cascading (local + API + fallback) | Cascading + Ollama local |
 
 > Veja o diagrama completo em [`ARCHITECTURE.md`](ARCHITECTURE.md).
 

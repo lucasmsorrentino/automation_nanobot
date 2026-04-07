@@ -35,9 +35,14 @@ python -m ufpr_automation --debug       # capture DOM + screenshot (OWA only)
 python -m ufpr_automation --headed      # force visible browser (OWA only)
 python -m ufpr_automation --perceber-only  # scrape only, no LLM (OWA only)
 
-# Feedback — human corrections store (feeds DSPy in Marco II)
+# Feedback — human corrections store (feeds DSPy optimization)
 python -m ufpr_automation.feedback stats    # show feedback statistics
 python -m ufpr_automation.feedback export   # export as JSON for DSPy training
+python -m ufpr_automation.feedback review   # interactive review of last pipeline run
+python -m ufpr_automation.feedback add      # manually add a correction
+
+# OCR for attachments (requires Tesseract installed on the system)
+pip install -e ".[ocr]"                    # install pytesseract + Pillow
 
 # RAG — Vector store for institutional documents
 pip install -e ".[rag]"                                        # install RAG deps
@@ -64,6 +69,11 @@ python -m ufpr_automation.dspy_modules.optimize --evaluate-only  # evaluate curr
 
 # LangGraph pipeline (Marco II)
 python -m ufpr_automation --channel gmail --langgraph           # use LangGraph orchestrator
+
+# Model cascading (Marco III) — set in .env:
+# LLM_CLASSIFY_MODEL=ollama/qwen3:8b     # local model for classification
+# LLM_DRAFT_MODEL=minimax/MiniMax-M2     # API model for drafting
+# LLM_FALLBACK_MODEL=minimax/MiniMax-M2  # fallback if primary fails
 
 # Run UFPR automation tests
 pytest ufpr_automation/tests/ -v
@@ -96,14 +106,14 @@ An ultra-lightweight AI agent framework. The agent implements a simple sense →
 
 ### ufpr_automation (sub-project)
 
-A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco II (LangGraph + DSPy)** phase.
+A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco II (LangGraph + DSPy + RAPTOR)** phase.
 
 **Packages under `ufpr_automation/`:**
 
 - **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()` (with attachment download), `save_draft()`, `send_reply()`, `mark_read()`.
-- **`attachments/`** — Attachment text extraction module. `extractor.py` handles PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), and plain text. Images/scanned PDFs flagged with `needs_ocr=True` for future OCR support. Downloaded files saved to `ATTACHMENTS_DIR`.
+- **`attachments/`** — Attachment text extraction module. `extractor.py` handles PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), plain text, and **OCR** (Tesseract via pytesseract) for scanned PDFs and images. Falls back to `needs_ocr=True` if Tesseract is not installed. Downloaded files saved to `ATTACHMENTS_DIR`.
 - **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot. `locators.py` provides resilient locator fallback chains (semantic -> text -> ID -> CSS).
-- **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle), RAG context injection, and attachment text injection.
+- **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle), RAG context injection, attachment text injection, and **model cascading** (`router.py` — routes classification to cheap/local models and drafting to capable API models, with automatic fallback).
 - **`config/`** — `.env`-based settings (UTF-8 aware for Windows). Centralized credentials for Gmail, OWA, SIGA, SEI. Configurable RAG store/docs paths (`RAG_STORE_DIR`, `RAG_DOCS_DIR`). Attachment settings (`ATTACHMENTS_DIR`, `ATTACHMENT_MAX_SIZE_MB`).
 - **`core/`** — Domain model (`EmailData` with `AttachmentData` list, `EmailClassification` with confidence score).
 - **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB. `retriever.py` provides semantic search with metadata filters (conselho, tipo). `raptor.py` provides hierarchical RAPTOR indexing (GMM clustering + recursive summarization) with collapsed tree retrieval. RAG context is automatically injected into the LLM classification pipeline. Store path configurable via `RAG_STORE_DIR` env var for sharing across machines.

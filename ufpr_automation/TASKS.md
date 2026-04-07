@@ -259,20 +259,95 @@ python -m ufpr_automation
 
 ---
 
-## Marco II — Roteamento Agêntico (Futuro)
+## Marco II — Roteamento Agêntico
 
-- [ ] **OCR para anexos** — PDFs escaneados e imagens (Tesseract/EasyOCR)
-  - [ ] Detecção automática de PDF escaneado (pouco texto por página)
-  - [ ] `ocr_image()` e `ocr_pdf_scanned()` em `attachments/extractor.py`
-- [ ] Migrar orquestrador para LangGraph
-- [ ] Implementar Vector RAG (LanceDB/Chroma) para portarias e memorandos
-- [ ] Roteamento condicional: auto-envio para risco baixo
-- [ ] Tratamento de exceções (mudança de layout OWA)
+### ✅ Concluído
+
+- [x] **Canal Gmail IMAP** (canal primário, substitui OWA para leitura)
+  - [x] `gmail/client.py` — GmailClient com App Password (sem MFA, sem Playwright)
+  - [x] `list_unread()`, `save_draft()`, `send_reply()`, `mark_read()`
+  - [x] Download de anexos via IMAP (`_extract_attachments`)
+  - [x] Seleção de canal via `--channel gmail|owa` e `EMAIL_CHANNEL` no `.env`
+
+- [x] **RAG — Base vetorial de documentos institucionais**
+  - [x] `rag/ingest.py` — Pipeline: PDF → PyMuPDF → chunks (LangChain) → embeddings (multilingual-e5-large) → LanceDB
+  - [x] `rag/retriever.py` — Busca semântica com filtros por conselho/tipo
+  - [x] Subset estágio (18 PDFs, 338 chunks) indexado e validado
+  - [x] Caminhos configuráveis via `RAG_STORE_DIR` / `RAG_DOCS_DIR` (compartilhar via rede/nuvem)
+  - [x] Integração no pipeline: contexto RAG injetado no prompt do LLM antes da classificação
+
+- [x] **RAPTOR — RAG hierárquico** (Sarthi et al., ICLR 2024)
+  - [x] `rag/raptor.py` — Clusterização GMM + sumarização LLM recursiva
+  - [x] Collapsed tree retrieval (busca em todos os níveis)
+  - [x] Auto-fallback para busca flat se RAPTOR não disponível
+
+- [x] **Self-Refine** (Madaan et al., NeurIPS 2023)
+  - [x] `llm/client.py:self_refine_async()` — gerar → criticar → refinar
+  - [x] Critérios UFPR-específicos (resolução correta, tom oficial, completude)
+  - [x] Max 1 ciclo de refinamento por e-mail
+
+- [x] **Score de confiança + roteamento**
+  - [x] Campo `confianca: float` (0.0–1.0) em `EmailClassification`
+  - [x] Roteamento por confiança em `graph/nodes.py:rotear()`:
+    - ≥ 0.95 → auto-draft (sem revisão humana)
+    - ≥ 0.70 → human review (rascunho salvo para aprovação)
+    - < 0.70 → escalação manual
+
+- [x] **LangGraph — orquestrador StateGraph**
+  - [x] `graph/builder.py` — StateGraph com nós e arestas condicionais
+  - [x] `graph/nodes.py` — Nós: perceber → rag_retrieve → classificar → rotear → agir
+  - [x] `graph/state.py` — EmailState TypedDict
+  - [x] Checkpointing SQLite para tolerância a falhas
+  - [x] CLI: `python -m ufpr_automation --channel gmail --langgraph`
+
+- [x] **DSPy — otimização programática de prompts**
+  - [x] `dspy_modules/signatures.py` — EmailClassifier, DraftCritic, DraftRefiner
+  - [x] `dspy_modules/modules.py` — SelfRefineModule composto
+  - [x] `dspy_modules/metrics.py` — Métricas de qualidade (formato, citação, tom)
+  - [x] `dspy_modules/optimize.py` — GEPA bootstrap e MIPROv2
+
+- [x] **Reflexion — memória episódica de erros** (Shinn et al., NeurIPS 2023)
+  - [x] `feedback/reflexion.py` — ReflexionMemory (gerar análise + armazenar + recuperar)
+  - [x] Contexto de erros anteriores injetado como "=== ERROS ANTERIORES ==="
+  - [x] Integrado no nó `rag_retrieve` do LangGraph
+
+- [x] **Feedback store — infraestrutura de correções humanas**
+  - [x] `feedback/store.py` — FeedbackStore (JSONL append-only)
+  - [x] `feedback/cli.py` — CLI para stats e export (`python -m ufpr_automation.feedback stats|export`)
+
+- [x] **Locator fallback chain — resiliência do Playwright**
+  - [x] `outlook/locators.py` — Cadeia de fallback: semantic → text → ID → CSS
+  - [x] 10 elementos OWA com múltiplas estratégias cada
+  - [x] API pública: `find_element()`, `click_element()`, `get_text()`, `wait_for_any()`
+
+- [x] **Model cascading — roteamento de modelos LLM**
+  - [x] `llm/router.py` — Router com TaskType (CLASSIFY, DRAFT, CRITIQUE, REFINE)
+  - [x] Classificação → modelo local/barato; Drafting → modelo API capaz
+  - [x] Fallback automático com retry configurável
+  - [x] Configuração via `LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `LLM_FALLBACK_MODEL`
+
+### 🔜 Pendente — Completar Marco II
+
+- [ ] **OCR para anexos** — PDFs escaneados e imagens
+  - [x] Detecção automática de PDF escaneado (pouco texto por página) em `attachments/extractor.py`
+  - [x] Marcação com `needs_ocr=True` (10+ arquivos no teste e2e)
+  - [ ] `ocr_image()` e `ocr_pdf_scanned()` com Tesseract ou EasyOCR
+- [ ] **Feedback loop completo** — conectar store ao pipeline
+  - [x] FeedbackStore com `add()`, `list_all()`, `count()` implementados
+  - [ ] Comando `review` interativo no CLI de feedback
+  - [ ] Integração: pipeline chama `FeedbackStore.add()` e `ReflexionMemory.add_reflection()` após revisão
+- [ ] **perceber_owa no LangGraph** — substituir stub por implementação real
+- [ ] **Testes para módulos novos** — graph, router, reflexion, dspy sem cobertura
+- [ ] **Ingestão completa do RAG** — 3.298 PDFs (cepe, coun, coplad, concur) aguardando (~3-4GB RAM)
+
+---
 
 ## Marco III — Automação Governamental Total (Futuro)
 
 - [ ] LangGraph Fleet com sub-agentes
 - [ ] GraphRAG (Neo4j) para hierarquia departamental
-- [ ] Integração com SIGA-UFPR via Playwright
-- [ ] Integração com SEI via Playwright
+- [ ] AFlow — otimização automática de topologia do grafo
+- [ ] Integração com SIGA-UFPR via Playwright (credenciais no `.env`)
+- [ ] Integração com SEI via Playwright (credenciais no `.env`)
 - [ ] Protocolar processos e extrair trâmites em lote
+- [ ] Model cascading local (Ollama/Qwen3-8B) — infraestrutura pronta, aguardando setup

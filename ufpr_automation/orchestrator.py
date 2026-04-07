@@ -21,8 +21,32 @@ from __future__ import annotations
 
 from playwright.async_api import Page
 
+import json
+
 from ufpr_automation.agents.pensar import run_pensar_concurrently
+from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.utils.logging import logger
+
+
+def _save_run_results_gmail(
+    emails: list[EmailData], classifications: list[EmailClassification]
+) -> None:
+    """Save classification results for feedback review CLI."""
+    from ufpr_automation.feedback.store import FEEDBACK_DIR
+
+    results_file = FEEDBACK_DIR / "last_run.jsonl"
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+    with open(results_file, "w", encoding="utf-8") as f:
+        for email_obj, cls in zip(emails, classifications):
+            entry = {
+                "email_hash": email_obj.stable_id,
+                "sender": email_obj.sender,
+                "subject": email_obj.subject,
+                "body": (email_obj.body or email_obj.preview)[:500],
+                "classification": cls.model_dump(),
+            }
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 async def run_pipeline_gmail() -> dict:
@@ -63,6 +87,9 @@ async def run_pipeline_gmail() -> dict:
 
     for email_obj, cls in zip(classified_emails, classifications):
         email_obj.classification = cls
+
+    # Save results for feedback review CLI
+    _save_run_results_gmail(classified_emails, classifications)
 
     # Phase 3 — AGIR (save drafts to Gmail)
     drafts_saved = 0

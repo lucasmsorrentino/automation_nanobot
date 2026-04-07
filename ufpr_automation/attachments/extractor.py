@@ -1,7 +1,8 @@
 """Extract readable text from email attachments.
 
 Supports PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), and plain text.
-Images and scanned PDFs are flagged with needs_ocr=True for future OCR support.
+Images and scanned PDFs are processed with OCR (Tesseract) when available;
+if Tesseract is not installed, they are flagged with needs_ocr=True.
 """
 
 from __future__ import annotations
@@ -34,6 +35,9 @@ def extract_text_from_attachment(att: AttachmentData) -> str:
     try:
         if mime == "application/pdf":
             text = _extract_pdf(path)
+            # If PDF text extraction failed (scanned), try OCR
+            if not text.strip():
+                text = _ocr_pdf_scanned(path)
         elif mime in (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
@@ -47,10 +51,7 @@ def extract_text_from_attachment(att: AttachmentData) -> str:
         elif mime.startswith("text/"):
             text = path.read_text(encoding="utf-8", errors="replace")
         elif mime.startswith("image/"):
-            att.needs_ocr = True
-            att.extracted_text = ""
-            logger.debug("Anexo imagem '%s' — OCR necessario (fase 2)", att.filename)
-            return ""
+            text = _ocr_image(path)
         else:
             logger.debug("Tipo MIME nao suportado para extracao: %s (%s)", mime, att.filename)
             att.extracted_text = ""
@@ -66,6 +67,7 @@ def extract_text_from_attachment(att: AttachmentData) -> str:
         att.extracted_text = ""
         return ""
 
+    att.needs_ocr = False
     att.extracted_text = text
     return text
 
@@ -125,3 +127,100 @@ def _extract_xlsx(path: Path) -> str:
                 lines.append(line)
     wb.close()
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# OCR — Tesseract-based text extraction for images and scanned PDFs
+# ---------------------------------------------------------------------------
+
+
+def _is_tesseract_available() -> bool:
+    """Check if Tesseract OCR is installed and accessible."""
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:
+        return False
+
+
+def _ocr_image(path: Path) -> str:
+    """Extract text from an image file using Tesseract OCR.
+
+    Falls back to empty string (with needs_ocr=True) if Tesseract is not installed.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        logger.debug(
+            "pytesseract/Pillow nao instalado — pip install pytesseract Pillow "
+            "(+ instalar Tesseract OS package)"
+        )
+        return ""
+
+    if not _is_tesseract_available():
+        logger.debug("Tesseract nao encontrado no sistema — OCR indisponivel para '%s'", path.name)
+        return ""
+
+    try:
+        img = Image.open(path)
+        text = pytesseract.image_to_string(img, lang="por+eng")
+        if text.strip():
+            logger.debug("OCR extraiu %d chars de imagem '%s'", len(text.strip()), path.name)
+        return text.strip()
+    except Exception as e:
+        logger.warning("OCR falhou para imagem '%s': %s", path.name, e)
+        return ""
+
+
+def _ocr_pdf_scanned(path: Path) -> str:
+    """Extract text from a scanned PDF by converting pages to images and running OCR.
+
+    Uses PyMuPDF to render pages as pixmaps, then Tesseract for OCR.
+    Falls back to empty string if Tesseract is not installed.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        logger.debug(
+            "pytesseract/Pillow nao instalado — pip install pytesseract Pillow"
+        )
+        return ""
+
+    if not _is_tesseract_available():
+        logger.debug("Tesseract nao encontrado — OCR indisponivel para PDF '%s'", path.name)
+        return ""
+
+    try:
+        import io
+
+        import pymupdf
+
+        doc = pymupdf.open(str(path))
+        pages_text = []
+
+        for page_num, page in enumerate(doc):
+            # Render page to image at 300 DPI for good OCR quality
+            pix = page.get_pixmap(dpi=300)
+            img_data = pix.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+
+            text = pytesseract.image_to_string(img, lang="por+eng")
+            if text.strip():
+                pages_text.append(text.strip())
+
+        doc.close()
+
+        full_text = "\n\n".join(pages_text)
+        if full_text:
+            logger.debug(
+                "OCR extraiu %d chars de PDF escaneado '%s' (%d paginas)",
+                len(full_text), path.name, len(pages_text),
+            )
+        return full_text
+
+    except Exception as e:
+        logger.warning("OCR falhou para PDF '%s': %s", path.name, e)
+        return ""
