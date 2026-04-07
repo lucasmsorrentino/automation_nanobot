@@ -61,25 +61,17 @@ def cmd_export(store: FeedbackStore) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def cmd_review(store: FeedbackStore) -> None:
-    """Interactive review of recent email classifications.
+def _load_last_run_entries(store: FeedbackStore) -> list[dict]:
+    """Load classification entries from the last pipeline run.
 
-    Reads the latest pipeline results from the log file and lets the
-    reviewer accept or correct each classification.
+    Returns:
+        List of entry dicts from last_run.jsonl.
     """
-    from ufpr_automation.utils.logging import LOG_DIR
-
-    # Find the most recent pipeline log to extract classifications
-    log_files = sorted(LOG_DIR.glob("*.jsonl"), reverse=True) if LOG_DIR.exists() else []
     results_file = store.path.parent / "last_run.jsonl"
 
     if not results_file.exists():
-        print("Nenhum resultado de pipeline encontrado para revisão.")
-        print(f"Execute o pipeline primeiro: python -m ufpr_automation --channel gmail")
-        print(f"\nOu use 'python -m ufpr_automation.feedback add' para adicionar correções manualmente.")
-        return
+        return []
 
-    # Load last run results
     entries = []
     with open(results_file, "r", encoding="utf-8") as f:
         for line in f:
@@ -89,12 +81,88 @@ def cmd_review(store: FeedbackStore) -> None:
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+    return entries
+
+
+def _print_entry(i: int, total: int, entry: dict) -> None:
+    """Print a single classification entry for review."""
+    cls_data = entry.get("classification", {})
+    print(f"--- [{i}/{total}] ---")
+    print(f"De: {entry.get('sender', '?')}")
+    print(f"Assunto: {entry.get('subject', '?')}")
+    print(f"Categoria: {cls_data.get('categoria', '?')}")
+    print(f"Confianca: {cls_data.get('confianca', '?')}")
+    print(f"Resumo: {cls_data.get('resumo', '?')}")
+    print(f"Acao: {cls_data.get('acao_necessaria', '?')}")
+    resposta = cls_data.get("sugestao_resposta", "")
+    if resposta:
+        print(f"Resposta: {resposta[:200]}{'...' if len(resposta) > 200 else ''}")
+    print()
+
+
+def _record_correction(
+    store: FeedbackStore,
+    entry: dict,
+    cls_data: dict,
+    corrected_data: dict,
+    notes: str = "",
+) -> None:
+    """Save a correction to the FeedbackStore and generate Reflexion if needed."""
+    original = EmailClassification(**cls_data)
+    corrected = EmailClassification(**corrected_data)
+    email_hash = entry.get("email_hash", "unknown")
+    sender = entry.get("sender", "?")
+    subject = entry.get("subject", "?")
+
+    store.add(
+        email_hash=email_hash,
+        original=original,
+        corrected=corrected,
+        email_sender=sender,
+        email_subject=subject,
+        notes=notes,
+    )
+
+    # Generate Reflexion if categories differ
+    if original.categoria != corrected.categoria:
+        try:
+            from ufpr_automation.feedback.reflexion import ReflexionMemory
+
+            memory = ReflexionMemory()
+            memory.add_reflection(
+                email_subject=subject,
+                email_body=entry.get("body", entry.get("preview", "")),
+                original=original,
+                corrected=corrected,
+            )
+            print("  + Reflexion gerada e armazenada")
+        except Exception as e:
+            print(f"  ! Reflexion falhou: {e}")
+
+
+def cmd_review(store: FeedbackStore, approve_all: bool = False) -> None:
+    """Interactive review of recent email classifications.
+
+    Reads the latest pipeline results from the log file and lets the
+    reviewer accept or correct each classification.
+
+    Args:
+        approve_all: If True, auto-accept all classifications without prompting.
+            Records each as feedback (original == corrected) so DSPy sees
+            confirmed-correct examples. Useful for CI or batch workflows.
+    """
+    entries = _load_last_run_entries(store)
 
     if not entries:
-        print("Nenhuma classificação encontrada no último run.")
+        print("Nenhum resultado de pipeline encontrado para revisao.")
+        print("Execute o pipeline primeiro: python -m ufpr_automation --channel gmail")
+        print(
+            "\nOu use 'python -m ufpr_automation.feedback add' "
+            "para adicionar correcoes manualmente."
+        )
         return
 
-    print(f"=== Revisão de {len(entries)} classificação(ões) ===\n")
+    print(f"=== Revisao de {len(entries)} classificacao(oes) ===\n")
     reviewed = 0
 
     for i, entry in enumerate(entries, 1):
@@ -103,46 +171,65 @@ def cmd_review(store: FeedbackStore) -> None:
         subject = entry.get("subject", "?")
         cls_data = entry.get("classification", {})
 
-        print(f"--- [{i}/{len(entries)}] ---")
-        print(f"De: {sender}")
-        print(f"Assunto: {subject}")
-        print(f"Categoria: {cls_data.get('categoria', '?')}")
-        print(f"Confiança: {cls_data.get('confianca', '?')}")
-        print(f"Resumo: {cls_data.get('resumo', '?')}")
-        print(f"Ação: {cls_data.get('acao_necessaria', '?')}")
-        resposta = cls_data.get("sugestao_resposta", "")
-        if resposta:
-            print(f"Resposta: {resposta[:200]}{'...' if len(resposta) > 200 else ''}")
-        print()
+        _print_entry(i, len(entries), entry)
+
+        if approve_all:
+            # Auto-accept: record as confirmed-correct feedback
+            original = EmailClassification(**cls_data)
+            store.add(
+                email_hash=email_hash,
+                original=original,
+                corrected=original,
+                email_sender=sender,
+                email_subject=subject,
+                notes="auto-approved via --approve-all",
+            )
+            print("  + Aceito automaticamente (--approve-all)\n")
+            reviewed += 1
+            continue
 
         while True:
             choice = input("[a]ceitar / [c]orrigir / [p]ular / [q]uit? ").strip().lower()
             if choice in ("a", "c", "p", "q"):
                 break
-            print("Opção inválida. Use: a, c, p, q")
+            print("Opcao invalida. Use: a, c, p, q")
 
         if choice == "q":
             break
         if choice == "p":
             continue
         if choice == "a":
-            print("  ✓ Aceito (sem correção)\n")
+            # Record acceptance as confirmed-correct feedback
+            original = EmailClassification(**cls_data)
+            store.add(
+                email_hash=email_hash,
+                original=original,
+                corrected=original,
+                email_sender=sender,
+                email_subject=subject,
+                notes="accepted by reviewer",
+            )
+            print("  + Aceito (confirmado como correto)\n")
+            reviewed += 1
             continue
 
         # Correction flow
-        original = EmailClassification(**cls_data)
         corrected_data = dict(cls_data)
 
-        print(f"\nCategorias válidas: {', '.join(_VALID_CATEGORIES)}")
+        print(f"\nCategorias validas: {', '.join(_VALID_CATEGORIES)}")
         new_cat = input(f"  Nova categoria [{cls_data.get('categoria')}]: ").strip()
         if new_cat and new_cat in _VALID_CATEGORIES:
             corrected_data["categoria"] = new_cat
 
-        new_resumo = input(f"  Novo resumo [{cls_data.get('resumo', '')[:60]}]: ").strip()
+        new_resumo = input(
+            f"  Novo resumo [{cls_data.get('resumo', '')[:60]}]: "
+        ).strip()
         if new_resumo:
             corrected_data["resumo"] = new_resumo
 
-        new_acao = input(f"  Nova ação [{cls_data.get('acao_necessaria', '')}]: ").strip()
+        new_acao = input(
+            f"  Nova acao [{cls_data.get('acao_necessaria', '')}]: "
+        ).strip()
         if new_acao:
             corrected_data["acao_necessaria"] = new_acao
 
@@ -152,35 +239,14 @@ def cmd_review(store: FeedbackStore) -> None:
 
         notes = input("  Notas (opcional): ").strip()
 
-        corrected = EmailClassification(**corrected_data)
-        store.add(
-            email_hash=email_hash,
-            original=original,
-            corrected=corrected,
-            email_sender=sender,
-            email_subject=subject,
-            notes=notes,
-        )
+        _record_correction(store, entry, cls_data, corrected_data, notes)
 
-        # Generate Reflexion if categories differ
-        if original.categoria != corrected.categoria:
-            try:
-                from ufpr_automation.feedback.reflexion import ReflexionMemory
-                memory = ReflexionMemory()
-                memory.add_reflection(
-                    email_subject=subject,
-                    email_body=entry.get("body", entry.get("preview", "")),
-                    original=original,
-                    corrected=corrected,
-                )
-                print("  ✓ Reflexion gerada e armazenada")
-            except Exception as e:
-                print(f"  ⚠ Reflexion falhou: {e}")
-
-        print(f"  ✓ Correção salva ({original.categoria} → {corrected.categoria})\n")
+        orig_cat = cls_data.get("categoria", "?")
+        corr_cat = corrected_data.get("categoria", orig_cat)
+        print(f"  + Correcao salva ({orig_cat} -> {corr_cat})\n")
         reviewed += 1
 
-    print(f"\nRevisão concluída. {reviewed} correção(ões) registrada(s).")
+    print(f"\nRevisao concluida. {reviewed} registro(s) processado(s).")
     print(f"Total acumulado: {store.count()} registros")
 
 
@@ -235,6 +301,12 @@ def main() -> None:
         choices=["stats", "export", "review", "add"],
         help="Command: stats | export | review | add",
     )
+    parser.add_argument(
+        "--approve-all",
+        action="store_true",
+        default=False,
+        help="(review only) Auto-accept all classifications without prompting.",
+    )
     args = parser.parse_args()
 
     store = FeedbackStore()
@@ -244,7 +316,7 @@ def main() -> None:
     elif args.command == "export":
         cmd_export(store)
     elif args.command == "review":
-        cmd_review(store)
+        cmd_review(store, approve_all=args.approve_all)
     elif args.command == "add":
         cmd_add(store)
 

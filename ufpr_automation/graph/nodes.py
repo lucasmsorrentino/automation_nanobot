@@ -323,16 +323,61 @@ def _save_run_results(emails: list, classifications: dict) -> None:
     logger.debug("Run results saved to %s (%d entries)", results_file, len(classifications))
 
 
+def registrar_feedback(state: EmailState) -> dict[str, Any]:
+    """Record pipeline results in the FeedbackStore for later human review.
+
+    This node runs after classification and routing. It:
+    1. Saves the run results to last_run.jsonl (for the `review` CLI command)
+    2. Records each classification in the FeedbackStore as a pending entry
+       (original == corrected, notes="pipeline-auto") so DSPy has baseline data
+
+    Human reviewers later use `python -m ufpr_automation.feedback review` to
+    accept or correct these classifications, which triggers ReflexionMemory
+    updates for misclassifications.
+    """
+    from ufpr_automation.feedback.store import FeedbackStore
+
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+
+    if not classifications:
+        return {"feedback_recorded": 0}
+
+    # Save run results for the review CLI
+    _save_run_results(emails, classifications)
+
+    # Record each classification in the FeedbackStore
+    store = FeedbackStore()
+    email_map = {e.stable_id: e for e in emails}
+    recorded = 0
+
+    for sid, cls in classifications.items():
+        email = email_map.get(sid)
+        if not email:
+            continue
+        try:
+            store.add(
+                email_hash=sid,
+                original=cls,
+                corrected=cls,  # same until human corrects
+                email_sender=email.sender,
+                email_subject=email.subject,
+                notes="pipeline-auto",
+            )
+            recorded += 1
+        except Exception as e:
+            logger.warning("Feedback: falha ao registrar '%s': %s", email.subject[:40], e)
+
+    logger.info("Feedback: %d classificacao(oes) registrada(s)", recorded)
+    return {"feedback_recorded": recorded}
+
+
 def agir_gmail(state: EmailState) -> dict[str, Any]:
     """Save drafts to Gmail for emails routed to auto_draft or human_review."""
     from ufpr_automation.gmail.client import GmailClient
 
     emails = state.get("emails", [])
     classifications = state.get("classifications", {})
-
-    # Save run results for feedback review CLI
-    if classifications:
-        _save_run_results(emails, classifications)
 
     # Save drafts for both auto and review — human reviews the draft
     eligible = set(state.get("auto_draft", []) + state.get("human_review", []))

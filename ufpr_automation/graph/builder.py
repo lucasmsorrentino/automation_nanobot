@@ -16,6 +16,7 @@ from ufpr_automation.graph.nodes import (
     perceber_gmail,
     perceber_owa,
     rag_retrieve,
+    registrar_feedback,
     rotear,
 )
 from ufpr_automation.graph.state import EmailState
@@ -49,13 +50,17 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     graph.add_node("rag_retrieve", rag_retrieve)
     graph.add_node("classificar", classificar)
     graph.add_node("rotear", rotear)
+    graph.add_node("registrar_feedback", registrar_feedback)
 
     # Define edges
     graph.set_entry_point("perceber")
-    graph.add_conditional_edges("perceber", _has_emails, {"rag_retrieve": "rag_retrieve", "end": END})
+    graph.add_conditional_edges(
+        "perceber", _has_emails, {"rag_retrieve": "rag_retrieve", "end": END}
+    )
     graph.add_edge("rag_retrieve", "classificar")
     graph.add_edge("classificar", "rotear")
-    graph.add_edge("rotear", "agir")
+    graph.add_edge("rotear", "registrar_feedback")
+    graph.add_edge("registrar_feedback", "agir")
     graph.add_edge("agir", END)
 
     return graph.compile(checkpointer=checkpointer)

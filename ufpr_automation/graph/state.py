@@ -30,6 +30,9 @@ class EmailState(TypedDict, total=False):
     human_review: list[str]     # stable_ids for human review (medium confidence)
     manual_escalation: list[str]  # stable_ids for manual handling (low confidence)
 
+    # Feedback output
+    feedback_recorded: int      # number of classifications recorded in FeedbackStore
+
     # Agir output
     drafts_saved: list[str]     # stable_ids of successfully saved drafts
 

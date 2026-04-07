@@ -336,10 +336,10 @@ python -m ufpr_automation
   - [x] OCR integrado ao pipeline de ingestão RAG (`rag/ingest.py --ocr-only`)
   - [x] 70 PDFs escaneados recuperados (404 chunks), 10 irrecuperáveis (7 vazios, 2 corrompidos, 1 ilegível)
   - [x] Cobertura RAG: 3.288/3.316 = 99,2%
-- [ ] **Feedback loop completo** — conectar store ao pipeline
+- [x] **Feedback loop completo** — conectar store ao pipeline
   - [x] FeedbackStore com `add()`, `list_all()`, `count()` implementados
-  - [ ] Comando `review` interativo no CLI de feedback
-  - [ ] Integração: pipeline chama `FeedbackStore.add()` e `ReflexionMemory.add_reflection()` após revisão
+  - [x] Comando `review` interativo no CLI de feedback (`--approve-all` para batch)
+  - [x] Integração: nó `registrar_feedback` no LangGraph grava no FeedbackStore após classificação; `review` CLI gera ReflexionMemory em correções
 - [x] **perceber_owa no LangGraph** — implementação completa em `graph/nodes.py`
 - [ ] **Testes para módulos novos** — graph, router, reflexion, dspy sem cobertura
 - [x] **Ingestão completa do RAG** — 3.316 PDFs → 34.285 chunks indexados no LanceDB (2026-04-07)
