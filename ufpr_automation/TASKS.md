@@ -328,6 +328,7 @@ python -m ufpr_automation
 
 ### 🔜 Pendente — Completar Marco II
 
+- [x] **RAPTOR tree** — árvore hierárquica construída (2 níveis, 12 sumários, 34.231 nós totais)
 - [ ] **OCR para anexos** — PDFs escaneados e imagens
   - [x] Detecção automática de PDF escaneado (pouco texto por página) em `attachments/extractor.py`
   - [x] Marcação com `needs_ocr=True` (10+ arquivos no teste e2e)
