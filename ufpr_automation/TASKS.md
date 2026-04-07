@@ -273,7 +273,7 @@ python -m ufpr_automation
   - [x] `rag/ingest.py` — Pipeline: PDF → PyMuPDF → chunks (LangChain) → embeddings (multilingual-e5-large) → LanceDB
   - [x] `rag/retriever.py` — Busca semântica com filtros por conselho/tipo
   - [x] Subset estágio (18 PDFs, 338 chunks) indexado e validado
-  - [x] Caminhos configuráveis via `RAG_STORE_DIR` / `RAG_DOCS_DIR` (compartilhar via rede/nuvem)
+  - [x] Caminhos configuráveis via `RAG_STORE_DIR` / `RAG_DOCS_DIR` (compartilhado via Google Drive)
   - [x] Integração no pipeline: contexto RAG injetado no prompt do LLM antes da classificação
 
 - [x] **RAPTOR — RAG hierárquico** (Sarthi et al., ICLR 2024)
@@ -336,9 +336,14 @@ python -m ufpr_automation
   - [x] FeedbackStore com `add()`, `list_all()`, `count()` implementados
   - [ ] Comando `review` interativo no CLI de feedback
   - [ ] Integração: pipeline chama `FeedbackStore.add()` e `ReflexionMemory.add_reflection()` após revisão
-- [ ] **perceber_owa no LangGraph** — substituir stub por implementação real
+- [x] **perceber_owa no LangGraph** — implementação completa em `graph/nodes.py`
 - [ ] **Testes para módulos novos** — graph, router, reflexion, dspy sem cobertura
-- [ ] **Ingestão completa do RAG** — 3.298 PDFs (cepe, coun, coplad, concur) aguardando (~3-4GB RAM)
+- [x] **Ingestão completa do RAG** — 3.316 PDFs → 33.881 chunks indexados no LanceDB (2026-04-07)
+  - [x] 3.218 documentos indexados com sucesso (97,6%)
+  - [x] 71 PDFs vazios (escaneados sem texto) — recuperáveis via OCR
+  - [x] 9 PDFs com erro (7 vazios 0 bytes + 2 corrompidos)
+  - [x] Relatório completo em `RAG_INGESTION_REPORT.md`
+  - [x] Store compartilhado via Google Drive (`G:/Meu Drive/ufpr_rag/`)
 
 ---
 

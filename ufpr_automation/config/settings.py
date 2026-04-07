@@ -49,7 +49,7 @@ ATTACHMENT_MAX_SIZE_MB = int(os.getenv("ATTACHMENT_MAX_SIZE_MB", "25"))
 # RAG — Vector store and documents directories
 # ============================================================================
 
-# Override to share the store via network/cloud (e.g. OneDrive, NAS)
+# Override to share the store via network/cloud (e.g. Google Drive, NAS)
 RAG_STORE_DIR = Path(os.getenv("RAG_STORE_DIR", str(_PACKAGE_DIR / "rag" / "store")))
 RAG_DOCS_DIR = Path(os.getenv("RAG_DOCS_DIR", str(_PACKAGE_DIR / "docs")))
 

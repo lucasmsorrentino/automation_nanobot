@@ -158,11 +158,25 @@ graph LR
 | CONCUR   | 143  | 10         | —                    |
 | Estágio  | —    | —          | 18 (manuais, leis)   |
 
+### Estatísticas da Ingestão (2026-04-07)
+
+| Métrica             | Valor   |
+|---------------------|---------|
+| PDFs processados    | 3.316   |
+| PDFs indexados      | 3.218   |
+| Chunks gerados      | 33.881  |
+| Média chunks/doc    | 10,5    |
+| PDFs vazios (OCR)   | 71      |
+| PDFs com erro       | 9       |
+
+Relatório completo: [`RAG_INGESTION_REPORT.md`](RAG_INGESTION_REPORT.md)
+
 ### Pacote `ufpr_automation/rag/`
 
 - **`ingest.py`** — Pipeline de ingestão: PDF → texto (PyMuPDF) → chunks (LangChain RecursiveCharacterTextSplitter com separadores para documentos legais PT-BR) → embeddings (E5 multilingual) → LanceDB. Suporta `--subset`, `--dry-run`, skip de arquivos já indexados (idempotente).
 - **`retriever.py`** — Busca vetorial semântica com filtros por `conselho` e `tipo`. Retorna `SearchResult` com texto, score, metadados. Método `search_formatted()` gera contexto pronto para injeção no system prompt do LLM.
-- **`store/`** — Diretório do LanceDB (gerado automaticamente, não versionado no git).
+- **`raptor.py`** — Indexação hierárquica RAPTOR (GMM clustering + sumarização recursiva). Collapsed tree retrieval busca em todos os níveis.
+- **`store/`** — Diretório do LanceDB. Compartilhado via Google Drive (`RAG_STORE_DIR` em `.env`). Não versionado no git.
 
 ## Stack Tecnológica por Fase
 
