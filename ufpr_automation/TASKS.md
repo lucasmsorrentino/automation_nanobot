@@ -341,7 +341,7 @@ python -m ufpr_automation
   - [x] Comando `review` interativo no CLI de feedback (`--approve-all` para batch)
   - [x] Integração: nó `registrar_feedback` no LangGraph grava no FeedbackStore após classificação; `review` CLI gera ReflexionMemory em correções
 - [x] **perceber_owa no LangGraph** — implementação completa em `graph/nodes.py`
-- [ ] **Testes para módulos novos** — graph, router, reflexion, dspy sem cobertura
+- [x] **Testes para módulos novos** — 79 testes (graph 19, router 12, reflexion 14, dspy 34)
 - [x] **Ingestão completa do RAG** — 3.316 PDFs → 34.285 chunks indexados no LanceDB (2026-04-07)
   - [x] 3.288 documentos indexados com sucesso (99,2%) — 3.218 PyMuPDF + 70 OCR
   - [x] 10 PDFs irrecuperáveis (7 vazios 0 bytes, 2 corrompidos, 1 ilegível)
