@@ -19,7 +19,7 @@ class EmailState(TypedDict, total=False):
     # Perceber output
     emails: list[EmailData]
 
-    # RAG output (email stable_id -> formatted context)
+    # RAG output (email stable_id -> formatted context: vector + graph + reflexion)
     rag_contexts: dict[str, str]
 
     # Pensar output (email stable_id -> classification)

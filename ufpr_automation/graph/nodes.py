@@ -135,10 +135,32 @@ def _get_retriever():
     return Retriever()
 
 
-def rag_retrieve(state: EmailState) -> dict[str, Any]:
-    """Fetch RAG context for each email from the vector store.
+def _get_graph_context(email) -> str:
+    """Retrieve structured context from Neo4j GraphRAG for an email."""
+    try:
+        from ufpr_automation.graphrag.retriever import GraphRetriever
 
-    Uses RAPTOR collapsed tree retrieval if available, otherwise flat search.
+        retriever = GraphRetriever()
+        try:
+            ctx = retriever.get_context_for_email(
+                subject=email.subject,
+                body=email.body or email.preview,
+            )
+            return ctx
+        finally:
+            retriever.close()
+    except Exception as e:
+        logger.debug("GraphRAG nao disponivel: %s", e)
+        return ""
+
+
+def rag_retrieve(state: EmailState) -> dict[str, Any]:
+    """Fetch RAG context for each email from the vector store and knowledge graph.
+
+    Combines three context sources:
+    1. Vector RAG (RAPTOR/flat) — semantic search over institutional documents
+    2. GraphRAG (Neo4j) — structured knowledge: workflows, norms, templates, hierarchy
+    3. Reflexion — past error reflections for self-improvement
     """
     emails = state.get("emails", [])
     if not emails:
@@ -148,17 +170,29 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
         retriever = _get_retriever()
     except Exception as e:
         logger.debug("RAG nao disponivel: %s", e)
-        return {"rag_contexts": {}}
+        retriever = None
 
     contexts: dict[str, str] = {}
     for email in emails:
+        parts: list[str] = []
         query = f"{email.subject} {(email.body or email.preview)[:300]}"
-        try:
-            ctx = retriever.search_formatted(query, top_k=5)
-            if ctx and ctx != "Nenhum documento relevante encontrado.":
-                contexts[email.stable_id] = ctx
-        except Exception as e:
-            logger.debug("RAG falhou para '%s': %s", email.subject[:40], e)
+
+        # Vector RAG
+        if retriever:
+            try:
+                ctx = retriever.search_formatted(query, top_k=5)
+                if ctx and ctx != "Nenhum documento relevante encontrado.":
+                    parts.append(ctx)
+            except Exception as e:
+                logger.debug("RAG falhou para '%s': %s", email.subject[:40], e)
+
+        # GraphRAG (Neo4j)
+        graph_ctx = _get_graph_context(email)
+        if graph_ctx:
+            parts.append(graph_ctx)
+
+        if parts:
+            contexts[email.stable_id] = "\n\n".join(parts)
 
     # Append Reflexion (past error) contexts
     reflexion_contexts = _get_reflexion_context(emails)

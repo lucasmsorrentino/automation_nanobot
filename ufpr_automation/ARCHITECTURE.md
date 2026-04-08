@@ -86,10 +86,14 @@ graph TB
             LANGGRAPH3["🔀 LangGraph Fleet<br/>Frota de Sub-Agentes"]
         end
 
-        subgraph P3_MEMORIA["Memória (GraphRAG)"]
-            NEO4J["🕸️ Neo4j<br/>Grafo de Conhecimento"]
-            HIERARQUIA["🏛️ Hierarquia Departamental<br/>Relações Normativas"]
+        subgraph P3_MEMORIA["Memória (GraphRAG) ✅ IMPLEMENTADO"]
+            NEO4J["🕸️ Neo4j (1.757 nós, 2.296 rels)<br/>Grafo de Conhecimento"]
+            HIERARQUIA["🏛️ Hierarquia Departamental<br/>21 órgãos + relações"]
+            NORMAS["📜 1.600 Normas<br/>vigente / alterada / revogada"]
+            FLUXOS["📋 6 Fluxos, 47 Etapas<br/>TCE, Aditivo, Rescisão..."]
             NEO4J --- HIERARQUIA
+            NEO4J --- NORMAS
+            NEO4J --- FLUXOS
         end
 
         subgraph P3_SISTEMAS["Sistemas Legados (Expansão)"]
@@ -179,6 +183,71 @@ Relatório completo: [`RAG_INGESTION_REPORT.md`](RAG_INGESTION_REPORT.md)
 - **`raptor.py`** — Indexação hierárquica RAPTOR (GMM clustering + sumarização recursiva). Collapsed tree retrieval busca em todos os níveis.
 - **`store/`** — Diretório do LanceDB. Compartilhado via Google Drive (`RAG_STORE_DIR` em `.env`). Não versionado no git.
 
+## GraphRAG — Grafo de Conhecimento Neo4j (Marco III, Implementado 2026-04-08)
+
+```mermaid
+graph TB
+    subgraph GRAPHRAG["🕸️ GraphRAG — Neo4j Knowledge Graph"]
+        direction TB
+
+        subgraph SEED["📦 Seed (conhecimento base)"]
+            SOUL["SOUL.md<br/>Hierarquia + Fluxos"]
+            SEI_M["Manual SEI<br/>Tipos de Processo"]
+            SIGA_M["Manual SIGA<br/>Abas + URLs"]
+            COWORK["ClaudeCowork<br/>Templates + Guias"]
+        end
+
+        subgraph ENRICH["🔄 Enrich (extração do RAG)"]
+            RAG_SRC["LanceDB<br/>34.285 chunks"]
+            REGEX["Regex Extractor<br/>código + ementa + refs"]
+            RAG_SRC --> REGEX
+        end
+
+        subgraph NEO["🗄️ Neo4j (1.757 nós, 2.296 rels)"]
+            ORGAOS["🏛️ 21 Órgãos<br/>SUBORDINADO_A"]
+            NORMAS["📜 ~1.600 Normas<br/>vigente/alterada/revogada"]
+            FLUXOS2["📋 6 Fluxos, 47 Etapas<br/>EXECUTADA_POR + USA_SISTEMA"]
+            TEMPLATES["📝 15 Templates<br/>USADO_EM"]
+            PROCS["📁 20 Tipos Processo SEI<br/>TRAMITA_VIA"]
+        end
+
+        SEED --> NEO
+        REGEX -->|"ALTERA / REVOGA / CONSOLIDADA_EM"| NORMAS
+    end
+
+    subgraph RETRIEVER["🔍 GraphRetriever"]
+        MATCH["Match Fluxo<br/>(categoria + keywords)"]
+        NORMS_Q["Normas Aplicáveis<br/>(full-text search)"]
+        TEMPL_Q["Templates Relevantes"]
+        SIGA_Q["Hints SIGA<br/>(abas a consultar)"]
+        ORG_Q["Contatos<br/>(email, telefone)"]
+    end
+
+    NEO --> RETRIEVER
+    RETRIEVER -->|"Contexto formatado"| PIPELINE["LangGraph<br/>rag_retrieve node"]
+
+    style GRAPHRAG fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style RETRIEVER fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+### Vigência e Rastreabilidade
+
+O grafo reflete o **estado atual** da legislação. Cada norma tem:
+- `status`: `vigente` (1.281) / `alterada` (174) / `revogada` (148)
+- `fonte_rag`: nome do PDF para buscar o texto completo no RAG vetorial
+- Relações `ALTERA` (298) e `REVOGA` (151) formam a cadeia de linhagem
+- Relaç��o `CONSOLIDADA_EM` (191) aponta da norma original para a versão mais recente
+
+O histórico completo pode sempre ser consultado no banco vetorial via `fonte_rag`.
+
+### Pacote `ufpr_automation/graphrag/`
+
+- **`client.py`** — Wrapper do driver Neo4j: `run_query()`, `run_write()`, `health_check()`, context manager.
+- **`schema.py`** — Constraints de unicidade para cada label, full-text index para busca textual.
+- **`seed.py`** — Popula o grafo com conhecimento estruturado: 21 órgãos, 12 pessoas, 6 sistemas, 10 papéis, 10 normas-chave, 14 documentos, 20 tipos de processo SEI, 6 fluxos (47 etapas), 15 templates, 8 abas SIGA. CLI: `python -m ufpr_automation.graphrag.seed`.
+- **`enrich.py`** — Extrai normas do RAG vetorial via regex, insere no Neo4j com relações ALTERA/REVOGA, computa status de vigência, cria links CONSOLIDADA_EM. CLI: `python -m ufpr_automation.graphrag.enrich`.
+- **`retriever.py`** — `GraphRetriever` combina 5 tipos de contexto (workflow, normas, templates, SIGA, contatos). Integrado no nó `rag_retrieve` do LangGraph.
+
 ## Stack Tecnológica por Fase
 
 | Componente        | Marco I (Protótipo)         | Marco II (Intermediário)     | Marco III (Avançado)          |
@@ -186,7 +255,7 @@ Relatório completo: [`RAG_INGESTION_REPORT.md`](RAG_INGESTION_REPORT.md)
 | **Linguagem**     | Python                      | Python                       | Python                        |
 | **Orquestrador**  | Nanobot (loop nativo)       | LangGraph                    | LangGraph (Fleet)             |
 | **Motor Cognitivo** | LiteLLM → MiniMax (RAG + Self-Refine) | LiteLLM → MiniMax (DSPy) | LiteLLM → MiniMax (GraphRAG)  |
-| **Memória**       | LanceDB (Vetorial) + SOUL.md | LanceDB + RAPTOR (Hierárquico) | Neo4j (Grafo de Conhecimento) |
+| **Memória**       | LanceDB (Vetorial) + SOUL.md | LanceDB + RAPTOR (Hierárquico) | Neo4j (1.757 nós) + LanceDB (34K chunks) |
 | **Interface I/O** | Gmail API (IMAP) / Playwright OWA | Gmail API / Playwright OWA | Gmail + SIGA + SEI |
 | **Autonomia**     | Rascunho + Revisão Humana   | Auto (baixo risco) + Humano  | Totalmente autônomo           |
 | **Autenticação**  | Auto-login + MFA Telegram   | Auto-login + MFA Telegram    | Auto-login + MFA Telegram     |

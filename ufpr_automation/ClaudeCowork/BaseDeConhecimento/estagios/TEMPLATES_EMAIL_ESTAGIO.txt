@@ -1,0 +1,344 @@
+================================================================================
+TEMPLATES DE RESPOSTA DE E-MAIL — ESTÁGIOS
+Secretaria do Curso de Design Gráfico — UFPR
+Uso: adaptar os campos entre [colchetes] antes de enviar
+================================================================================
+
+INSTRUÇÕES DE USO:
+  • Campos obrigatórios:    [NOME DO ALUNO], [data], [situação específica]
+  • Campos opcionais:       marcados com (se aplicável)
+  • Assinatura padrão:      usar sempre o bloco de assinatura ao final
+  • Remetente:              design.grafico@ufpr.br
+  • Tom: cordial, objetivo e institucional — sem tutear o aluno
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 01 — COMO INICIAR ESTÁGIO NÃO OBRIGATÓRIO
+(Uso: aluno pergunta "como faço para começar um estágio?", "quero fazer estágio")
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Estágio Não Obrigatório — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+Para dar início ao estágio não obrigatório, você precisará seguir os passos abaixo:
+
+1. Verifique se você atende aos requisitos:
+   • Estar regularmente matriculado(a) com a carga mínima do semestre
+   • Não ter reprovação por falta em nenhuma disciplina no semestre anterior
+   • O estágio deve ser em uma empresa/instituição com atividades na área de Design
+
+2. Preencha e assine o TCE (Termo de Compromisso de Estágio) e o Plano de
+   Atividades. Os formulários estão disponíveis em: www.estagios.ufpr.br
+   As assinaturas podem ser físicas, digitais ou eletrônicas.
+
+3. Atenção ao supervisor: o/a responsável por você na empresa precisa ter
+   formação ou experiência na área de Design. Caso não tenha, será necessário
+   apresentar também uma "Declaração de Experiência do Supervisor".
+
+4. Envie a documentação em PDF para coordi@ufpr.br com no mínimo 10 dias
+   úteis de antecedência antes da data de início do estágio.
+   ⚠️ Não é possível homologar estágios com data retroativa.
+
+Após o envio, a coordenação analisará a documentação, abrirá o processo no SEI
+e encaminhará à COAPPE para registro. Você será avisado(a) do deferimento.
+
+Durante o estágio, você deverá enviar um Relatório Parcial a cada 6 meses e
+um Relatório Final ao término, por e-mail para a coordenação.
+
+Qualquer dúvida, estamos à disposição.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 02 — COMO INICIAR ESTÁGIO OBRIGATÓRIO
+(Uso: aluno matriculado em OD501/ODDA5 quer saber como proceder)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Estágio Obrigatório — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+Para formalizar o estágio obrigatório, siga os passos abaixo:
+
+1. Confirme que você está matriculado(a) na disciplina de Estágio Supervisionado
+   (OD501 — currículo 2016 / ODDA5 — currículo 2020).
+
+2. Preencha e assine o TCE (Termo de Compromisso de Estágio) e o Plano de
+   Atividades com as assinaturas da empresa concedente. Os formulários estão
+   em: www.estagios.ufpr.br
+
+3. Verifique o supervisor: deve ter formação ou experiência na área de Design.
+   Se não tiver, inclua também a "Declaração de Experiência do Supervisor".
+
+4. Envie a documentação em PDF para coordi@ufpr.br com no mínimo 10 dias
+   úteis de antecedência antes do início.
+   ⚠️ Homologação retroativa não é permitida.
+
+Lembretes importantes:
+   • Carga horária total: 360 horas (12 semanas × 5 dias × 6h/dia)
+   • O estágio deve ocorrer dentro do período letivo da disciplina
+   • Não pode coincidir com horários de aulas
+
+Para dúvidas sobre a disciplina em si, entre em contato também com o/a
+professor(a) responsável: ufpr.design.estagio@gmail.com
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 03 — DOCUMENTAÇÃO INCOMPLETA / PENDÊNCIA NO TCE
+(Uso: TCE recebido com erro, faltando assinatura, dados incorretos etc.)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Pendência na Documentação de Estágio
+
+Olá, [NOME DO ALUNO]!
+
+Recebemos sua documentação de estágio, porém identificamos a(s) seguinte(s)
+pendência(s) que precisam ser corrigidas antes de prosseguirmos:
+
+  [  ] Falta assinatura do(a) supervisor(a) da empresa no TCE
+  [  ] Falta assinatura do(a) estagiário(a) no TCE / Plano de Atividades
+  [  ] O/A supervisor(a) não tem formação compatível — inclua a Declaração de Experiência
+  [  ] A data de início informada é retroativa — não é possível homologar
+  [  ] Dados do orientador UFPR estão incorretos — veja os dados corretos abaixo
+  [  ] O Plano de Atividades não descreve atividades compatíveis com Design
+  [  ] [outra pendência específica]
+
+Dados corretos do orientador UFPR para o TCE:
+  Nome:      [nome do/a coordenador/a atual]
+  UORG:      Departamento de Design
+  Telefone:  (41) 3360-5103
+  E-mail:    coordi@ufpr.br
+  Formação:  Design
+
+Por favor, corrija e reenvie a documentação para coordi@ufpr.br.
+⚠️ Lembre-se: a documentação deve ser enviada com no mínimo 10 dias úteis
+de antecedência antes da data de início do estágio.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 04 — ESTÁGIO DEFERIDO / APROVADO
+(Uso: após aprovação pela COAPPE, informar o aluno)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Estágio Aprovado — [NOME DO ALUNO] | [nome da empresa]
+
+Olá, [NOME DO ALUNO]!
+
+Informamos que seu estágio foi devidamente registrado na UFPR.
+
+  Modalidade:    [Obrigatório / Não Obrigatório]
+  Empresa:       [nome da empresa]
+  Período:       [data início] a [data término]
+  Carga horária: [X] horas semanais
+
+Segue em anexo a documentação do processo para seus registros.
+
+Lembretes durante o estágio:
+  • Envie um Relatório Parcial a cada 6 meses para este e-mail
+  • Ao final, envie o Relatório Final
+  • Caso precise prorrogar, entre em contato ANTES do vencimento do TCE
+  • Em caso de encerramento antecipado, nos comunique imediatamente
+
+Bom estágio!
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 05 — PRORROGAÇÃO DE ESTÁGIO (TERMO ADITIVO)
+(Uso: aluno quer prorrogar estágio em andamento)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Prorrogação de Estágio — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+Para prorrogar seu estágio, você precisará providenciar um Termo Aditivo ao TCE.
+
+⚠️ ATENÇÃO: a solicitação deve ser feita ANTES da data de término indicada
+no seu TCE atual. Após o vencimento, o estágio é encerrado automaticamente
+e não pode ser renovado retroativamente.
+
+Documentação necessária:
+  1. Termo Aditivo preenchido e assinado por todas as partes
+     (modelo disponível em www.estagios.ufpr.br)
+  2. Relatório de Estágio do período realizado até o momento
+
+Envie os documentos em PDF para coordi@ufpr.br com no mínimo 10 dias
+úteis de antecedência antes do vencimento do TCE atual.
+
+(se aplicável) Lembretes:
+  • O tempo máximo de estágio na mesma empresa é de 24 meses (2 anos)
+  • O Termo Aditivo também pode ser usado para alterar carga horária,
+    bolsa/auxílio transporte ou substituir supervisor/orientador
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 06 — ENCERRAMENTO ANTECIPADO (RESCISÃO)
+(Uso: aluno quer encerrar estágio antes do prazo)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Encerramento de Estágio — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+Para encerrar seu estágio antes do prazo previsto no TCE, você precisará
+providenciar um Termo de Rescisão.
+
+Procedimento:
+  1. Preencha o Termo de Rescisão com a concordância da empresa
+     (modelo disponível em www.estagios.ufpr.br)
+  2. Colete as assinaturas necessárias
+  3. Envie o documento em PDF para coordi@ufpr.br
+
+Após o recebimento, atualizaremos o processo no SEI e comunicaremos a
+COAPPE para encerrar o registro do estágio.
+
+(se aplicável) Caso ainda seja necessário, lembre-se de enviar também o
+Relatório Final do período realizado.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 07 — CONVALIDAÇÃO DE ESTÁGIO
+(Uso: aluno pergunta sobre convalidar IC, trabalho, extensão como estágio)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Convalidação de Estágio — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+É possível solicitar a convalidação de horas em atividades específicas como
+estágio obrigatório. As atividades aceitas são:
+
+  • Iniciação Científica (IC)
+  • Atividades de Extensão
+  • Trabalho com carteira assinada na área de Design
+  • Atividade profissional freelancer na área de Design
+
+Para solicitar, acesse o formulário de convalidação:
+https://docs.google.com/forms/d/e/1FAIpQLSeum_rsemCHa1Rp7E1PMcodgvIpvHg_hSZKH_MBMwFas9b1KQ/viewform
+
+⚠️ ATENÇÃO: a solicitação deve ser feita até 30 dias antes do final do
+semestre letivo. A COE analisará a documentação e emitirá parecer.
+
+Se tiver dúvidas sobre quais documentos anexar no formulário, nos escreva.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 08 — EMPRESA OFERECE VAGAS DE ESTÁGIO
+(Uso: empresa/RH entra em contato querendo divulgar vagas)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Divulgação de Vagas de Estágio
+
+Olá, [NOME DO CONTATO]!
+
+Agradecemos o interesse em receber estagiários do Curso de Design Gráfico da UFPR.
+
+Para divulgarmos a(s) vaga(s) aos nossos alunos, pedimos que nos envie
+as informações abaixo:
+
+  • Descrição das atividades a serem realizadas
+  • Carga horária (máximo 30h semanais / 6h diárias)
+  • Bolsa Auxílio e Auxílio Transporte oferecidos
+  • Período de vigência do estágio
+  • Área de atuação e requisitos desejados
+  • Nome e contato do responsável (supervisor na empresa)
+  • Forma de candidatura (e-mail, link de formulário etc.)
+
+Informamos que o único documento necessário para formalização do estágio é
+o Termo de Compromisso de Estágio (TCE), disponível em www.estagios.ufpr.br.
+Caso sua empresa utilize agente de integração conveniado à UFPR, o processo
+segue pelas vias do próprio agente.
+
+Encaminharemos a oportunidade para os nossos discentes assim que recebermos
+as informações.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 09 — ALUNO NÃO CUMPRE REQUISITOS
+(Uso: aluno quer estágio mas está impedido por alguma razão)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Solicitação de Estágio — Impedimento
+
+Olá, [NOME DO ALUNO]!
+
+Agradecemos o contato. Infelizmente, no momento não é possível autorizar
+seu estágio pelo(s) seguinte(s) motivo(s):
+
+  [  ] Você possui reprovação por falta em disciplina no semestre anterior
+  [  ] Você não está matriculado(a) com a carga mínima exigida neste semestre
+  [  ] Você já integralizou o currículo — o vínculo com a UFPR foi encerrado
+  [  ] A disciplina de Estágio Supervisionado (OD501/ODDA5) não está em sua matrícula
+  [  ] O estágio pretendido não é na área de Design ou afins
+  [  ] [outro motivo específico]
+
+[se aplicável] Assim que a situação for regularizada, você poderá fazer a
+solicitação novamente. Estamos à disposição para orientá-lo(a).
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 10 — SOLICITAÇÃO DE RELATÓRIO PARCIAL
+(Uso: lembrete semestral para alunos com estágio em andamento)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Relatório Parcial de Estágio — [semestre/ano]
+
+Olá, [NOME DO ALUNO]!
+
+Conforme as normas de acompanhamento de estágio da UFPR, solicitamos o
+envio do seu Relatório Parcial de Estágio referente ao período de
+[mês/ano] a [mês/ano].
+
+O relatório deve ser enviado para este e-mail (coordi@ufpr.br) em formato PDF.
+
+Caso seu estágio já tenha sido encerrado ou haja alguma mudança de situação,
+por favor nos informe para que possamos atualizar o processo.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE 11 — DÚVIDA SOBRE CERTIFICADO DE ESTÁGIO
+(Uso: aluno pergunta como obter certificado ao final)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Assunto: Re: [assunto original] | Certificado de Estágio — Orientações
+
+Olá, [NOME DO ALUNO]!
+
+O certificado de estágio é emitido apenas para estágios NÃO OBRIGATÓRIOS
+concluídos. Para obtê-lo, você precisará:
+
+  1. Enviar o Relatório Final do estágio para a coordenação
+  2. Enviar a Ficha de Avaliação de Estágio preenchida e assinada
+     pelo(a) supervisor(a) da empresa
+
+Após apreciação da COE, o certificado será emitido pela COAPPE/PROGRAP.
+
+⚠️ Não são emitidos certificados parciais (antes do término do estágio)
+   nem certificados de estágio obrigatório.
+
+[ASSINATURA]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BLOCO DE ASSINATURA PADRÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Atenciosamente,
+
+Secretaria do Curso de Design Gráfico
+Departamento de Design — SACOD/UFPR
+Rua General Carneiro, 460 — 8º andar, sala 801
+CEP 80060-150 — Curitiba/PR
+Telefone: (41) 3360-5360
+E-mail: design.grafico@ufpr.br
+Site: https://sacod.ufpr.br/coordesign/
+
+================================================================================

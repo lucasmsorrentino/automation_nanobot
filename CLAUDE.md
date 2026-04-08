@@ -77,6 +77,15 @@ python -m ufpr_automation.dspy_modules.optimize --evaluate-only  # evaluate curr
 # LangGraph pipeline (Marco II)
 python -m ufpr_automation --channel gmail --langgraph           # use LangGraph orchestrator
 
+# GraphRAG — Neo4j knowledge graph (Marco III, requires neo4j running on bolt://localhost:7687)
+pip install -e ".[marco3]"
+python -m ufpr_automation.graphrag.seed                         # populate base knowledge graph
+python -m ufpr_automation.graphrag.seed --clear                 # clear graph + re-seed
+python -m ufpr_automation.graphrag.seed --dry-run               # show connection + stats only
+python -m ufpr_automation.graphrag.enrich                       # extract norms from RAG → Neo4j (with lineage)
+python -m ufpr_automation.graphrag.enrich --dry-run             # extract only, print stats
+python -m ufpr_automation.graphrag.enrich --conselho cepe       # filter by conselho
+
 # Model cascading (Marco III) — set in .env:
 # LLM_CLASSIFY_MODEL=ollama/qwen3:8b     # local model for classification
 # LLM_DRAFT_MODEL=minimax/MiniMax-M2     # API model for drafting
@@ -130,8 +139,10 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 - **`graph/`** — LangGraph StateGraph orchestrator (Marco II). Nodes: perceber (Gmail/OWA) -> rag_retrieve (RAPTOR/flat + Reflexion) -> classificar (DSPy/LiteLLM) -> rotear (confidence routing) -> consultar_sei/consultar_siga (conditional, for Estágios) -> agir (save drafts) -> registrar_procedimento. SQLite checkpointing for fault tolerance.
 - **`dspy_modules/`** — DSPy Signatures and Modules for programmatic prompt optimization. `signatures.py` declares EmailClassifier, DraftCritic, DraftRefiner. `modules.py` composes them into SelfRefineModule. `metrics.py` provides quality metrics. `optimize.py` runs GEPA bootstrap or MIPROv2 optimization.
 - **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for DSPy prompt optimization. `reflexion.py` implements Reflexion pattern: auto-analyzes errors, stores in vector store, retrieves past mistakes as negative context. CLI for stats and export. `web.py` provides Streamlit dashboard for reviewing classifications, approving/correcting drafts, and viewing learning statistics.
+- **`graphrag/`** — Neo4j GraphRAG knowledge graph (Marco III). `client.py` wraps the Neo4j driver. `schema.py` defines node types (Orgao, Norma, TipoProcesso, Documento, Papel, Sistema, Template, Fluxo, Etapa, Pessoa, Curso, Disciplina, SigaAba) and relationships. `seed.py` populates the graph from institutional knowledge (SOUL.md, SEI/SIGA manuals, ClaudeCowork). `retriever.py` provides graph-aware retrieval: workflow matching, norm lookup, template selection, SIGA navigation hints, org contacts. Integrated into `rag_retrieve` node alongside vector RAG.
 - **`scheduler.py`** — APScheduler-based pipeline scheduler. Runs LangGraph pipeline 3x/day (configurable via `SCHEDULE_HOURS`, `SCHEDULE_TZ`). CLI: `--schedule` (daemon) or `--schedule --once`.
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.
+- **`ClaudeCowork/`** — Base de conhecimento from Claude Cowork: SEI manual, SIGA manual, course data, internship guides, email templates, scheduled skills (morning/afternoon email checks).
 
 The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I -> LangGraph -> GraphRAG/multi-agent).
 
@@ -147,4 +158,4 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 - `main` — Production releases
 - `nightly` — Experimental / breaking changes
 - Feature branches: `feat/<name>`
-- Current branch `feat/marco-i-unified` — Marco I+II unified implementation (LangGraph + DSPy + RAPTOR + Gmail + model cascading).
+- Current branch `feat/marco-i-unified` — Marco I+II+III unified implementation (LangGraph + DSPy + RAPTOR + Gmail + model cascading + Neo4j GraphRAG).
