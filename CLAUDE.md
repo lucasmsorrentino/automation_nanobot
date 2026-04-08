@@ -35,11 +35,16 @@ python -m ufpr_automation --debug       # capture DOM + screenshot (OWA only)
 python -m ufpr_automation --headed      # force visible browser (OWA only)
 python -m ufpr_automation --perceber-only  # scrape only, no LLM (OWA only)
 
+# Scheduler — automatic pipeline execution (3x/day)
+python -m ufpr_automation --schedule           # start scheduler daemon (8h, 13h, 17h)
+python -m ufpr_automation --schedule --once    # run pipeline once now and exit
+
 # Feedback — human corrections store (feeds DSPy optimization)
 python -m ufpr_automation.feedback stats    # show feedback statistics
 python -m ufpr_automation.feedback export   # export as JSON for DSPy training
 python -m ufpr_automation.feedback review   # interactive review of last pipeline run
 python -m ufpr_automation.feedback add      # manually add a correction
+streamlit run ufpr_automation/feedback/web.py  # Streamlit feedback web UI (port 8502)
 
 # OCR for attachments (requires Tesseract installed on the system)
 pip install -e ".[ocr]"                    # install pytesseract + Pillow
@@ -119,9 +124,13 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 - **`config/`** — `.env`-based settings (UTF-8 aware for Windows). Centralized credentials for Gmail, OWA, SIGA, SEI. RAG store/docs paths (`RAG_STORE_DIR`, `RAG_DOCS_DIR`) shared via Google Drive (`G:/Meu Drive/ufpr_rag/`). Attachment settings (`ATTACHMENTS_DIR`, `ATTACHMENT_MAX_SIZE_MB`).
 - **`core/`** — Domain model (`EmailData` with `AttachmentData` list, `EmailClassification` with confidence score).
 - **`rag/`** — RAG (Retrieval-Augmented Generation) module for institutional documents. `ingest.py` extracts text from 3,316 PDFs (PyMuPDF + Tesseract OCR fallback for scanned docs), chunks with legal-document-aware separators (LangChain), embeds with `multilingual-e5-large` (sentence-transformers), and indexes in LanceDB (34,285 chunks, 99.2% coverage). Supports `--ocr-only` for re-ingesting previously empty PDFs. `retriever.py` provides semantic search with metadata filters (conselho, tipo). `raptor.py` provides hierarchical RAPTOR indexing (GMM clustering + recursive summarization) with collapsed tree retrieval. RAG context is automatically injected into the LLM classification pipeline. Store shared via Google Drive (`RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store`).
-- **`graph/`** — LangGraph StateGraph orchestrator (Marco II). Nodes: perceber (Gmail/OWA) -> rag_retrieve (RAPTOR/flat + Reflexion) -> classificar (DSPy/LiteLLM) -> rotear (confidence routing) -> agir (save drafts). SQLite checkpointing for fault tolerance.
+- **`sei/`** — SEI (Sistema Eletrônico de Informações) integration via Playwright. READ-ONLY: searches processes, extracts documents, prepares despacho drafts using SOUL.md templates (TCE, Aditivo, Rescisão). Login automático via credenciais `.env`.
+- **`siga/`** — SIGA (Sistema Integrado de Gestão Acadêmica) integration via Playwright. READ-ONLY: checks student status, enrollment, validates internship eligibility per SOUL.md section 11 rules.
+- **`procedures/`** — Procedure logging for learning. Records steps, duration, outcome, SEI/SIGA consultations in JSONL. Statistics for tracking efficiency over time.
+- **`graph/`** — LangGraph StateGraph orchestrator (Marco II). Nodes: perceber (Gmail/OWA) -> rag_retrieve (RAPTOR/flat + Reflexion) -> classificar (DSPy/LiteLLM) -> rotear (confidence routing) -> consultar_sei/consultar_siga (conditional, for Estágios) -> agir (save drafts) -> registrar_procedimento. SQLite checkpointing for fault tolerance.
 - **`dspy_modules/`** — DSPy Signatures and Modules for programmatic prompt optimization. `signatures.py` declares EmailClassifier, DraftCritic, DraftRefiner. `modules.py` composes them into SelfRefineModule. `metrics.py` provides quality metrics. `optimize.py` runs GEPA bootstrap or MIPROv2 optimization.
-- **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for DSPy prompt optimization. `reflexion.py` implements Reflexion pattern: auto-analyzes errors, stores in vector store, retrieves past mistakes as negative context. CLI for stats and export.
+- **`feedback/`** — Human corrections store (append-only JSONL). Records original vs corrected classifications for DSPy prompt optimization. `reflexion.py` implements Reflexion pattern: auto-analyzes errors, stores in vector store, retrieves past mistakes as negative context. CLI for stats and export. `web.py` provides Streamlit dashboard for reviewing classifications, approving/correcting drafts, and viewing learning statistics.
+- **`scheduler.py`** — APScheduler-based pipeline scheduler. Runs LangGraph pipeline 3x/day (configurable via `SCHEDULE_HOURS`, `SCHEDULE_TZ`). CLI: `--schedule` (daemon) or `--schedule --once`.
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (agent persona + internship regulations knowledge), `AGENTS.md`, `SKILL.md`, `config.json`.
 
 The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I -> LangGraph -> GraphRAG/multi-agent).

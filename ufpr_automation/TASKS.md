@@ -350,12 +350,70 @@ python -m ufpr_automation
 
 ---
 
+## Marco II.5 — Integração SEI/SIGA + Agendamento + Feedback Web
+
+### ✅ Concluído (2026-04-08)
+
+- [x] **Módulo SEI (Sistema Eletrônico de Informações)**
+  - [x] `sei/models.py` — ProcessoSEI, DocumentoSEI, DespachoDraft
+  - [x] `sei/browser.py` — Login automático via Playwright (credenciais `.env`)
+  - [x] `sei/client.py` — SEIClient: search_process, get_process_status, list_documents
+  - [x] Preparação de rascunhos de despacho usando templates SOUL.md seção 14 (TCE, Aditivo, Rescisão)
+  - [x] Extração de número de processo SEI e GRR de texto (regex)
+  - [x] **Somente leitura** — nenhuma ação submetida automaticamente
+
+- [x] **Módulo SIGA (Sistema Integrado de Gestão Acadêmica)**
+  - [x] `siga/models.py` — StudentStatus, EnrollmentInfo, EligibilityResult
+  - [x] `siga/browser.py` — Login automático via Playwright (credenciais `.env`)
+  - [x] `siga/client.py` — SIGAClient: check_student_status, check_enrollment, validate_internship_eligibility
+  - [x] Validação de elegibilidade para estágio conforme SOUL.md seção 11
+  - [x] **Somente leitura** — nenhuma ação submetida automaticamente
+
+- [x] **Pipeline LangGraph expandido**
+  - [x] Novos nós: `consultar_sei`, `consultar_siga`, `registrar_procedimento`
+  - [x] Roteamento condicional: emails de "Estágios" passam por SEI/SIGA antes de agir
+  - [x] `graph/state.py` — campos `sei_contexts`, `siga_contexts`, `procedures_logged`
+  - [x] `graph/builder.py` — grafo expandido com nós condicionais
+
+- [x] **Registro de procedimentos (aprendizado)**
+  - [x] `procedures/store.py` — ProcedureStore (JSONL append-only)
+  - [x] ProcedureRecord com steps, duração, outcome, consultas SEI/SIGA
+  - [x] Estatísticas: tempo médio, taxa de sucesso, procedimentos por categoria
+
+- [x] **Agendamento automático (3x/dia)**
+  - [x] `scheduler.py` — APScheduler com CronTrigger
+  - [x] Configurável via `SCHEDULE_HOURS` e `SCHEDULE_TZ` no `.env`
+  - [x] CLI: `--schedule` (daemon) e `--schedule --once` (execução única)
+
+- [x] **Interface web de feedback (Streamlit)**
+  - [x] `feedback/web.py` — Dashboard, Revisar Classificações, Estatísticas, Procedimentos
+  - [x] Aceitar/Corrigir classificações via botões (integrado com FeedbackStore + ReflexionMemory)
+  - [x] Visualização de consultas SEI/SIGA e log de procedimentos
+  - [x] Gráficos de evolução de acurácia
+
+- [x] **Testes**
+  - [x] `test_sei.py` — 16 testes (modelos, extração regex, templates de despacho)
+  - [x] `test_siga.py` — 8 testes (modelos, elegibilidade)
+  - [x] `test_procedures.py` — 9 testes (store JSONL, estatísticas)
+  - [x] `test_scheduler.py` — 6 testes (config, importação)
+  - [x] `test_graph_expanded.py` — 8 testes (nós SEI/SIGA, roteamento, procedimentos)
+
+### 🔜 Pendente — Validação Manual
+
+- [ ] Validar login automático no SEI (requer sessão ativa e credenciais reais)
+- [ ] Validar login automático no SIGA (requer sessão ativa e credenciais reais)
+- [ ] Refinar seletores Playwright do SEI/SIGA após inspeção do DOM real
+- [ ] Testar scheduler em produção (executar 1 dia completo)
+- [ ] Coletar feedback via interface web e verificar ReflexionMemory
+
+---
+
 ## Marco III — Automação Governamental Total (Futuro)
 
 - [ ] LangGraph Fleet com sub-agentes
 - [ ] GraphRAG (Neo4j) para hierarquia departamental
 - [ ] AFlow — otimização automática de topologia do grafo
-- [ ] Integração com SIGA-UFPR via Playwright (credenciais no `.env`)
-- [ ] Integração com SEI via Playwright (credenciais no `.env`)
-- [ ] Protocolar processos e extrair trâmites em lote
+- [ ] Protocolar processos no SEI via Playwright (atualmente somente leitura)
+- [ ] Preencher formulários no SIGA via Playwright (atualmente somente leitura)
+- [ ] Extrair trâmites em lote
 - [ ] Model cascading local (Ollama/Qwen3-8B) — infraestrutura pronta, aguardando setup

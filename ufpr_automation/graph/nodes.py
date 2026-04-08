@@ -9,7 +9,6 @@ import asyncio
 import json
 from typing import Any
 
-from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.graph.state import EmailState
 from ufpr_automation.utils.logging import logger
 
@@ -118,9 +117,9 @@ def _get_reflexion_context(emails: list) -> dict[str, str]:
 def _get_retriever():
     """Get the best available retriever (RAPTOR > flat)."""
     try:
-        from ufpr_automation.rag.raptor import RAPTOR_TABLE, STORE_DIR, RaptorRetriever
-
         import lancedb
+
+        from ufpr_automation.rag.raptor import RAPTOR_TABLE, STORE_DIR, RaptorRetriever
 
         db_path = STORE_DIR / "ufpr.lance"
         if db_path.exists():
@@ -370,6 +369,237 @@ def registrar_feedback(state: EmailState) -> dict[str, Any]:
 
     logger.info("Feedback: %d classificacao(oes) registrada(s)", recorded)
     return {"feedback_recorded": recorded}
+
+
+def consultar_sei(state: EmailState) -> dict[str, Any]:
+    """Consult SEI for emails that mention a process number.
+
+    Only runs for emails classified as 'Estagios' that contain a SEI process
+    number pattern (XXXXX.XXXXXX/XXXX-XX). READ-ONLY: no data is submitted.
+    """
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+    if not emails:
+        return {"sei_contexts": {}}
+
+    from ufpr_automation.sei.client import extract_sei_process_number
+
+    # Identify emails that need SEI consultation
+    sei_candidates: dict[str, str] = {}  # stable_id -> process number
+    for email in emails:
+        cls = classifications.get(email.stable_id)
+        if not cls or cls.categoria != "Estágios":
+            continue
+        text = f"{email.subject} {email.body or email.preview}"
+        proc_num = extract_sei_process_number(text)
+        if proc_num:
+            sei_candidates[email.stable_id] = proc_num
+
+    if not sei_candidates:
+        return {"sei_contexts": {}}
+
+    # Check if SEI credentials are configured
+    from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
+
+    if not sei_has_credentials():
+        logger.info("SEI: credenciais nao configuradas, pulando consultas")
+        return {"sei_contexts": {}}
+
+    # Run SEI consultations
+    sei_results = asyncio.run(_consult_sei_async(sei_candidates))
+    logger.info("SEI: %d consulta(s) realizadas", len(sei_results))
+    return {"sei_contexts": sei_results}
+
+
+async def _consult_sei_async(candidates: dict[str, str]) -> dict[str, Any]:
+    """Internal async implementation for SEI consultations."""
+    from ufpr_automation.config.settings import SEI_URL
+    from ufpr_automation.sei.browser import (
+        auto_login,
+        create_browser_context,
+        is_logged_in,
+        launch_browser,
+        save_session_state,
+    )
+    from ufpr_automation.sei.client import SEIClient
+
+    results: dict[str, Any] = {}
+    pw, browser = await launch_browser(headless=True)
+    try:
+        context = await create_browser_context(browser)
+        page = await context.new_page()
+        await page.goto(SEI_URL, wait_until="domcontentloaded")
+
+        if not await is_logged_in(page):
+            if not await auto_login(page):
+                logger.error("SEI: login falhou")
+                return results
+            await save_session_state(context)
+
+        client = SEIClient(page)
+        for stable_id, proc_num in candidates.items():
+            processo = await client.search_process(proc_num)
+            if processo:
+                results[stable_id] = {
+                    "numero": processo.numero,
+                    "status": processo.status,
+                    "documentos": len(processo.documentos),
+                    "interessados": processo.interessados,
+                    "observacoes": processo.observacoes[:300] if processo.observacoes else "",
+                }
+    except Exception as e:
+        logger.error("SEI: erro durante consultas: %s", e)
+    finally:
+        await browser.close()
+        await pw.stop()
+    return results
+
+
+def consultar_siga(state: EmailState) -> dict[str, Any]:
+    """Consult SIGA for emails that mention a student GRR.
+
+    Only runs for emails classified as 'Estagios' that contain a GRR pattern.
+    READ-ONLY: no data is submitted. Validates internship eligibility.
+    """
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+    if not emails:
+        return {"siga_contexts": {}}
+
+    from ufpr_automation.sei.client import extract_grr
+
+    # Identify emails that need SIGA consultation
+    siga_candidates: dict[str, str] = {}  # stable_id -> GRR
+    for email in emails:
+        cls = classifications.get(email.stable_id)
+        if not cls or cls.categoria != "Estágios":
+            continue
+        text = f"{email.subject} {email.body or email.preview}"
+        grr = extract_grr(text)
+        if grr:
+            siga_candidates[email.stable_id] = grr
+
+    if not siga_candidates:
+        return {"siga_contexts": {}}
+
+    from ufpr_automation.siga.browser import has_credentials as siga_has_credentials
+
+    if not siga_has_credentials():
+        logger.info("SIGA: credenciais nao configuradas, pulando consultas")
+        return {"siga_contexts": {}}
+
+    siga_results = asyncio.run(_consult_siga_async(siga_candidates))
+    logger.info("SIGA: %d consulta(s) realizadas", len(siga_results))
+    return {"siga_contexts": siga_results}
+
+
+async def _consult_siga_async(candidates: dict[str, str]) -> dict[str, Any]:
+    """Internal async implementation for SIGA consultations."""
+    from ufpr_automation.config.settings import SIGA_URL
+    from ufpr_automation.siga.browser import (
+        auto_login,
+        create_browser_context,
+        is_logged_in,
+        launch_browser,
+        save_session_state,
+    )
+    from ufpr_automation.siga.client import SIGAClient
+
+    results: dict[str, Any] = {}
+    pw, browser = await launch_browser(headless=True)
+    try:
+        context = await create_browser_context(browser)
+        page = await context.new_page()
+        await page.goto(SIGA_URL, wait_until="domcontentloaded")
+
+        if not await is_logged_in(page):
+            if not await auto_login(page):
+                logger.error("SIGA: login falhou")
+                return results
+            await save_session_state(context)
+
+        client = SIGAClient(page)
+        for stable_id, grr in candidates.items():
+            eligibility = await client.validate_internship_eligibility(grr)
+            result_data: dict[str, Any] = {
+                "grr": grr,
+                "eligible": eligibility.eligible,
+                "reasons": eligibility.reasons,
+                "warnings": eligibility.warnings,
+            }
+            if eligibility.student:
+                result_data["nome"] = eligibility.student.nome
+                result_data["situacao"] = eligibility.student.situacao
+                result_data["curso"] = eligibility.student.curso
+            results[stable_id] = result_data
+    except Exception as e:
+        logger.error("SIGA: erro durante consultas: %s", e)
+    finally:
+        await browser.close()
+        await pw.stop()
+    return results
+
+
+def registrar_procedimento(state: EmailState) -> dict[str, Any]:
+    """Log the procedure steps executed for each email in this pipeline run.
+
+    Records what was done, how long it took, and the outcome, so the system
+    can learn which procedures are most efficient over time.
+    """
+    import uuid
+
+    from ufpr_automation.procedures.store import ProcedureRecord, ProcedureStep, ProcedureStore
+
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+    drafts_saved = set(state.get("drafts_saved", []))
+    sei_contexts = state.get("sei_contexts", {})
+    siga_contexts = state.get("siga_contexts", {})
+    manual_escalation = set(state.get("manual_escalation", []))
+
+    store = ProcedureStore()
+    run_id = uuid.uuid4().hex[:12]
+    logged = 0
+
+    email_map = {e.stable_id: e for e in emails}
+    for sid, cls in classifications.items():
+        email = email_map.get(sid)
+        if not email:
+            continue
+
+        steps: list[ProcedureStep] = [
+            ProcedureStep(name="perceber", result="ok"),
+            ProcedureStep(name="classificar", result="ok"),
+        ]
+
+        if sid in sei_contexts:
+            steps.append(ProcedureStep(name="consultar_sei", result="ok"))
+        if sid in siga_contexts:
+            steps.append(ProcedureStep(name="consultar_siga", result="ok"))
+
+        if sid in drafts_saved:
+            steps.append(ProcedureStep(name="agir_draft", result="ok"))
+            outcome = "draft_saved"
+        elif sid in manual_escalation:
+            outcome = "escalated"
+        else:
+            outcome = "human_review"
+
+        record = ProcedureRecord(
+            run_id=run_id,
+            email_hash=sid,
+            email_subject=email.subject[:100],
+            email_categoria=cls.categoria,
+            steps=steps,
+            outcome=outcome,
+            sei_process=sei_contexts.get(sid, {}).get("numero", ""),
+            siga_grr=siga_contexts.get(sid, {}).get("grr", ""),
+        )
+        store.add(record)
+        logged += 1
+
+    logger.info("Procedimentos: %d registro(s) gravado(s) (run_id=%s)", logged, run_id)
+    return {"procedures_logged": logged}
 
 
 def agir_gmail(state: EmailState) -> dict[str, Any]:

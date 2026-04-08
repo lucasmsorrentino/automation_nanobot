@@ -13,10 +13,13 @@ from langgraph.graph import END, StateGraph
 from ufpr_automation.graph.nodes import (
     agir_gmail,
     classificar,
+    consultar_sei,
+    consultar_siga,
     perceber_gmail,
     perceber_owa,
     rag_retrieve,
     registrar_feedback,
+    registrar_procedimento,
     rotear,
 )
 from ufpr_automation.graph.state import EmailState
@@ -27,11 +30,20 @@ def _has_emails(state: EmailState) -> str:
     return "rag_retrieve" if state.get("emails") else "end"
 
 
+def _needs_sei_siga(state: EmailState) -> str:
+    """Route to SEI/SIGA consultation if any email is classified as Estagios."""
+    classifications = state.get("classifications", {})
+    for cls in classifications.values():
+        if cls.categoria == "Estágios":
+            return "consultar_sei"
+    return "registrar_feedback"
+
+
 def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     """Build and compile the email processing StateGraph.
 
     Args:
-        channel: "gmail" or "owa" — selects the perceber node.
+        channel: "gmail" or "owa" -- selects the perceber node.
         checkpointer: Optional LangGraph checkpointer for persistence.
 
     Returns:
@@ -50,7 +62,10 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     graph.add_node("rag_retrieve", rag_retrieve)
     graph.add_node("classificar", classificar)
     graph.add_node("rotear", rotear)
+    graph.add_node("consultar_sei", consultar_sei)
+    graph.add_node("consultar_siga", consultar_siga)
     graph.add_node("registrar_feedback", registrar_feedback)
+    graph.add_node("registrar_procedimento", registrar_procedimento)
 
     # Define edges
     graph.set_entry_point("perceber")
@@ -59,9 +74,22 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     )
     graph.add_edge("rag_retrieve", "classificar")
     graph.add_edge("classificar", "rotear")
-    graph.add_edge("rotear", "registrar_feedback")
+
+    # After routing: if any email is Estagios, consult SEI/SIGA before acting
+    graph.add_conditional_edges(
+        "rotear",
+        _needs_sei_siga,
+        {
+            "consultar_sei": "consultar_sei",
+            "registrar_feedback": "registrar_feedback",
+        },
+    )
+    graph.add_edge("consultar_sei", "consultar_siga")
+    graph.add_edge("consultar_siga", "registrar_feedback")
+
     graph.add_edge("registrar_feedback", "agir")
-    graph.add_edge("agir", END)
+    graph.add_edge("agir", "registrar_procedimento")
+    graph.add_edge("registrar_procedimento", END)
 
     return graph.compile(checkpointer=checkpointer)
 

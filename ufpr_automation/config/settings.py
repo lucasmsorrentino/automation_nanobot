@@ -145,6 +145,17 @@ SEI_PASSWORD = os.getenv("SEI_PASSWORD", "")
 
 
 # ============================================================================
+# Scheduler
+# ============================================================================
+
+# Comma-separated hours (24h format) when the pipeline runs automatically
+SCHEDULE_HOURS = os.getenv("SCHEDULE_HOURS", "8,13,17")
+
+# Timezone for scheduling
+SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "America/Sao_Paulo")
+
+
+# ============================================================================
 # LLM Provider
 # ============================================================================
 

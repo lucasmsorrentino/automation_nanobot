@@ -77,6 +77,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use LangGraph pipeline (Marco II) instead of sequential orchestrator.",
     )
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help="Start the scheduler to run the pipeline automatically (3x/day by default). "
+             "Configure via SCHEDULE_HOURS and SCHEDULE_TZ in .env.",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="(With --schedule) Run the pipeline once now and exit, instead of starting the scheduler.",
+    )
     return parser.parse_args()
 
 
@@ -217,7 +228,16 @@ def main() -> None:
     # Determine channel: CLI flag overrides .env setting
     channel = args.channel or settings.EMAIL_CHANNEL
 
-    if args.dry_run:
+    if args.schedule:
+        from ufpr_automation.scheduler import run_scheduled_pipeline, start_scheduler
+
+        if args.once:
+            print("\n=== Executando pipeline uma vez (--once) ===")
+            run_scheduled_pipeline()
+            print("\nExecucao unica concluida.")
+        else:
+            start_scheduler()
+    elif args.dry_run:
         asyncio.run(run_dry_run())
     elif channel == "gmail":
         asyncio.run(run_gmail_channel(use_langgraph=args.langgraph))
