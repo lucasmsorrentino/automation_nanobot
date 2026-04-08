@@ -1,0 +1,324 @@
+================================================================================
+GUIA DO PROCESSO BUROCRÁTICO DE ESTÁGIOS
+Curso de Design Gráfico — UFPR | Secretaria CCDG
+Compilado a partir: Regulamento DG 2024, Manual UFPR, FAQ COAPPE, Site DG
+Última atualização: março/2026
+================================================================================
+
+
+── MODALIDADES DE ESTÁGIO ──────────────────────────────────────────────────────
+
+┌─────────────────────┬──────────────────────────────────────────────────────┐
+│ OBRIGATÓRIO         │ Disciplina curricular (OD501/ODDA5). Matrícula,      │
+│                     │ frequência e aprovação são requisitos para           │
+│                     │ integralização. 360h = 12 semanas × 5 dias × 6h/dia │
+│                     │ Realizado no 4º ano do curso.                        │
+├─────────────────────┼──────────────────────────────────────────────────────┤
+│ NÃO OBRIGATÓRIO     │ Atividade formativa opcional e remunerada. Pode      │
+│                     │ contar como AFC. Não substitui o obrigatório.        │
+│                     │ Duração: mínimo 1 semestre, máximo 2 anos.           │
+└─────────────────────┴──────────────────────────────────────────────────────┘
+
+DIREITOS COMPARADOS:
+  Benefício                  Obrigatório        Não Obrigatório
+  Bolsa Auxílio              Não (público)      SIM (obrigatório pela concedente)
+  Auxílio Transporte         Não                SIM
+  Férias remuneradas         Não                SIM (30 dias a cada 12 meses)
+  Seguro acidentes           SIM (pela UFPR)    SIM (pela concedente)
+  Certificado UFPR           NÃO*               SIM
+  Permanência mesma empresa  Período disciplina Máximo 24 meses
+  Carga horária              Máx. 30h/sem       Máx. 30h/sem (40h em férias)
+
+  * Exceto para alunos de outras IES que estagiam na UFPR.
+
+
+── REQUISITOS PARA INÍCIO DO ESTÁGIO ───────────────────────────────────────────
+
+▸ ESTÁGIO NÃO OBRIGATÓRIO (Art. 22 — Regulamento DG 2024):
+  ✓ Estar matriculado com a carga mínima exigida no semestre
+  ✓ Não ter reprovação por falta em nenhuma disciplina no semestre anterior
+  ✓ Atividades do estágio na área de Design ou afins
+  ✗ NÃO autorizado para quem já integralizou o currículo
+  ✗ NÃO pode coincidir com atividades acadêmicas (mesmo dia/horário)
+
+▸ ESTÁGIO OBRIGATÓRIO:
+  ✓ Estar matriculado na disciplina OD501 (cur. 2016) ou ODDA5 (cur. 2020)
+  ✓ Atividades na área de Design ou afins
+  ✓ Ocorrer no período da disciplina (datas do ano letivo)
+  ✗ NÃO pode coincidir com atividades acadêmicas (mesmo dia/horário)
+
+▸ SUPERVISOR (em qualquer modalidade):
+  ✓ Deve ter formação ou experiência na área de Design ou afins
+  ✗ Se NÃO tiver: apresentar "Declaração de Experiência do Supervisor"
+     (form: http://200.17.193.102/tela_estagio_formularios/formularios/form_declaracao_experiencia.php)
+
+
+── FLUXO — ESTÁGIO NÃO OBRIGATÓRIO ────────────────────────────────────────────
+
+  [ALUNO + EMPRESA]
+       │
+       ▼
+  1. Preencher e assinar o TCE + Plano de Atividades
+     (assinaturas físicas, digitais ou eletrônicas)
+       │
+       ▼
+  2. Enviar por e-mail para coordi@ufpr.br em PDF
+     ⚠️ Mínimo 10 DIAS ÚTEIS antes do início do estágio
+     ⚠️ NÃO é permitida homologação retroativa
+       │
+       ▼
+  [COORDENAÇÃO / SECRETARIA]
+  3. Verifica situação acadêmica do aluno
+  4. Analisa documentação e condições do estágio
+  5. Abre processo no SEI (tipo: "Estágios não Obrigatórios")
+  6. Gera despacho e envia processo para a COAPPE
+       │
+       ▼
+  [COAPPE / UE — PROGRAP]
+  7. Analisa e faz o "registro" do estágio na UFPR
+     ou solicita ajuste/complementação de documentos
+       │
+       ▼
+  8. Após deferimento: coordenação envia documentos ao discente
+       │
+  ─────────────── DURANTE O ESTÁGIO ───────────────
+       │
+       ▼
+  9.  A cada 6 meses: aluno envia Relatório Parcial por e-mail
+  10. Ao final: aluno envia Relatório Final por e-mail
+
+
+── FLUXO — ESTÁGIO OBRIGATÓRIO ─────────────────────────────────────────────────
+
+  [ALUNO + EMPRESA]
+       │
+       ▼
+  1. Estar matriculado na disciplina OD501/ODDA5
+  2. Preencher e assinar o TCE + Plano de Atividades
+       │
+       ▼
+  3. Enviar por e-mail para coordi@ufpr.br em PDF
+     ⚠️ Mínimo 10 DIAS ÚTEIS antes do início do estágio
+     ⚠️ NÃO é permitida homologação retroativa
+       │
+       ▼
+  [COORDENAÇÃO / SECRETARIA]
+  4. Verifica situação acadêmica
+  5. Abre processo no SEI (tipo: "Estágio Obrigatório")
+  6. Gera despacho para o/a docente da disciplina (OD501/ODDA5)
+       │
+       ▼
+  [DOCENTE DA DISCIPLINA]
+  7. Gera despacho e retorna processo para coordenação
+       │
+       ▼
+  [COORDENAÇÃO]
+  8. Envia processo para a COAPPE
+       │
+       ▼
+  [COAPPE]
+  9. Registra o estágio ou solicita ajustes
+       │
+       ▼
+  10. Após deferimento: coordenação envia documentos ao discente
+       │
+  ─────────────── DURANTE O ESTÁGIO ───────────────
+       │
+       ▼
+  11. A cada 6 meses: Relatório Parcial (conforme solicitação COAPPE)
+  12. Ao final: Relatório Final + defesa oral para o professor orientador
+
+
+── FLUXO — PRORROGAÇÃO (TERMO ADITIVO) ─────────────────────────────────────────
+
+  ⚠️ Solicitar ANTES da data de término do TCE. Após o vencimento, o estágio
+     é encerrado automaticamente e não pode ser prorrogado retroativamente.
+
+  1. Preencher Termo Aditivo com as devidas assinaturas
+  2. Apresentar Relatório de Estágio do período
+  3. Enviar para coordi@ufpr.br (10 dias úteis de antecedência)
+  4. Coordenação verifica relatório e documentação
+  5. Atualiza o processo SEI e encaminha para COAPPE
+  6. COAPPE atualiza período e seguro (quando aplicável)
+
+  O Termo Aditivo pode alterar: prazo, carga horária, bolsa, supervisor, orientador.
+
+
+── FLUXO — RESCISÃO ANTECIPADA ─────────────────────────────────────────────────
+
+  1. Preencher Termo de Rescisão com assinaturas das partes
+  2. Enviar para a coordenação
+  3. Coordenação atualiza o processo SEI
+  4. COAPPE encerra o registro do estágio
+
+  ⚠️ Se o aluno trancar, cancelar ou mudar de curso: comunicar imediatamente
+     a COAPPE. O estágio é automaticamente cancelado. Realizar estágio sem
+     matrícula regular caracteriza fraude (implicações trabalhistas e cíveis).
+
+
+── FLUXO — CERTIFICAÇÃO (ESTÁGIO NÃO OBRIGATÓRIO) ─────────────────────────────
+
+  1. Aluno envia Relatório Final + Ficha de Avaliação (assinada pelo supervisor)
+  2. COE aprecia e emite parecer sobre emissão do certificado
+  3. COAPPE emite o certificado
+
+  ⚠️ Certificados parciais (antes do término) NÃO são emitidos.
+  ⚠️ Certificados de estágio OBRIGATÓRIO NÃO são emitidos (exceto para alunos
+     de outras IES que estagiam na UFPR).
+
+
+── CONVALIDAÇÃO DE ESTÁGIO ─────────────────────────────────────────────────────
+
+  Atividades que podem ser convalidadas como estágio pela COE:
+  • Iniciação Científica (IC)
+  • Extensão
+  • Trabalho com carteira assinada na área de Design
+  • Atividade profissional freelancer
+
+  Prazo para solicitação: até 30 dias antes do final do semestre letivo.
+  Form de convalidação:
+    https://docs.google.com/forms/d/e/1FAIpQLSeum_rsemCHa1Rp7E1PMcodgvIpvHg_hSZKH_MBMwFas9b1KQ/viewform
+
+
+── DADOS PARA O TCE — SUPERVISOR DA UFPR ───────────────────────────────────────
+
+  (Preencher quando o campo "Orientador UFPR" for o/a coordenador/a do curso)
+
+  Nome do Orientador:        [nome do/a coordenador/a atual]
+  Sigla UORG:                Departamento de Design
+  Telefone:                  (41) 3360-5103
+  E-mail institucional:      coordi@ufpr.br
+  Área de formação:          Design
+
+  ⚠️ O nome do orientador no TCE deve ser o do professor que efetivamente
+     acompanhará o estágio, não necessariamente o coordenador.
+
+
+── DOCUMENTOS — PARA QUE SERVE CADA UM ─────────────────────────────────────────
+
+  TCE — Termo de Compromisso de Estágio
+    Principal documento. Obrigatório em todos os estágios. Deve ser
+    formalizado ANTES do início das atividades. Nele constam: modalidade,
+    carga horária, duração, bolsa, supervisor, orientador e demais condições.
+
+  PLANO DE ATIVIDADES DE ESTÁGIO
+    Descreve as atividades que o aluno realizará. Elaborado em conjunto
+    com o supervisor e aprovado pelo professor orientador. Parte integrante do TCE.
+
+  TERMO ADITIVO
+    Altera condições do TCE: prazo, carga horária, supervisor, orientador,
+    valores de bolsa. Deve ser solicitado ANTES do vencimento do TCE.
+
+  TERMO DE RESCISÃO
+    Encerra o estágio antes do prazo. Obrigatório em encerramento antecipado,
+    sob pena de caracterização de fraude.
+
+  RELATÓRIO PARCIAL
+    Elaborado pelo aluno a cada 6 meses. Enviado por e-mail à coordenação.
+    Necessário também para solicitar prorrogação via Termo Aditivo.
+
+  RELATÓRIO FINAL
+    Elaborado pelo aluno ao término do estágio. Para estágio obrigatório,
+    inclui defesa oral perante o professor orientador da disciplina.
+
+  FICHA DE AVALIAÇÃO DE ESTÁGIO
+    Preenchida e assinada pelo supervisor da concedente. Necessária para
+    emissão do certificado (apenas estágios não obrigatórios).
+
+  DECLARAÇÃO DE EXPERIÊNCIA DO SUPERVISOR
+    Usada quando o supervisor não tem formação compatível com a área de Design.
+    Comprova experiência profissional na área.
+
+  DECLARAÇÃO DE PARENTESCO
+    Apenas para estágios remunerados no âmbito da UFPR.
+
+
+── SITUAÇÕES ESPECIAIS ──────────────────────────────────────────────────────────
+
+▸ ESTUDANTE-FUNCIONÁRIO (trabalha com carteira assinada na área)
+  Pode solicitar convalidação das horas de trabalho como estágio obrigatório,
+  desde que as atividades sejam correlatas ao curso. Solicitar à COE.
+  Formulário: via "Outras solicitações" no site do curso.
+
+▸ ESTÁGIO NA UFPR
+  A UFPR pode ser concedente em estágios não obrigatórios remunerados e
+  obrigatórios sem remuneração. Documentação: COAPPE + PROGEPE (para pagamento).
+
+▸ ESTÁGIO NO EXTERIOR
+  1. Adquirir seguro internacional contra acidentes
+  2. Apresentar documento de aceite da concedente
+  3. Apresentar plano de atividades (português, espanhol ou inglês)
+  4. Aprovação da COE e conferência pela COAPPE
+  5. Encaminhamento à Agência UFPR Internacional (AUI)
+
+▸ INICIAÇÃO CIENTÍFICA como estágio obrigatório
+  Permitida se prevista no PPC e aprovada pela COE. Professor do IC não
+  deve ser o mesmo da disciplina de estágio. Solicitar à coordenação sem
+  necessidade de documentação à COAPPE.
+
+▸ PERÍODO DE PROVAS
+  O estagiário pode solicitar redução de 50% da carga horária no período
+  de provas, mediante justificativa assinada pelo Professor Orientador ou
+  pela coordenação do curso.
+
+▸ ESTÁGIO NÃO OBRIGATÓRIO DURANTE FÉRIAS
+  Permitido até 40h semanais (8h diárias) quando não há disciplinas presenciais.
+
+
+── CONTATOS IMPORTANTES ────────────────────────────────────────────────────────
+
+  Secretaria / Coordenação DG:   coordi@ufpr.br | (41) 3360-5103
+  Disciplina Estágio Superv.:    ufpr.design.estagio@gmail.com
+  COAPPE / UE (PROGRAP):         estagio@ufpr.br | (41) 3310-2675
+  PROGRAP (geral):                prograp@ufpr.br | (41) 3310-2665
+  Formulários UFPR (TCE etc.):   www.estagios.ufpr.br
+  Site estágio DG:               https://sacod.ufpr.br/coordesign/estagio-orientacoes/
+  Convalidação (form):           https://docs.google.com/forms/d/e/1FAIpQLSeum_rsemCHa1Rp7E1PMcodgvIpvHg_hSZKH_MBMwFas9b1KQ/viewform
+  Outras solicitações à COE:     https://forms.gle/4s24KTMUYrZu8Z8W6
+
+
+── BASE NORMATIVA ───────────────────────────────────────────────────────────────
+
+  Lei Federal 11.788/2008       — Lei do Estágio (nacional)
+  Resolução 70/04-CEPE          — Atividades Formativas na UFPR
+  Resolução 46/10-CEPE          — Estágios na UFPR (cria a COE)
+  Instrução Normativa 01/12-CEPE — Estágios não obrigatórios externos
+  Instrução Normativa 02/12-CEPE — Estágios no exterior
+  Instrução Normativa 01/13-CEPE — Estágios remunerados no âmbito da UFPR
+  Regulamento de Estágio DG 2024 — Normas específicas do curso (aprovado 23/02/2024)
+
+
+── PERGUNTAS FREQUENTES (SÍNTESE) ──────────────────────────────────────────────
+
+P: Posso fazer estágio em área diferente de Design?
+R: Não. Todos os estágios devem ser em áreas correlatas ao curso de Design Gráfico.
+
+P: O estágio não obrigatório substitui o obrigatório?
+R: Não. São modalidades independentes. O obrigatório precisa ser cumprido pela disciplina.
+
+P: Preciso de convênio entre a empresa e a UFPR?
+R: Não. O único documento indispensável é o TCE. Se a empresa exigir convênio,
+   o único que pode assinar é a COAPPE (não a coordenação do curso).
+
+P: Quanto tempo posso ficar no mesmo estágio?
+R: Máximo 24 meses (2 anos) na mesma concedente.
+
+P: Posso prorrogar meu estágio?
+R: Sim, via Termo Aditivo, desde que solicitado ANTES do vencimento do TCE.
+
+P: O estágio cria vínculo empregatício?
+R: Não, em nenhuma hipótese. Estágio irregular pode ser convertido em relação
+   de emprego com todas as implicações trabalhistas (fraude ao estágio).
+
+P: Tenho direito a férias?
+R: Sim. 30 dias de recesso a cada 12 meses de estágio (ou proporcional),
+   gozados antes da data de término do TCE.
+
+P: O que acontece se eu trancar o curso durante o estágio?
+R: O estágio é automaticamente cancelado. Comunicar imediatamente a COAPPE.
+
+P: Posso fazer estágio depois de integralizar o currículo?
+R: Não. Uma vez integralizado, o vínculo com a UFPR é encerrado. O estágio
+   deve ser rescindido antes do final do último semestre matriculado.
+
+================================================================================

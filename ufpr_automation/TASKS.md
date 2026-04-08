@@ -350,10 +350,17 @@ python -m ufpr_automation
 
 ---
 
-## Marco III — Automação Governamental Total (Futuro)
+## Marco III — Automação Governamental Total
 
 - [ ] LangGraph Fleet com sub-agentes
-- [ ] GraphRAG (Neo4j) para hierarquia departamental
+- [x] **GraphRAG (Neo4j) para hierarquia departamental** — implementado (2026-04-08)
+  - [x] `graphrag/client.py` — Neo4j connection manager com health check
+  - [x] `graphrag/schema.py` — Constraints, indexes, modelo do grafo (12 tipos de nó, 12 tipos de relação)
+  - [x] `graphrag/seed.py` — Seed com conhecimento institucional completo (órgãos, normas, fluxos, templates, papéis, sistemas, SIGA abas, SEI tipos de processo)
+  - [x] `graphrag/retriever.py` — Retriever com match de fluxo, normas, templates, hints SIGA, contexto organizacional
+  - [x] Integração no LangGraph: `rag_retrieve` combina Vector RAG + GraphRAG + Reflexion
+  - [x] 43 testes (schema 3, client 6, retriever 20, seed 12, integração 2)
+  - [x] Dependência `neo4j>=5.20.0` em `[marco3]` extra, config `NEO4J_*` em settings.py
 - [ ] AFlow — otimização automática de topologia do grafo
 - [ ] Integração com SIGA-UFPR via Playwright (credenciais no `.env`)
 - [ ] Integração com SEI via Playwright (credenciais no `.env`)
