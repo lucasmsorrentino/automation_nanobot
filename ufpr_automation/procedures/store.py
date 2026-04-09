@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from ufpr_automation.config import settings
 from ufpr_automation.utils.logging import logger
 
-PROCEDURES_DIR = settings.PACKAGE_ROOT / "procedures_data"
+PROCEDURES_DIR = settings.PROCEDURES_DATA_DIR
 PROCEDURES_FILE = PROCEDURES_DIR / "procedures.jsonl"
 
 

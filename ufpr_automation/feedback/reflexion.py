@@ -30,7 +30,7 @@ from ufpr_automation.config import settings
 from ufpr_automation.core.models import EmailClassification
 from ufpr_automation.utils.logging import logger
 
-REFLEXION_DIR = settings.PACKAGE_ROOT / "feedback_data"
+REFLEXION_DIR = settings.FEEDBACK_DATA_DIR
 REFLEXION_FILE = REFLEXION_DIR / "reflexions.jsonl"
 REFLEXION_STORE = settings.RAG_STORE_DIR / "ufpr.lance"
 REFLEXION_TABLE = "ufpr_reflexions"

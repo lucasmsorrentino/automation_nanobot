@@ -55,6 +55,20 @@ RAG_DOCS_DIR = Path(os.getenv("RAG_DOCS_DIR", str(_PACKAGE_DIR / "docs")))
 
 
 # ============================================================================
+# Feedback / Procedures — human corrections + learning data
+# Override to share across machines (e.g. Google Drive, NAS).
+# Default keeps everything local to the package.
+# ============================================================================
+
+FEEDBACK_DATA_DIR = Path(
+    os.getenv("FEEDBACK_DATA_DIR", str(_PACKAGE_DIR / "feedback_data"))
+)
+PROCEDURES_DATA_DIR = Path(
+    os.getenv("PROCEDURES_DATA_DIR", str(_PACKAGE_DIR / "procedures_data"))
+)
+
+
+# ============================================================================
 # Outlook Web Access (OWA)
 # ============================================================================
 

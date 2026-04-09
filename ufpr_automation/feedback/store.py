@@ -28,8 +28,8 @@ from ufpr_automation.config import settings
 from ufpr_automation.core.models import EmailClassification
 from ufpr_automation.utils.logging import logger
 
-# Default location for the feedback store
-FEEDBACK_DIR = settings.PACKAGE_ROOT / "feedback_data"
+# Default location for the feedback store (override via FEEDBACK_DATA_DIR env var)
+FEEDBACK_DIR = settings.FEEDBACK_DATA_DIR
 FEEDBACK_FILE = FEEDBACK_DIR / "corrections.jsonl"
 
 
