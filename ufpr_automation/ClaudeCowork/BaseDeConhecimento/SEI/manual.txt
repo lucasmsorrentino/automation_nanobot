@@ -1,0 +1,161 @@
+================================================================================
+MANUAL DO SEI — SECRETARIA DO CURSO DE DESIGN GRÁFICO | UFPR
+Gerado com base nos processos reais da unidade UFPR/R/AC/CCDG
+Última atualização: março/2026
+================================================================================
+
+
+── O QUE É O SEI ───────────────────────────────────────────────────────────────
+
+O SEI (Sistema Eletrônico de Informações) é o sistema oficial da UFPR para
+criação, tramitação e arquivamento de processos administrativos.
+Todos os processos da secretaria devem ser abertos e acompanhados no SEI.
+
+Acesso: https://sei.ufpr.br
+Unidade da secretaria: UFPR/R/AC/CCDG (Coordenação do Curso de Design Gráfico)
+
+
+── TIPOS DE PROCESSO — POR FREQUÊNCIA ──────────────────────────────────────────
+
+Os números indicam a quantidade de processos existentes na unidade.
+Use esta lista para identificar o tipo correto ao abrir um processo.
+
+  238  Graduação/Ensino Técnico: Estágios não Obrigatórios        ← mais comum
+  132  Administração Geral: Informações e Documentos
+   62  Graduação: Registro de Diplomas
+   60  Graduação/Ensino Técnico: Estágio Obrigatório
+   60  Graduação/Ensino Técnico: Dispensa/Isenção/Aproveitamento de disciplinas
+   42  Graduação: Programa de Voluntariado Acadêmico
+   30  Graduação: Matrículas
+   23  Graduação/Ensino Técnico: Expedição de Diploma
+   21  [DOCUMENTOS NÃO VINCULADOS A PROCESSOS]
+   15  CPA/SEAI: Sensibilização da aplicação da pesquisa
+   13  Graduação: Solicitação de Trancamento/Destrancamento de Curso
+   12  Graduação: Cancelamento por Abandono de Curso
+   11  Graduação: Cancelamento de Registro Acadêmico (prazo de integralização)
+   11  Graduação: Colação de Grau com Solenidade
+   11  Administração Geral: Acordos. Ajustes. Contratos. Convênios
+   10  Graduação/Ensino Técnico: Matrícula em curso
+    8  Graduação/Ensino Técnico: Agenda Acadêmica / Guia do Estudante
+    8  Graduação/Ensino Técnico: Oferta de Disciplinas
+    7  PROGEPE: Avaliação de Estágio Probatório
+    7  Graduação: PROVAR - Processo de Ocupação de Vagas Remanescentes
+    5  Graduação/Ensino Técnico: Mobilidade Acadêmica Internacional
+    5  Graduação/Ensino Técnico: Outras formas de Ingresso
+    5  Graduação: Colação de Grau sem Solenidade
+    4  Eleição
+    3  Graduação: Colação de Grau / Antecipação
+    3  Graduação: Inclusão de Disciplina
+    3  Graduação: Reconhecimento/Revalidação de diploma expedido no exterior
+    3  Graduação: Solicitação de Matrícula em Disciplinas
+    3  SIBI: Informação e Documentação
+    2  Graduação: Prorrogação de prazo para Conclusão do Curso
+    2  Graduação: Solicitação de Período Especial
+    2  PROGEPE: Concurso Público / Processo Seletivo
+    (... demais tipos com 1 ocorrência omitidos para brevidade)
+
+
+── PROCESSOS MAIS COMUNS — COMO ABRIR ──────────────────────────────────────────
+
+Para abrir qualquer processo: Menu → "Iniciar Processo" → escolher o tipo (exibir todos os tipos para menos comuns)
+
+▸ ESTÁGIO NÃO OBRIGATÓRIO (238 processos)
+  Tipo: "Graduação/Ensino Técnico: Estágios não Obrigatórios"
+  Documentos típicos: TCE (Termo de Compromisso de Estágio), Termo Aditivo de Estágio, Plano de Atividades,
+    Relatório semestral, Avaliação do supervisor, encerramento do estágio.
+  Identificação no título: nome do aluno + GRR (ex.: "NOME ALUNO - GRR20XXXXXX")
+  Obs.: Um processo por aluno por estágio. Não reutilizar processos anteriores após .
+
+▸ ESTÁGIO OBRIGATÓRIO (60 processos)
+  Tipo: "Graduação/Ensino Técnico: Estágio Obrigatório"
+  Documentos típicos: matrícula na disciplina, TCE, relatórios, avaliação final.
+  Obs.: Inclui também convalidação de estágio obrigatório.
+
+▸ DISPENSA / ISENÇÃO / APROVEITAMENTO DE DISCIPLINAS (60 processos)
+  Tipo: "Graduação/Ensino Técnico: Dispensa/Isenção/Aproveitamento de disciplinas"
+  Documentos típicos: requerimento do aluno, histórico da instituição de origem,
+    ementa da disciplina cursada, parecer do colegiado.
+  Base normativa: Resolução 92/13-CEPE (alterada pela 39/18-CEPE).
+
+▸ TRANCAMENTO / DESTRANCAMENTO DE CURSO (13 processos)
+  Tipo: "Graduação: Solicitação de Trancamento de Curso / Destrancamento de Curso"
+  Documentos típicos: requerimento do aluno (1º trancamento é imotivado),
+    justificativa e documentação (2º e 3º trancamentos), parecer da coordenação.
+  Base normativa: Instrução Normativa 01/16-PROGRAD.
+  Prazo: verificar calendário acadêmico vigente.
+
+▸ CANCELAMENTO POR ABANDONO DE CURSO (12 processos)
+  Tipo: "Graduação: Cancelamento por Abandono de Curso"
+  Obs.: Iniciado pela coordenação quando o aluno não realiza matrícula por dois
+    semestres consecutivos sem trancamento.
+
+▸ CANCELAMENTO POR PRAZO (11 processos)
+  Tipo: "Graduação: Cancelamento de Registro Acadêmico (ultrapassar prazo de integralização)"
+  Obs.: Aluno que ultrapassou o prazo máximo de integralização curricular.
+
+▸ COLAÇÃO DE GRAU (11+5+3 processos)
+  Tipos: "Graduação: Colação de Grau com Solenidade" /
+         "Graduação: Colação de Grau sem Solenidade" /
+         "Graduação: Colação de grau / Antecipação"
+  Obs.: Processo gerado por formando ou pela coordenação. Verificar SIBI para
+    quitação de débitos antes de encaminhar expedição de diploma.
+
+▸ REGISTRO DE DIPLOMAS (62 processos)
+  Tipo: "Graduação: Registro de Diplomas"
+  Obs.: Processo tramitado após colação. Encaminhado à PROGRAP.
+
+▸ MATRÍCULA (30 processos)
+  Tipo: "Graduação: Matrículas"
+  Obs.: Para situações especiais de matrícula fora do SIGA (ex.: estudantes
+    estrangeiros, mobilidade, situações excepcionais).
+
+▸ VOLUNTARIADO ACADÊMICO (42 processos)
+  Tipo: "Graduação: Programa de Voluntariado Acadêmico"
+  Obs.: Frequente como forma de horas AFC (Atividades Formativas Complementares).
+
+
+── DOCUMENTOS NÃO VINCULADOS A PROCESSOS ───────────────────────────────────────
+
+Usados para documentos internos sem processo formal:
+  • ATAS de Reuniões do Colegiado
+  • Declarações emitidas pela coordenação
+  • Planos de ensino por semestre
+  • Relatórios e análises internas (ex.: análise de horas AFC)
+  • Documentos de uso recorrente da secretaria
+
+Para criar: Menu → "Iniciar Processo" → tipo em branco / "Documento não vinculado"
+(ou diretamente pelo ícone de novo documento dentro de um processo existente)
+
+
+── AÇÕES COMUNS NO DIA A DIA ───────────────────────────────────────────────────
+
+• Consultar processo:    		 Pesquisa → número do processo, ou GRR (matrícula) do aluno, ou nome do aluno
+• Acompanhamento especial: 		Menu → Classificar para visualização da unidade, dos processos mais usados, importante para economizar tempo de pesquisa.
+• Incluir documento:		         Dentro do processo → Consultar entre tipos mais comuns (despacho, ofício) ou entre todos os tipos (formulários diversos). Documento 'externo' para anexar documentos .pdf, entre outros tipos, no processo.
+• Editar conteúdo (do documento):	Dentro do documento que está dentro do processo, apenas habiltiado para documentos SEI criados na Unidade e que ainda não tiveram assinatura visualizada em outra Unidade ou externamente(assintura pode ser quebrada antes de visualizada de fora).
+• Tramitar processo *deixar para o humano no loop*:  	         Dentro do processo → "Enviar Processo" → escolher unidade
+• Arquivar processo:    		 Menu → Arquivo → Arquivamento (após conclusão)
+• Assinar documento:    		 Dentro do documento → "Assinar Documento"
+• Ver por tipo:         		 Controle de Processos → "Ver por tipo"
+• Favoritos: 				 Menu → Usado para referência de modelo/padrão de documentos 
+• Textos padrão:        		 Menu → Textos Padrão (modelos de documentos reutilizáveis) <instrucoes> prencher "Textos padrão" conforme "Favoritos", caso seja mais eficiente para o modelo</instrucoes>
+
+
+── UNIDADES PARA TRAMITAÇÃO FREQUENTE ──────────────────────────────────────────
+
+[Preencher com as unidades SEI mais usadas para encaminhamento, ex.:]
+  PROGRAP (graduação):    [código da unidade — preencher]
+  PROGEPE (pessoal):      [código da unidade — preencher]
+  SIBI (biblioteca):      [código da unidade — preencher]
+  SACOD (setor):          [código da unidade — preencher]
+
+
+── OBSERVAÇÕES ─────────────────────────────────────────────────────────────────
+
+• Campos com [preencher] devem ser completados manualmente.
+• Os números de processos por tipo foram levantados em março/2026 e podem variar.
+• Em caso de dúvida sobre o tipo correto de processo, consultar a base de
+  conhecimento do SEI (Menu → Base de Conhecimento) ou a PROGRAP.
+• Para processos sigilosos<instrucoes>ignore sigilosos</instrucoes>, usar "Acervo de Sigilosos da Unidade" no menu.
+
+================================================================================

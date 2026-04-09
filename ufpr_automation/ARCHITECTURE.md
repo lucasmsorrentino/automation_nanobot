@@ -24,13 +24,13 @@ graph TB
             OWA1["📧 Outlook Web Access (OWA)<br/>UFPR Microsoft 365"]
             AUTOLOGIN -->|"E-mail + Senha + MFA"| OWA1
             BROWSER1 -->|"Web Scraping DOM"| OWA1
-            OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo"| EXTRACT1["📋 Extração de Dados"]
+            OWA1 -->|"E-mails não lidos:<br/>remetente, assunto, corpo, anexos"| EXTRACT1["📋 Extração de Dados<br/>+ Download de Anexos"]
         end
 
         subgraph P1_COGNICAO["Pensar (LiteLLM + MiniMax)"]
             LLM1["🧠 LiteLLM → MiniMax API"]
             ICL["📝 In-Context Learning<br/>Normas UFPR no System Prompt"]
-            EXTRACT1 -->|"Conteúdo do e-mail"| LLM1
+            EXTRACT1 -->|"Conteúdo do e-mail<br/>+ texto dos anexos"| LLM1
             ICL -->|"Contexto institucional"| LLM1
             LLM1 -->|"Classificação + Resposta"| DRAFT1["✍️ Ofício / Resposta Gerada"]
         end
@@ -86,10 +86,14 @@ graph TB
             LANGGRAPH3["🔀 LangGraph Fleet<br/>Frota de Sub-Agentes"]
         end
 
-        subgraph P3_MEMORIA["Memória (GraphRAG)"]
-            NEO4J["🕸️ Neo4j<br/>Grafo de Conhecimento"]
-            HIERARQUIA["🏛️ Hierarquia Departamental<br/>Relações Normativas"]
+        subgraph P3_MEMORIA["Memória (GraphRAG) ✅ IMPLEMENTADO"]
+            NEO4J["🕸️ Neo4j (1.757 nós, 2.296 rels)<br/>Grafo de Conhecimento"]
+            HIERARQUIA["🏛️ Hierarquia Departamental<br/>21 órgãos + relações"]
+            NORMAS["📜 1.600 Normas<br/>vigente / alterada / revogada"]
+            FLUXOS["📋 6 Fluxos, 47 Etapas<br/>TCE, Aditivo, Rescisão..."]
             NEO4J --- HIERARQUIA
+            NEO4J --- NORMAS
+            NEO4J --- FLUXOS
         end
 
         subgraph P3_SISTEMAS["Sistemas Legados (Expansão)"]
@@ -119,15 +123,140 @@ graph TB
     style LEGEND fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px
 ```
 
+## Módulo RAG — Vector Store (Marco II, Fase Inicial)
+
+```mermaid
+graph LR
+    subgraph INGEST["📥 Pipeline de Ingestão"]
+        PDF["📄 PDFs<br/>(3.316 documentos)"]
+        EXTRACT["📝 PyMuPDF<br/>Extração de Texto"]
+        CHUNK["✂️ LangChain Splitter<br/>Chunking Semântico"]
+        EMBED["🧮 multilingual-e5-large<br/>Embeddings (1024 dim)"]
+        STORE["🗄️ LanceDB<br/>Vector Store Local"]
+
+        PDF --> EXTRACT --> CHUNK --> EMBED --> STORE
+    end
+
+    subgraph RETRIEVE["🔍 Pipeline de Busca"]
+        QUERY["❓ Query (PT-BR)"]
+        QEMBED["🧮 query: prefix<br/>Embedding"]
+        SEARCH["🔎 Busca Vetorial<br/>+ Filtros Metadata"]
+        RESULTS["📋 Top-K Resultados<br/>com Score + Fonte"]
+
+        QUERY --> QEMBED --> SEARCH --> RESULTS
+    end
+
+    STORE -.->|"cosine similarity"| SEARCH
+
+    style INGEST fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style RETRIEVE fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+```
+
+### Estrutura do Corpus
+
+| Conselho | Atas | Resoluções | Instruções Normativas |
+|----------|------|------------|----------------------|
+| CEPE     | 731  | 648        | 8                    |
+| COPLAD   | 630  | 474        | 1                    |
+| COUN     | 217  | 435        | 1                    |
+| CONCUR   | 143  | 10         | —                    |
+| Estágio  | —    | —          | 18 (manuais, leis)   |
+
+### Estatísticas da Ingestão (2026-04-07, com OCR)
+
+| Métrica              | Valor   |
+|----------------------|---------|
+| PDFs processados     | 3.316   |
+| PDFs indexados       | 3.288   |
+| — via PyMuPDF        | 3.218   |
+| — via OCR (Tesseract)| 70      |
+| Chunks gerados       | 34.285  |
+| PDFs irrecuperáveis  | 10      |
+| Cobertura            | 99,2%   |
+
+Relatório completo: [`RAG_INGESTION_REPORT.md`](RAG_INGESTION_REPORT.md)
+
+### Pacote `ufpr_automation/rag/`
+
+- **`ingest.py`** — Pipeline de ingestão: PDF → texto (PyMuPDF) → chunks (LangChain RecursiveCharacterTextSplitter com separadores para documentos legais PT-BR) → embeddings (E5 multilingual) → LanceDB. Suporta `--subset`, `--dry-run`, skip de arquivos já indexados (idempotente).
+- **`retriever.py`** — Busca vetorial semântica com filtros por `conselho` e `tipo`. Retorna `SearchResult` com texto, score, metadados. Método `search_formatted()` gera contexto pronto para injeção no system prompt do LLM.
+- **`raptor.py`** — Indexação hierárquica RAPTOR (GMM clustering + sumarização recursiva). Collapsed tree retrieval busca em todos os níveis.
+- **`store/`** — Diretório do LanceDB. Compartilhado via Google Drive (`RAG_STORE_DIR` em `.env`). Não versionado no git.
+
+## GraphRAG — Grafo de Conhecimento Neo4j (Marco III, Implementado 2026-04-08)
+
+```mermaid
+graph TB
+    subgraph GRAPHRAG["🕸️ GraphRAG — Neo4j Knowledge Graph"]
+        direction TB
+
+        subgraph SEED["📦 Seed (conhecimento base)"]
+            SOUL["SOUL.md<br/>Hierarquia + Fluxos"]
+            SEI_M["Manual SEI<br/>Tipos de Processo"]
+            SIGA_M["Manual SIGA<br/>Abas + URLs"]
+            COWORK["ClaudeCowork<br/>Templates + Guias"]
+        end
+
+        subgraph ENRICH["🔄 Enrich (extração do RAG)"]
+            RAG_SRC["LanceDB<br/>34.285 chunks"]
+            REGEX["Regex Extractor<br/>código + ementa + refs"]
+            RAG_SRC --> REGEX
+        end
+
+        subgraph NEO["🗄️ Neo4j (1.757 nós, 2.296 rels)"]
+            ORGAOS["🏛️ 21 Órgãos<br/>SUBORDINADO_A"]
+            NORMAS["📜 ~1.600 Normas<br/>vigente/alterada/revogada"]
+            FLUXOS2["📋 6 Fluxos, 47 Etapas<br/>EXECUTADA_POR + USA_SISTEMA"]
+            TEMPLATES["📝 15 Templates<br/>USADO_EM"]
+            PROCS["📁 20 Tipos Processo SEI<br/>TRAMITA_VIA"]
+        end
+
+        SEED --> NEO
+        REGEX -->|"ALTERA / REVOGA / CONSOLIDADA_EM"| NORMAS
+    end
+
+    subgraph RETRIEVER["🔍 GraphRetriever"]
+        MATCH["Match Fluxo<br/>(categoria + keywords)"]
+        NORMS_Q["Normas Aplicáveis<br/>(full-text search)"]
+        TEMPL_Q["Templates Relevantes"]
+        SIGA_Q["Hints SIGA<br/>(abas a consultar)"]
+        ORG_Q["Contatos<br/>(email, telefone)"]
+    end
+
+    NEO --> RETRIEVER
+    RETRIEVER -->|"Contexto formatado"| PIPELINE["LangGraph<br/>rag_retrieve node"]
+
+    style GRAPHRAG fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style RETRIEVER fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+### Vigência e Rastreabilidade
+
+O grafo reflete o **estado atual** da legislação. Cada norma tem:
+- `status`: `vigente` (1.281) / `alterada` (174) / `revogada` (148)
+- `fonte_rag`: nome do PDF para buscar o texto completo no RAG vetorial
+- Relações `ALTERA` (298) e `REVOGA` (151) formam a cadeia de linhagem
+- Relaç��o `CONSOLIDADA_EM` (191) aponta da norma original para a versão mais recente
+
+O histórico completo pode sempre ser consultado no banco vetorial via `fonte_rag`.
+
+### Pacote `ufpr_automation/graphrag/`
+
+- **`client.py`** — Wrapper do driver Neo4j: `run_query()`, `run_write()`, `health_check()`, context manager.
+- **`schema.py`** — Constraints de unicidade para cada label, full-text index para busca textual.
+- **`seed.py`** — Popula o grafo com conhecimento estruturado: 21 órgãos, 12 pessoas, 6 sistemas, 10 papéis, 10 normas-chave, 14 documentos, 20 tipos de processo SEI, 6 fluxos (47 etapas), 15 templates, 8 abas SIGA. CLI: `python -m ufpr_automation.graphrag.seed`.
+- **`enrich.py`** — Extrai normas do RAG vetorial via regex, insere no Neo4j com relações ALTERA/REVOGA, computa status de vigência, cria links CONSOLIDADA_EM. CLI: `python -m ufpr_automation.graphrag.enrich`.
+- **`retriever.py`** — `GraphRetriever` combina 5 tipos de contexto (workflow, normas, templates, SIGA, contatos). Integrado no nó `rag_retrieve` do LangGraph.
+
 ## Stack Tecnológica por Fase
 
 | Componente        | Marco I (Protótipo)         | Marco II (Intermediário)     | Marco III (Avançado)          |
 |-------------------|-----------------------------|------------------------------|-------------------------------|
 | **Linguagem**     | Python                      | Python                       | Python                        |
 | **Orquestrador**  | Nanobot (loop nativo)       | LangGraph                    | LangGraph (Fleet)             |
-| **Motor Cognitivo** | LiteLLM → MiniMax (ICL)   | LiteLLM → MiniMax (RAG)      | LiteLLM → MiniMax (GraphRAG)  |
-| **Memória**       | System Prompt (In-Context)  | LanceDB / Chroma (Vetorial)  | Neo4j (Grafo de Conhecimento) |
-| **Interface I/O** | Playwright → OWA            | Playwright → OWA             | Playwright → OWA + SIGA + SEI |
+| **Motor Cognitivo** | LiteLLM → MiniMax (RAG + Self-Refine) | LiteLLM → MiniMax (DSPy) | LiteLLM → MiniMax (GraphRAG)  |
+| **Memória**       | LanceDB (Vetorial) + SOUL.md | LanceDB + RAPTOR (Hierárquico) | Neo4j (1.757 nós) + LanceDB (34K chunks) |
+| **Interface I/O** | Gmail API (IMAP) / Playwright OWA | Gmail API / Playwright OWA | Gmail + SIGA + SEI |
 | **Autonomia**     | Rascunho + Revisão Humana   | Auto (baixo risco) + Humano  | Totalmente autônomo           |
 | **Autenticação**  | Auto-login + MFA Telegram   | Auto-login + MFA Telegram    | Auto-login + MFA Telegram     |
 | **Tratamento Erro** | Logs no terminal          | Recovery nodes (LangGraph)   | Auto-healing + alertas        |

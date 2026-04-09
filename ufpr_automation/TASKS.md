@@ -104,6 +104,28 @@
   - [x] Adicionar logging estruturado (JSON) para arquivo em `logs/`
   - [x] Substituir `print()` por `logger.info()` nos módulos principais
 
+- [x] **8. Suporte a anexos de e-mail**
+  - [x] Modelo `AttachmentData` (filename, mime_type, size, local_path, extracted_text, needs_ocr)
+  - [x] Campos `attachments` e `has_attachments` em `EmailData`
+  - [x] Download de anexos via Gmail IMAP (`_extract_attachments` em `gmail/client.py`)
+  - [x] Extração de texto: PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), texto plano
+  - [x] Injeção do texto dos anexos no prompt do LLM (`llm/client.py`)
+  - [x] Integração no pipeline Gmail (`orchestrator.py`)
+  - [x] Configuração via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB`
+  - [x] Imagens e PDFs escaneados marcados com `needs_ocr=True` (OCR na Fase 2)
+  - [x] 11 testes unitários passando (`tests/test_attachments.py`)
+  - [x] **Teste end-to-end validado (2026-04-06):**
+    - 20 emails lidos, 7 com anexos (20 arquivos: PDFs, PNGs, JPGs)
+    - PDFs com texto: extração OK (ex: despachos SEI, formulário horas formativas)
+    - PDFs escaneados e imagens: marcados `needs_ocr=True` (10+ arquivos, aguardando Fase 2 OCR)
+    - Texto dos anexos injetado no LLM — classificação correta (ex: "Problemas com Estágio" com despachos SEI → Estágios)
+    - 20/20 classificações, 8 rascunhos salvos
+    - 53 testes passando (0 falhas)
+
+- [x] **9. Correção de testes existentes**
+  - [x] `test_partial_failure` — mock baseado em conteúdo ao invés de call_count (compatível com Self-Refine)
+  - [x] `test_all_pdfs` — skip quando pasta docs está vazia
+
 ### 🔜 Pendente — Validação Manual (requer sessão OWA)
 
 > **Próxima tarefa.** Executar na ordem abaixo. Cada etapa depende da anterior.
@@ -237,17 +259,168 @@ python -m ufpr_automation
 
 ---
 
-## Marco II — Roteamento Agêntico (Futuro)
+## Marco II — Roteamento Agêntico
 
-- [ ] Migrar orquestrador para LangGraph
-- [ ] Implementar Vector RAG (LanceDB/Chroma) para portarias e memorandos
-- [ ] Roteamento condicional: auto-envio para risco baixo
-- [ ] Tratamento de exceções (mudança de layout OWA)
+### ✅ Concluído
 
-## Marco III — Automação Governamental Total (Futuro)
+- [x] **Canal Gmail IMAP** (canal primário, substitui OWA para leitura)
+  - [x] `gmail/client.py` — GmailClient com App Password (sem MFA, sem Playwright)
+  - [x] `list_unread()`, `save_draft()`, `send_reply()`, `mark_read()`
+  - [x] Download de anexos via IMAP (`_extract_attachments`)
+  - [x] Seleção de canal via `--channel gmail|owa` e `EMAIL_CHANNEL` no `.env`
+
+- [x] **RAG — Base vetorial de documentos institucionais**
+  - [x] `rag/ingest.py` — Pipeline: PDF → PyMuPDF → chunks (LangChain) → embeddings (multilingual-e5-large) → LanceDB
+  - [x] `rag/retriever.py` — Busca semântica com filtros por conselho/tipo
+  - [x] Subset estágio (18 PDFs, 338 chunks) indexado e validado
+  - [x] Caminhos configuráveis via `RAG_STORE_DIR` / `RAG_DOCS_DIR` (compartilhado via Google Drive)
+  - [x] Integração no pipeline: contexto RAG injetado no prompt do LLM antes da classificação
+
+- [x] **RAPTOR — RAG hierárquico** (Sarthi et al., ICLR 2024)
+  - [x] `rag/raptor.py` — Clusterização GMM + sumarização LLM recursiva
+  - [x] Collapsed tree retrieval (busca em todos os níveis)
+  - [x] Auto-fallback para busca flat se RAPTOR não disponível
+
+- [x] **Self-Refine** (Madaan et al., NeurIPS 2023)
+  - [x] `llm/client.py:self_refine_async()` — gerar → criticar → refinar
+  - [x] Critérios UFPR-específicos (resolução correta, tom oficial, completude)
+  - [x] Max 1 ciclo de refinamento por e-mail
+
+- [x] **Score de confiança + roteamento**
+  - [x] Campo `confianca: float` (0.0–1.0) em `EmailClassification`
+  - [x] Roteamento por confiança em `graph/nodes.py:rotear()`:
+    - ≥ 0.95 → auto-draft (sem revisão humana)
+    - ≥ 0.70 → human review (rascunho salvo para aprovação)
+    - < 0.70 → escalação manual
+
+- [x] **LangGraph — orquestrador StateGraph**
+  - [x] `graph/builder.py` — StateGraph com nós e arestas condicionais
+  - [x] `graph/nodes.py` — Nós: perceber → rag_retrieve → classificar → rotear → agir
+  - [x] `graph/state.py` — EmailState TypedDict
+  - [x] Checkpointing SQLite para tolerância a falhas
+  - [x] CLI: `python -m ufpr_automation --channel gmail --langgraph`
+
+- [x] **DSPy — otimização programática de prompts**
+  - [x] `dspy_modules/signatures.py` — EmailClassifier, DraftCritic, DraftRefiner
+  - [x] `dspy_modules/modules.py` — SelfRefineModule composto
+  - [x] `dspy_modules/metrics.py` — Métricas de qualidade (formato, citação, tom)
+  - [x] `dspy_modules/optimize.py` — GEPA bootstrap e MIPROv2
+
+- [x] **Reflexion — memória episódica de erros** (Shinn et al., NeurIPS 2023)
+  - [x] `feedback/reflexion.py` — ReflexionMemory (gerar análise + armazenar + recuperar)
+  - [x] Contexto de erros anteriores injetado como "=== ERROS ANTERIORES ==="
+  - [x] Integrado no nó `rag_retrieve` do LangGraph
+
+- [x] **Feedback store — infraestrutura de correções humanas**
+  - [x] `feedback/store.py` — FeedbackStore (JSONL append-only)
+  - [x] `feedback/cli.py` — CLI para stats e export (`python -m ufpr_automation.feedback stats|export`)
+
+- [x] **Locator fallback chain — resiliência do Playwright**
+  - [x] `outlook/locators.py` — Cadeia de fallback: semantic → text → ID → CSS
+  - [x] 10 elementos OWA com múltiplas estratégias cada
+  - [x] API pública: `find_element()`, `click_element()`, `get_text()`, `wait_for_any()`
+
+- [x] **Model cascading — roteamento de modelos LLM**
+  - [x] `llm/router.py` — Router com TaskType (CLASSIFY, DRAFT, CRITIQUE, REFINE)
+  - [x] Classificação → modelo local/barato; Drafting → modelo API capaz
+  - [x] Fallback automático com retry configurável
+  - [x] Configuração via `LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `LLM_FALLBACK_MODEL`
+
+### 🔜 Pendente — Completar Marco II
+
+- [x] **RAPTOR tree** — árvore hierárquica construída (2 níveis, 12 sumários, 34.231 nós totais)
+- [x] **OCR para anexos** — PDFs escaneados e imagens (2026-04-07)
+  - [x] Detecção automática de PDF escaneado (pouco texto por página) em `attachments/extractor.py`
+  - [x] Marcação com `needs_ocr=True` (10+ arquivos no teste e2e)
+  - [x] `_ocr_pdf_scanned()` e `_ocr_image()` com Tesseract (por+eng, 300 DPI) em `attachments/extractor.py`
+  - [x] OCR integrado ao pipeline de ingestão RAG (`rag/ingest.py --ocr-only`)
+  - [x] 70 PDFs escaneados recuperados (404 chunks), 10 irrecuperáveis (7 vazios, 2 corrompidos, 1 ilegível)
+  - [x] Cobertura RAG: 3.288/3.316 = 99,2%
+- [x] **Feedback loop completo** — conectar store ao pipeline
+  - [x] FeedbackStore com `add()`, `list_all()`, `count()` implementados
+  - [x] Comando `review` interativo no CLI de feedback (`--approve-all` para batch)
+  - [x] Integração: nó `registrar_feedback` no LangGraph grava no FeedbackStore após classificação; `review` CLI gera ReflexionMemory em correções
+- [x] **perceber_owa no LangGraph** — implementação completa em `graph/nodes.py`
+- [x] **Testes para módulos novos** — 79 testes (graph 19, router 12, reflexion 14, dspy 34)
+- [x] **Ingestão completa do RAG** — 3.316 PDFs → 34.285 chunks indexados no LanceDB (2026-04-07)
+  - [x] 3.288 documentos indexados com sucesso (99,2%) — 3.218 PyMuPDF + 70 OCR
+  - [x] 10 PDFs irrecuperáveis (7 vazios 0 bytes, 2 corrompidos, 1 ilegível)
+  - [x] Relatório completo em `RAG_INGESTION_REPORT.md`
+  - [x] Store compartilhado via Google Drive (`G:/Meu Drive/ufpr_rag/`)
+
+---
+
+## Marco II.5 — Integração SEI/SIGA + Agendamento + Feedback Web
+
+### ✅ Concluído (2026-04-08)
+
+- [x] **Módulo SEI (Sistema Eletrônico de Informações)**
+  - [x] `sei/models.py` — ProcessoSEI, DocumentoSEI, DespachoDraft
+  - [x] `sei/browser.py` — Login automático via Playwright (credenciais `.env`)
+  - [x] `sei/client.py` — SEIClient: search_process, get_process_status, list_documents
+  - [x] Preparação de rascunhos de despacho usando templates SOUL.md seção 14 (TCE, Aditivo, Rescisão)
+  - [x] Extração de número de processo SEI e GRR de texto (regex)
+  - [x] **Somente leitura** — nenhuma ação submetida automaticamente
+
+- [x] **Módulo SIGA (Sistema Integrado de Gestão Acadêmica)**
+  - [x] `siga/models.py` — StudentStatus, EnrollmentInfo, EligibilityResult
+  - [x] `siga/browser.py` — Login automático via Playwright (credenciais `.env`)
+  - [x] `siga/client.py` — SIGAClient: check_student_status, check_enrollment, validate_internship_eligibility
+  - [x] Validação de elegibilidade para estágio conforme SOUL.md seção 11
+  - [x] **Somente leitura** — nenhuma ação submetida automaticamente
+
+- [x] **Pipeline LangGraph expandido**
+  - [x] Novos nós: `consultar_sei`, `consultar_siga`, `registrar_procedimento`
+  - [x] Roteamento condicional: emails de "Estágios" passam por SEI/SIGA antes de agir
+  - [x] `graph/state.py` — campos `sei_contexts`, `siga_contexts`, `procedures_logged`
+  - [x] `graph/builder.py` — grafo expandido com nós condicionais
+
+- [x] **Registro de procedimentos (aprendizado)**
+  - [x] `procedures/store.py` — ProcedureStore (JSONL append-only)
+  - [x] ProcedureRecord com steps, duração, outcome, consultas SEI/SIGA
+  - [x] Estatísticas: tempo médio, taxa de sucesso, procedimentos por categoria
+
+- [x] **Agendamento automático (3x/dia)**
+  - [x] `scheduler.py` — APScheduler com CronTrigger
+  - [x] Configurável via `SCHEDULE_HOURS` e `SCHEDULE_TZ` no `.env`
+  - [x] CLI: `--schedule` (daemon) e `--schedule --once` (execução única)
+
+- [x] **Interface web de feedback (Streamlit)**
+  - [x] `feedback/web.py` — Dashboard, Revisar Classificações, Estatísticas, Procedimentos
+  - [x] Aceitar/Corrigir classificações via botões (integrado com FeedbackStore + ReflexionMemory)
+  - [x] Visualização de consultas SEI/SIGA e log de procedimentos
+  - [x] Gráficos de evolução de acurácia
+
+- [x] **Testes**
+  - [x] `test_sei.py` — 16 testes (modelos, extração regex, templates de despacho)
+  - [x] `test_siga.py` — 8 testes (modelos, elegibilidade)
+  - [x] `test_procedures.py` — 9 testes (store JSONL, estatísticas)
+  - [x] `test_scheduler.py` — 6 testes (config, importação)
+  - [x] `test_graph_expanded.py` — 8 testes (nós SEI/SIGA, roteamento, procedimentos)
+
+### 🔜 Pendente — Validação Manual
+
+- [ ] Validar login automático no SEI (requer sessão ativa e credenciais reais)
+- [ ] Validar login automático no SIGA (requer sessão ativa e credenciais reais)
+- [ ] Refinar seletores Playwright do SEI/SIGA após inspeção do DOM real
+- [ ] Testar scheduler em produção (executar 1 dia completo)
+- [ ] Coletar feedback via interface web e verificar ReflexionMemory
+
+---
+
+## Marco III — Automação Governamental Total
 
 - [ ] LangGraph Fleet com sub-agentes
-- [ ] GraphRAG (Neo4j) para hierarquia departamental
-- [ ] Integração com SIGA-UFPR via Playwright
-- [ ] Integração com SEI via Playwright
-- [ ] Protocolar processos e extrair trâmites em lote
+- [x] **GraphRAG (Neo4j) para hierarquia departamental** — implementado (2026-04-08)
+  - [x] `graphrag/client.py` — Neo4j connection manager com health check
+  - [x] `graphrag/schema.py` — Constraints, indexes, modelo do grafo (12 tipos de nó, 12 tipos de relação)
+  - [x] `graphrag/seed.py` — Seed com conhecimento institucional completo (órgãos, normas, fluxos, templates, papéis, sistemas, SIGA abas, SEI tipos de processo)
+  - [x] `graphrag/retriever.py` — Retriever com match de fluxo, normas, templates, hints SIGA, contexto organizacional
+  - [x] Integração no LangGraph: `rag_retrieve` combina Vector RAG + GraphRAG + Reflexion
+  - [x] 43 testes (schema 3, client 6, retriever 20, seed 12, integração 2)
+  - [x] Dependência `neo4j>=5.20.0` em `[marco3]` extra, config `NEO4J_*` em settings.py
+- [ ] AFlow — otimização automática de topologia do grafo
+- [ ] Protocolar processos no SEI via Playwright (atualmente somente leitura)
+- [ ] Preencher formulários no SIGA via Playwright (atualmente somente leitura)
+- [ ] Extrair trâmites em lote
+- [ ] Model cascading local (Ollama/Qwen3-8B) — infraestrutura pronta, aguardando setup

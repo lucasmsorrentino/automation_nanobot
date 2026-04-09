@@ -25,18 +25,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from ufpr_automation.config.settings import OWA_INBOX_URL, OWA_URL
-from ufpr_automation.orchestrator import print_summary, run_pipeline
-from ufpr_automation.outlook.browser import (
-    auto_login,
-    create_browser_context,
-    has_credentials,
-    has_saved_session,
-    is_logged_in,
-    launch_browser,
-    save_session_state,
-)
-from ufpr_automation.utils.debug import capture_debug_info
+from ufpr_automation.config import settings
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,11 +53,37 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Only run PerceberAgent (scrape + body extraction), skip LLM and drafts.",
     )
+    parser.add_argument(
+        "--channel",
+        choices=["gmail", "owa"],
+        default=None,
+        help="Email channel to use. Overrides EMAIL_CHANNEL from .env. "
+             "gmail = IMAP API (no MFA), owa = Playwright scraping.",
+    )
+    parser.add_argument(
+        "--langgraph",
+        action="store_true",
+        help="Use LangGraph pipeline (Marco II) instead of sequential orchestrator.",
+    )
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help="Start the scheduler to run the pipeline automatically (3x/day by default). "
+             "Configure via SCHEDULE_HOURS and SCHEDULE_TZ in .env.",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="(With --schedule) Run the pipeline once now and exit, instead of starting the scheduler.",
+    )
     return parser.parse_args()
 
 
 async def run_dry_run() -> None:
     """Launch browser, navigate to OWA, and exit."""
+    from ufpr_automation.config.settings import OWA_URL
+    from ufpr_automation.outlook.browser import create_browser_context, launch_browser
+
     print("\n🧪 DRY RUN — Testando configuração do Playwright")
     print("=" * 60)
     pw, browser = await launch_browser(headless=False)
@@ -90,6 +105,19 @@ async def run_dry_run() -> None:
 
 async def run_main(headed: bool = False, debug: bool = False, perceber_only: bool = False) -> None:
     """Main execution flow — login, then run the multi-agent pipeline."""
+    from ufpr_automation.config.settings import OWA_INBOX_URL
+    from ufpr_automation.orchestrator import print_summary, run_pipeline
+    from ufpr_automation.outlook.browser import (
+        auto_login,
+        create_browser_context,
+        has_credentials,
+        has_saved_session,
+        is_logged_in,
+        launch_browser,
+        save_session_state,
+    )
+    from ufpr_automation.utils.debug import capture_debug_info
+
     print("\n" + "=" * 60)
     print("🤖 UFPR Automation — Marco I — Pipeline Multi-Agente")
     print("    Perceber → Pensar (paralelo) → Agir")
@@ -160,11 +188,81 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
     print("\n👋 Execução finalizada.")
 
 
+def _print_summary(result: dict) -> None:
+    """Print a pipeline summary without importing the orchestrator (avoids Playwright)."""
+    print("=" * 60)
+    print("RESUMO DO PIPELINE")
+    print("=" * 60)
+    print(f"  E-mails nao lidos processados : {result['total_unread']}")
+    print(f"  Classificacoes geradas        : {result['classified']}")
+    print(f"  Rascunhos salvos              : {result['drafts_saved']}")
+    for i, email in enumerate(result.get("emails", []), 1):
+        cls = email.classification
+        cat = cls.categoria if cls else "—"
+        action = cls.acao_necessaria if cls else "—"
+        has_draft = "rascunho salvo" if (cls and cls.sugestao_resposta) else "sem resposta"
+        print(f"  {i}. {email.subject[:55]} | {cat} | {action} | {has_draft}")
+    print("Revise os rascunhos no Gmail antes de enviar.")
+
+
+async def run_gmail_channel(use_langgraph: bool = False) -> None:
+    """Run the pipeline using Gmail IMAP as the email source."""
+    print("\n" + "=" * 60)
+    if use_langgraph:
+        print("🤖 UFPR Automation — Marco II — LangGraph Pipeline")
+        print("    Perceber → RAG → Classificar → Rotear → Agir")
+    else:
+        print("🤖 UFPR Automation — Marco I — Canal Gmail (IMAP)")
+        print("    Ler e-mails → Pensar (paralelo) → Salvar rascunho")
+    print("=" * 60)
+
+    if use_langgraph:
+        from ufpr_automation.graph.builder import build_graph
+        graph = build_graph(channel="gmail")
+        result = graph.invoke({"channel": "gmail"})
+        # Adapt LangGraph state to summary format
+        emails = result.get("emails", [])
+        classifications = result.get("classifications", {})
+        drafts = result.get("drafts_saved", [])
+        # Attach classifications to emails for print_summary
+        for e in emails:
+            if e.stable_id in classifications:
+                e.classification = classifications[e.stable_id]
+        summary = {
+            "total_unread": len(emails),
+            "classified": len(classifications),
+            "drafts_saved": len(drafts),
+            "emails": emails,
+        }
+        _print_summary(summary)
+    else:
+        from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
+        result = await run_pipeline_gmail()
+        print_summary(result)
+
+    print("\n👋 Execução finalizada.")
+
+
 def main() -> None:
     """CLI entry point."""
     args = parse_args()
-    if args.dry_run:
+
+    # Determine channel: CLI flag overrides .env setting
+    channel = args.channel or settings.EMAIL_CHANNEL
+
+    if args.schedule:
+        from ufpr_automation.scheduler import run_scheduled_pipeline, start_scheduler
+
+        if args.once:
+            print("\n=== Executando pipeline uma vez (--once) ===")
+            run_scheduled_pipeline()
+            print("\nExecucao unica concluida.")
+        else:
+            start_scheduler()
+    elif args.dry_run:
         asyncio.run(run_dry_run())
+    elif channel == "gmail":
+        asyncio.run(run_gmail_channel(use_langgraph=args.langgraph))
     else:
         asyncio.run(
             run_main(

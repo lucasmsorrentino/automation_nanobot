@@ -38,6 +38,21 @@ SESSION_STATE_FILE = SESSION_DIR / "state.json"
 # Debug output directory
 DEBUG_OUTPUT_DIR = _PACKAGE_DIR / "debug_output"
 
+# Directory where downloaded email attachments are stored
+ATTACHMENTS_DIR = Path(os.getenv("ATTACHMENTS_DIR", str(_PACKAGE_DIR / "attachments_data")))
+
+# Max attachment size to download (in MB)
+ATTACHMENT_MAX_SIZE_MB = int(os.getenv("ATTACHMENT_MAX_SIZE_MB", "25"))
+
+
+# ============================================================================
+# RAG — Vector store and documents directories
+# ============================================================================
+
+# Override to share the store via network/cloud (e.g. Google Drive, NAS)
+RAG_STORE_DIR = Path(os.getenv("RAG_STORE_DIR", str(_PACKAGE_DIR / "rag" / "store")))
+RAG_DOCS_DIR = Path(os.getenv("RAG_DOCS_DIR", str(_PACKAGE_DIR / "docs")))
+
 
 # ============================================================================
 # Outlook Web Access (OWA)
@@ -87,20 +102,103 @@ ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL")
 
 
 # ============================================================================
-# LLM Provider (for future Marco I Gemini integration)
+# Email Channel Selection
 # ============================================================================
 
-# Telegram notification for MFA number matching
+# Which channel to use for reading emails: "gmail" (API, no MFA) or "owa" (Playwright)
+EMAIL_CHANNEL = os.getenv("EMAIL_CHANNEL", "gmail")
+
+
+# ============================================================================
+# Gmail (primary channel — receives forwarded emails from OWA)
+# ============================================================================
+
+GMAIL_EMAIL = os.getenv("GMAIL_EMAIL", "")
+GMAIL_API_KEY = os.getenv("GMAIL_API_KEY", "")        # Primary credential for IMAP/SMTP
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # Fallback credential
+
+
+# ============================================================================
+# Telegram (MFA notification for OWA login)
+# ============================================================================
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+
+# ============================================================================
+# SIGA (Sistema de Gestão Acadêmica)
+# ============================================================================
+
+SIGA_URL = os.getenv("SIGA_URL", "https://www.prppg.ufpr.br/siga/")
+SIGA_USERNAME = os.getenv("SIGA_USERNAME", "")
+SIGA_PASSWORD = os.getenv("SIGA_PASSWORD", "")
+
+
+# ============================================================================
+# SEI (Sistema Eletrônico de Informações)
+# ============================================================================
+
+SEI_URL = os.getenv("SEI_URL", "https://sei.ufpr.br/")
+SEI_USERNAME = os.getenv("SEI_USERNAME", "")
+SEI_PASSWORD = os.getenv("SEI_PASSWORD", "")
+
+
+# ============================================================================
+# Neo4j (GraphRAG — Marco III)
+# ============================================================================
+
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+
+
+# ============================================================================
+# Scheduler
+# ============================================================================
+
+# Comma-separated hours (24h format) when the pipeline runs automatically
+SCHEDULE_HOURS = os.getenv("SCHEDULE_HOURS", "8,13,17")
+
+# Timezone for scheduling
+SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "America/Sao_Paulo")
+
+
+# ============================================================================
+# LLM Provider
+# ============================================================================
 
 # API Key for the LLM provider (NEVER hardcode this!)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 
-# Model to use for classification and response generation
+# Default model (used when cascading models are not configured)
 # Easily swappable: change this to any model supported by LiteLLM
 LLM_MODEL = os.getenv("LLM_MODEL", "minimax/MiniMax-M2")
 
 # Provider name (matches nanobot config.json providers key)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "minimax")
+
+
+# ============================================================================
+# Model Cascading (Marco III) — route tasks to optimal models
+# ============================================================================
+
+# Classification model: cheaper/local model for categorization (e.g. ollama/qwen3:8b)
+# Empty = use LLM_MODEL for everything (no cascading)
+LLM_CLASSIFY_MODEL = os.getenv("LLM_CLASSIFY_MODEL", "")
+
+# Drafting model: higher-quality model for response generation
+# Empty = use LLM_MODEL
+LLM_DRAFT_MODEL = os.getenv("LLM_DRAFT_MODEL", "")
+
+# Fallback model: used when primary model fails (timeout, rate limit, down)
+# Empty = no fallback (error propagates)
+LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "")
+
+# Max retries before falling back to the next model
+LLM_CASCADE_RETRIES = int(os.getenv("LLM_CASCADE_RETRIES", "2"))
+
+# Timeout per LLM call in seconds (local models may need longer)
+LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "120"))

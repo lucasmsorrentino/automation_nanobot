@@ -1,0 +1,293 @@
+MANUAL DE USO DO SIGA — SECRETARIA DO CURSO DE DESIGN GRÁFICO (UFPR)
+Atualizado em: 25/03/2026
+Perfil: Coordenação / Secretaria - Graduação
+Usuário: Lucas Martins Sorrentino (Secretário/a)
+
+======================================================================
+1. ACESSO AO SISTEMA
+======================================================================
+
+URL de acesso direto (com token de sessão):
+https://siga.ufpr.br/siga/selecionanivelacesso?comboAcesso=TXSEPX40001016122G0XSEPX47XSEPX6XSEPXXSEPX0XSEPX1
+
+ATENÇÃO: O token acima pode expirar. Se a sessão não carregar, acessar
+primeiro https://siga.ufpr.br/siga/ e fazer login normalmente.
+
+Após login, selecionar perfil:
+  "Coordenação / Secretaria - Graduação"
+  Curso: DESIGN GRÁFICO - Presencial - Curitiba (4000-1016122G0)
+
+Quadro Geral (dashboard):
+  - 163 discentes com Registro ativo
+  - 2 em Mobilidade Acadêmica / Trancamento
+  - 46 Docentes Credenciados
+  - IRA (Índice de Qualificação do Corpo Docente): 5,6
+  Equipe: Stephania Padovani (Coordenador), Carolina Calomeno Machado
+  (Vice-Coordenador), Lucas Martins Sorrentino (Secretário/a)
+
+
+======================================================================
+2. MENU DISCENTES
+======================================================================
+
+--- 2.1 CONSULTAR DISCENTE ---
+URL: /siga/discente?operacao=listar&tipodiscente=I
+
+Lista todos os discentes do curso com Status e Matrícula (GRR).
+- Campo de busca: aceita GRR, nome ou CPF
+- Exportação disponível: CSV, Excel
+- Clicar no nome do aluno abre o perfil completo
+
+PERFIL COMPLETO DO DISCENTE
+URL: /siga/graduacao/discente?d={ID_INTERNO}&aba={NOME_DA_ABA}
+
+O ID interno é obtido clicando no nome na lista. Abas disponíveis:
+
+ABA: informacoes
+  - Foto, Status (Registro ativo / Trancado / Cancelado / Formado)
+  - Data de Matrícula, Forma de Ingresso, Ano/Período de Ingresso
+  - Nome Civil, Email pessoal, Email institucional (@ufpr.br)
+  - CPF, RG, Linha de Pesquisa, Pasta Física
+
+ABA: historico
+  - Currículo do aluno (ex: 93B - 2016 - Design Gráfico)
+  - IRA (Índice de Rendimento Acadêmico Geral)
+  - Por semestre: Sigla, Disciplina, Docente, Curríc. Atual, Carga
+    Horária, Nota, Frequência, Situação (Aprovado/Reprovado/etc.)
+
+ABA: integralizacao
+  - CH Obrigatórias, CH Optativas, CH Atividades Formativas, CH Total
+  - Status geral: "Integralizado" (verde) ou "Não integralizado" (vermelho)
+  - Por período: disciplinas com situação "Vencida" ou pendente
+
+ABA: trancamento
+  - Histórico de solicitações de trancamento/destrancamento do aluno
+  - Colunas: Matrícula, Discente, Status, Data solicitação, Inicia no,
+    Termina ao fim do, Status (Trancado / Destrancado)
+
+ABA: estagio
+  - Registro de estágios vinculados ao discente
+
+ABA: exames
+  - Solicitações de exames de aproveitamento e adiantamento
+
+ABA: equivalencias
+  - Solicitações de equivalência de disciplinas
+
+ABA: evasao
+  - Dados sobre risco ou histórico de evasão
+
+ABA: desempenho
+  - Indicadores de desempenho acadêmico
+
+ABA: observacoes
+  - Campo para registrar observações administrativas
+
+ABA: documentos / documentospessoais
+  - Documentos anexados ao processo do discente
+
+ABA: loghistorico
+  - Registro de todas as ações realizadas no cadastro do discente
+
+--- 2.2 GERENCIAR MATRÍCULAS ---
+URL: /siga/graduacao/matricula/ajuste
+
+Disponível apenas para discentes externos em mobilidade acadêmica.
+Permite ajustar matrículas manualmente.
+Busca por nome ou matrícula do discente.
+
+--- 2.3 TRANCAMENTOS DE CURSO ---
+URL: /siga/graduacao/trancamentos.jsp
+
+Lista todas as solicitações de trancamento e destrancamento do curso.
+Colunas: Matrícula, Discente, Status discente, Data solicitação,
+         Inicia no, Termina ao fim do, Status
+Campo de busca para localizar solicitação específica.
+
+--- 2.4 CONFIRMAÇÃO DE VAGA ---
+URL: /siga/graduacao/discente?op=listaCandidatosMatricula
+
+Lista candidatos aguardando confirmação de vaga no curso.
+
+--- 2.5 GERENCIAR MATRÍCULAS ELETIVAS ---
+URL: /siga/graduacao/matriculaEletiva?op=matriculaEletivaCoordenacao
+
+Gerenciamento de matrículas em disciplinas eletivas pela coordenação.
+
+--- 2.6 CANCELAMENTOS DE TURMAS ---
+URL: /siga/graduacao/solicitacoesCancelamentoTurma
+
+Lista e permite gerenciar solicitações de cancelamento de turmas.
+
+
+======================================================================
+3. MENU DOCENTES
+======================================================================
+
+--- 3.1 CONSULTAR DOCENTES ---
+URL: /siga/docente?operacao=listar
+
+Quadro geral: 11 docentes Internos, 0 Externos.
+Lista com: Nome, Documento (CPF), Tipo Docente (Interno/Externo),
+           Vínculo (ex: ESTATUTARIO RJU), Lotação (Depto. de Design)
+Filtro por Status. Exportação: CSV, Excel, PDF, Impressão.
+Clicar no nome abre o perfil do docente.
+
+
+======================================================================
+4. MENU DISCIPLINAS
+======================================================================
+
+--- 4.1 OFERTAR TURMAS ---
+URL: /siga/turmasGraduacao?op=ofertar
+
+Permite criar a oferta de turmas para o próximo semestre.
+ATENÇÃO: Só disponível no período definido pela PROGRAD.
+Próximo período: 04/05/2026 a 19/06/2026 (Oferta 2° Semestre 2026)
+
+--- 4.2 RELATÓRIO DE TURMAS ---
+URL: /siga/turmasGraduacao?op=relatorio
+
+--- 4.3 TURMAS SEM NOTAS INDICADAS ---
+URL: /siga/turmasGraduacao?op=turmasSemNotasIndicadas
+
+Lista turmas com notas ainda não lançadas (útil ao fim do semestre).
+
+--- 4.4 RELATÓRIO DE FICHAS 2 ---
+URL: /siga/turmasGraduacao?op=ficha2
+
+
+======================================================================
+5. OUTROS MENUS IMPORTANTES
+======================================================================
+
+--- 5.1 EXAMES DE APROVEITAMENTO E ADIANTAMENTO ---
+URL: /siga/graduacao/exames
+
+Lista solicitações de exames: GRR, Nome, Disciplina, Tipo,
+Período/Ano, Data solicitação, Situação.
+Atualmente: "Nenhum exame solicitado."
+
+--- 5.2 EQUIVALÊNCIAS ---
+URL: /siga/graduacao/equivalencias
+
+Gerenciamento de solicitações de equivalência de disciplinas.
+
+--- 5.3 ANÁLISE DE ABANDONO ---
+URL: /siga/graduacao/abandono
+
+Análise de abandono por semestre. Três abas: Em análise / Lançado /
+Não lançado.
+Colunas: GRR, Nome, Histórico Escolar, Integralização, Lançar Abandono,
+         Não Lançar Abandono, Justificativa, Situação discente.
+Período de análise 1°Sem/2026: 11/05/2026 a 13/05/2026.
+
+--- 5.4 COLAÇÕES DE GRAU ---
+URL: /siga/graduacao/colacoes?op=listar
+Solicitar: /siga/graduacao/colacoes?op=agendamento
+
+Lista colações com: #, Conclusão (semestre), Data agendada, Tipo
+(Com/Sem solenidade), Situação.
+Situações possíveis: Liberada (laranja), Diplomas Emitidos (azul),
+                     Agendamento Cancelado (vermelho)
+Próximas colações agendadas: 08/04/2026 e 10/04/2026 (2025/2)
+
+--- 5.5 AJUSTES DE CURRÍCULO ---
+URL: /siga/ppc/ajuste?operacao=listar
+
+Alterações no PPC (Projeto Pedagógico do Curso).
+
+--- 5.6 GRADE HORÁRIA DO CURSO ---
+URL: /siga/gradeHoraria?op=gradeHorariaCurso
+
+--- 5.7 ESTÁGIOS ---
+Indicar: /siga/graduacao/estagioPeriodoEspecial
+Listar:  /siga/graduacao/estagioPeriodoEspecial?op=listarEstagios
+
+--- 5.8 ENVIAR E-MAIL PELO SIGA ---
+URL: /siga/graduacao/email
+
+Permite envio de e-mail diretamente pelo SIGA para discentes/docentes.
+
+--- 5.9 CALENDÁRIO ACADÊMICO ---
+URL: /siga/graduacao/calendario.jsp
+
+--- 5.10 RELATÓRIOS DINÂMICOS ---
+URL: /siga/graduacao/relatoriodinamico
+
+Relatórios disponíveis (selecionar e configurar filtros):
+  - Discentes              - Equivalências
+  - Trancamentos           - Exames
+  - Integralização         - Turmas
+  - Disciplinas            - Cancelamento de matrícula
+  - Histórico Escolar      - Solicitações de matrícula
+  - Conflitos de horário   - Alunos por Turma
+  - Discentes PCD          - UFPR Virtual/Discentes
+  - UFPR Virtual/Docentes  - UFPR Virtual/Turmas
+
+--- 5.11 ACOMPANHAMENTO ACADÊMICO ---
+URL: /siga/graduacao/acompanhamentoAcademico
+
+--- 5.12 CREDITAÇÃO DA EXTENSÃO ---
+URL: /siga/graduacao/extensao
+
+--- 5.13 ANÁLISE DE DEMANDAS ---
+URL: /siga/graduacao/turmas?op=analiseDeDemandas
+
+--- 5.14 MEMBROS DO COLEGIADO ---
+URL: /siga/cursoGraduacao?op=colegiado
+
+--- 5.15 CHAMADOS UFPR ---
+URL: https://chamados.ufpr.br/
+(link externo para abertura de chamados de suporte)
+
+
+======================================================================
+6. PROCEDIMENTOS COMUNS DA SECRETARIA
+======================================================================
+
+CONSULTAR STATUS DE UM ALUNO:
+1. Acessar Discentes > Consultar
+2. Pesquisar pelo GRR ou nome
+3. Clicar no nome do aluno
+4. Verificar aba "Informações Gerais" (status, e-mail, dados pessoais)
+
+VERIFICAR HISTÓRICO DE UM ALUNO:
+1. Abrir perfil do discente (ver acima)
+2. Clicar na aba "Histórico"
+3. Ver IRA geral e desempenho por semestre
+
+VERIFICAR SE ALUNO PODE SE FORMAR (INTEGRALIZAÇÃO):
+1. Abrir perfil do discente
+2. Clicar na aba "Integralização"
+3. Verificar se CH Total está completa e status é "Integralizado"
+
+CONSULTAR TRANCAMENTOS ATIVOS DO CURSO:
+1. Acessar Discentes > Trancamentos de Curso
+2. Listar todas as solicitações ativas
+3. Para ver trancamento específico de um aluno: perfil > aba Trancamento
+
+VERIFICAR COLAÇÕES AGENDADAS:
+1. Menu lateral (inferior) > Listar colações de grau
+2. Filtrar por situação "Liberada" para colações próximas
+
+GERAR RELATÓRIO DE DISCENTES:
+1. Acessar Relatórios > Relatório Dinâmico
+2. Selecionar "Discentes"
+3. Configurar filtros desejados (status, período de ingresso, etc.)
+
+VERIFICAR TURMAS SEM NOTAS:
+1. Disciplinas > Turmas sem Notas Indicadas
+2. Útil para cobrar docentes ao fim do semestre
+
+
+======================================================================
+7. OBSERVAÇÕES TÉCNICAS
+======================================================================
+
+- O sistema usa IDs internos para discentes (ex: d=71277), diferentes
+  do GRR. Usar sempre a busca por GRR/nome para localizar o aluno.
+- Muitas funcionalidades ficam bloqueadas fora dos períodos definidos
+  pelo calendário da PROGRAD (ex: Oferta de Turmas, Análise de Abandono)
+- Exportações disponíveis em: CSV, Excel, PDF e Impressão (varia por tela)
+- URL base do sistema: https://siga.ufpr.br/siga/

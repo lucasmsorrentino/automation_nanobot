@@ -23,8 +23,8 @@ Sistema de automação burocrática para a **Universidade Federal do Paraná (UF
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| **Perceber** | Playwright navega até o OWA, extrai e-mails não lidos com corpo completo | ✅ Implementado |
-| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail e redige resposta em paralelo (asyncio.gather) | ✅ Implementado |
+| **Perceber** | Playwright/Gmail IMAP extrai e-mails com corpo completo + anexos (PDF, DOCX, XLSX) | ✅ Implementado |
+| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail (com contexto dos anexos) e redige resposta em paralelo | ✅ Implementado |
 | **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
 | **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
 
@@ -45,7 +45,7 @@ ufpr_automation/
 │
 ├── core/                    # 🧩 Modelos de domínio
 │   ├── __init__.py
-│   └── models.py            # EmailData dataclass
+│   └── models.py            # EmailData, AttachmentData dataclasses
 │
 ├── agents/                  # 🤖 Agentes do pipeline
 │   ├── perceber.py          # PerceberAgent — scraping + corpo completo
@@ -53,6 +53,10 @@ ufpr_automation/
 │   └── agir.py              # AgirAgent — salva rascunhos no OWA
 │
 ├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
+│
+├── attachments/             # 📎 Processamento de anexos de e-mail
+│   ├── __init__.py
+│   └── extractor.py         # Extração de texto: PDF, DOCX, XLSX, texto
 │
 ├── llm/                     # 🧠 Integração LLM
 │   └── client.py            # LLMClient via LiteLLM (sync + async)
@@ -76,6 +80,21 @@ ufpr_automation/
 │   └── skills/
 │       └── ufpr-outlook/
 │           └── SKILL.md     # Skill do nanobot
+│
+├── rag/                     # 🔍 RAG — Retrieval-Augmented Generation
+│   ├── __init__.py
+│   ├── ingest.py            # Pipeline: PDF → texto → chunks → embeddings → LanceDB
+│   ├── retriever.py         # Busca vetorial semântica com filtros
+│   ├── chat.py              # CLI interativo (REPL) para consultas
+│   ├── web.py               # Interface web (Streamlit) para consultas
+│   └── store/               # Dados LanceDB (git-ignored, gerado automaticamente)
+│
+├── docs/                    # 📜 Corpus de documentos institucionais (git-ignored)
+│   ├── cepe/                # CEPE: atas, resoluções, instruções normativas
+│   ├── coun/                # COUN: atas, resoluções, instruções normativas
+│   ├── coplad/              # COPLAD: atas, resoluções, instruções normativas
+│   ├── concur/              # CONCUR: atas, resoluções
+│   └── estagio/             # Manuais, leis e regulamentos de estágio
 │
 ├── INICIO.md                # Especificação da arquitetura
 └── TASKS.md                 # Tarefas e roadmap
@@ -151,14 +170,114 @@ O script detecta a sessão salva e executa em background (headless). Se a sessã
 
 ---
 
+## 🔍 RAG — Base de Conhecimento Vetorial
+
+O módulo RAG indexa os documentos institucionais da UFPR (resoluções, atas, instruções normativas, manuais de estágio) em um banco vetorial local (LanceDB) para busca semântica.
+
+### Instalação
+
+```bash
+pip install -e ".[rag]"
+```
+
+### Uso
+
+```bash
+# Indexar todos os documentos
+python -m ufpr_automation.rag.ingest
+
+# Indexar apenas um subset
+python -m ufpr_automation.rag.ingest --subset estagio
+python -m ufpr_automation.rag.ingest --subset cepe/resolucoes
+
+# Ver estatísticas sem indexar
+python -m ufpr_automation.rag.ingest --dry-run
+
+# Busca semântica via CLI
+python -m ufpr_automation.rag.retriever "prazo máximo para estágio obrigatório"
+python -m ufpr_automation.rag.retriever "rescisão de contrato" --conselho cepe --top-k 5
+
+# Interface interativa (terminal)
+python -m ufpr_automation.rag.chat
+python -m ufpr_automation.rag.chat --conselho cepe    # com filtro pré-definido
+
+# Interface web (Streamlit)
+streamlit run ufpr_automation/rag/web.py               # abre em http://localhost:8501
+```
+
+### Uso via Python
+
+```python
+from ufpr_automation.rag.retriever import Retriever
+
+r = Retriever()
+results = r.search("regulamento de estágio", conselho="cepe", top_k=3)
+context = r.search_formatted("prazo de estágio obrigatório")  # texto pronto para LLM
+```
+
+### Como adicionar novos documentos
+
+1. **Coloque os PDFs** na estrutura de pastas `ufpr_automation/docs/`:
+
+```
+docs/
+├── {conselho}/              # cepe, coun, coplad, concur (ou novo conselho)
+│   ├── atas/
+│   ├── resolucoes/
+│   └── instrucoes-normativas/
+└── estagio/                 # ou qualquer pasta temática
+```
+
+Os metadados (conselho, tipo) são extraídos automaticamente do caminho:
+- `docs/cepe/resolucoes/res-42.pdf` → conselho=cepe, tipo=resolucoes
+- `docs/estagio/manual.pdf` → conselho=estagio, tipo=estagio
+- `docs/prograd/portarias/port-01.pdf` → conselho=prograd, tipo=portarias
+
+2. **Rode o ingest** — o sistema é idempotente (pula arquivos já indexados):
+
+```bash
+# Só o subset novo
+python -m ufpr_automation.rag.ingest --subset prograd/portarias
+
+# Ou tudo (detecta e pula os já indexados)
+python -m ufpr_automation.rag.ingest
+```
+
+3. **Pronto** — os novos documentos já aparecem nas buscas.
+
+> **Nota:** Para reindexar um documento atualizado, apague a pasta `ufpr_automation/rag/store/` e rode o ingest novamente.
+
+---
+
+## 📎 Anexos de E-mail
+
+O sistema baixa e extrai texto dos anexos automaticamente durante a leitura dos e-mails (Gmail IMAP). O conteudo extraido e injetado no prompt do LLM para que ele entenda o contexto completo da solicitacao.
+
+### Tipos suportados
+
+| Tipo | Biblioteca | Status |
+|------|-----------|--------|
+| PDF | PyMuPDF | ✅ |
+| DOCX (Word) | python-docx | ✅ |
+| XLSX (Excel) | openpyxl | ✅ |
+| Texto (TXT, CSV) | built-in | ✅ |
+| Imagens (JPG, PNG) | OCR (Tesseract) | Fase 2 |
+| PDFs escaneados | OCR (Tesseract) | Fase 2 |
+
+Os anexos sao salvos em `ufpr_automation/attachments_data/` para referencia e fluxos posteriores (ex: upload ao SEI). Configuravel via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB` no `.env`.
+
+---
+
 ## 🏗️ Fases de Maturidade
 
-| | Marco I (Atual) | Marco II | Marco III |
+| | Marco I (Completo) | Marco II (Atual ~85%) | Marco III (Futuro) |
 |---|---|---|---|
-| **Orquestrador** | nanobot | LangGraph | LangGraph Fleet |
-| **Memória** | ICL (System Prompt) | Vector RAG | GraphRAG (Neo4j) |
-| **Autonomia** | Rascunho + Humano | Auto (baixo risco) | Totalmente autônomo |
-| **Sistemas** | OWA | OWA | OWA + SIGA + SEI |
+| **Orquestrador** | nanobot (sequential) | LangGraph (StateGraph) | LangGraph Fleet |
+| **Motor Cognitivo** | LiteLLM + MiniMax (ICL) | LiteLLM + DSPy + Self-Refine | LiteLLM + GraphRAG |
+| **Memória** | SOUL.md (System Prompt) | LanceDB + RAPTOR + Reflexion | Neo4j (Grafo de Conhecimento) |
+| **Canal E-mail** | OWA (Playwright) | Gmail IMAP (primário) + OWA (fallback) | Gmail + SIGA + SEI |
+| **Autonomia** | Rascunho + Humano | Roteamento por confiança (auto/review/escala) | Totalmente autônomo |
+| **Modelos** | MiniMax-M2 (único) | Model cascading (local + API + fallback) | Cascading + Ollama local |
 
 > Veja o diagrama completo em [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -172,6 +291,12 @@ O script detecta a sessão salva e executa em background (headless). Se a sessã
 - **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
 - **python-telegram-bot** — Notificação MFA via Telegram Bot
 - **python-dotenv** — Gerenciamento de variáveis de ambiente
+- **PyMuPDF** — Extração de texto de PDFs (anexos + RAG ingest)
+- **python-docx** — Extração de texto de documentos Word
+- **openpyxl** — Extração de texto de planilhas Excel
+- **LanceDB** — Banco vetorial local (zero servidor)
+- **sentence-transformers** — Embeddings multilíngue (`multilingual-e5-large`)
+- **LangChain Text Splitters** — Chunking semântico para documentos legais
 
 ---
 

@@ -64,13 +64,12 @@ class TestRunPensarConcurrently:
     async def test_partial_failure(self):
         emails = [_make_email("a@ufpr.br", "OK"), _make_email("b@ufpr.br", "FAIL")]
 
-        call_count = 0
-
         async def side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 2:
-                raise RuntimeError("API quota exceeded")
+            # Fail all LLM calls related to the "FAIL" email (classify + self-refine)
+            messages = kwargs.get("messages", [])
+            for msg in messages:
+                if "FAIL" in msg.get("content", ""):
+                    raise RuntimeError("API quota exceeded")
             return _mock_completion_response(_make_classification_json())
 
         with (
