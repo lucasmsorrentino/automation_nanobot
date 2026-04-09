@@ -18,6 +18,17 @@ from pathlib import Path
 
 from pythonjsonlogger import json as jsonlogger
 
+# Force UTF-8 on stdout/stderr for Windows so the console log handler (and any
+# print) can emit characters outside cp1252 — e.g. emojis in email subjects
+# (\U0001f4ac = 💬) or ligatures in PDFs (\ufb01 = ﬁ). Without this, the stdlib
+# logging StreamHandler crashes with UnicodeEncodeError mid-pipeline.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # older Python without reconfigure()
+
 # Log directory lives next to the ufpr_automation package
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 _LOG_DIR = _PACKAGE_ROOT / "logs"
