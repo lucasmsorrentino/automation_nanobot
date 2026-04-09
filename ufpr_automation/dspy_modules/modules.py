@@ -94,33 +94,94 @@ class SelfRefineModule(dspy.Module):
 
 
 _VALID_CATEGORIES = [
-    "Estágios", "Ofícios", "Memorandos", "Requerimentos",
-    "Portarias", "Informes", "Urgente", "Correio Lixo", "Outros",
+    "Estágios",
+    "Acadêmico / Matrícula",
+    "Acadêmico / Equivalência de Disciplinas",
+    "Acadêmico / Aproveitamento de Disciplinas",
+    "Acadêmico / Ajuste de Disciplinas",
+    "Diplomação / Diploma",
+    "Diplomação / Colação de Grau",
+    "Extensão",
+    "Formativas",
+    "Requerimentos",
+    "Urgente",
+    "Correio Lixo",
+    "Outros",
 ]
 
-# Map common LLM free-form outputs to valid categories
+# Map common LLM free-form outputs (including legacy categories) to valid Categoria values.
+# Keys are lowercased, matched via equality then substring.
 _CATEGORY_ALIASES: dict[str, str] = {
+    # Estágios
     "estagio": "Estágios", "estagios": "Estágios", "estágio": "Estágios",
     "estágios": "Estágios", "termo aditivo": "Estágios", "tce": "Estágios",
-    "oficio": "Ofícios", "oficios": "Ofícios", "ofício": "Ofícios",
-    "ofícios": "Ofícios",
-    "memorando": "Memorandos", "memorandos": "Memorandos",
+    "rescisão de estágio": "Estágios", "vaga de estágio": "Estágios",
+
+    # Acadêmico / Matrícula
+    "matrícula": "Acadêmico / Matrícula", "matricula": "Acadêmico / Matrícula",
+    "rematrícula": "Acadêmico / Matrícula", "rematricula": "Acadêmico / Matrícula",
+    "trancamento": "Acadêmico / Matrícula",
+
+    # Acadêmico / Equivalência de Disciplinas
+    "equivalência": "Acadêmico / Equivalência de Disciplinas",
+    "equivalencia": "Acadêmico / Equivalência de Disciplinas",
+    "equivalência de disciplinas": "Acadêmico / Equivalência de Disciplinas",
+
+    # Acadêmico / Aproveitamento de Disciplinas
+    "aproveitamento": "Acadêmico / Aproveitamento de Disciplinas",
+    "aproveitamento de disciplinas": "Acadêmico / Aproveitamento de Disciplinas",
+    "dispensa": "Acadêmico / Aproveitamento de Disciplinas",
+
+    # Acadêmico / Ajuste de Disciplinas
+    "ajuste": "Acadêmico / Ajuste de Disciplinas",
+    "ajuste de disciplinas": "Acadêmico / Ajuste de Disciplinas",
+    "ajuste de matrícula": "Acadêmico / Ajuste de Disciplinas",
+    "inclusão de disciplina": "Acadêmico / Ajuste de Disciplinas",
+    "exclusão de disciplina": "Acadêmico / Ajuste de Disciplinas",
+
+    # Diplomação / Diploma
+    "diploma": "Diplomação / Diploma", "diplomação": "Diplomação / Diploma",
+    "diplomacao": "Diplomação / Diploma",
+    "emissão de diploma": "Diplomação / Diploma",
+    "histórico": "Diplomação / Diploma", "historico": "Diplomação / Diploma",
+
+    # Diplomação / Colação de Grau
+    "colação": "Diplomação / Colação de Grau", "colacao": "Diplomação / Colação de Grau",
+    "colação de grau": "Diplomação / Colação de Grau",
+    "assinatura ata": "Diplomação / Colação de Grau",
+    "ata de colação": "Diplomação / Colação de Grau",
+
+    # Extensão
+    "extensão": "Extensão", "extensao": "Extensão",
+    "atividade de extensão": "Extensão", "projeto de extensão": "Extensão",
+
+    # Formativas
+    "formativas": "Formativas", "horas formativas": "Formativas",
+    "atividade formativa": "Formativas", "atividades formativas": "Formativas",
+
+    # Requerimentos (genérico — fallback legítimo)
     "requerimento": "Requerimentos", "requerimentos": "Requerimentos",
     "solicitação": "Requerimentos", "solicitacao": "Requerimentos",
-    "portaria": "Portarias", "portarias": "Portarias",
-    "informe": "Informes", "informes": "Informes", "informativo": "Informes",
-    "divulgação": "Informes", "divulgacao": "Informes", "convite": "Informes",
+    "consulta": "Requerimentos", "dúvida": "Requerimentos", "duvida": "Requerimentos",
+
+    # Urgente
     "urgente": "Urgente", "urgência": "Urgente",
+
+    # Correio Lixo
     "spam": "Correio Lixo", "correio lixo": "Correio Lixo", "lixo": "Correio Lixo",
     "propaganda": "Correio Lixo", "promocional": "Correio Lixo",
+    "divulgação": "Correio Lixo", "divulgacao": "Correio Lixo",
+
+    # Outros
     "outros": "Outros",
-    # Common free-form responses from the LLM
-    "coordenação": "Informes", "coordenacao": "Informes",
-    "consulta": "Requerimentos", "dúvida": "Requerimentos", "duvida": "Requerimentos",
-    "colação": "Requerimentos", "colacao": "Requerimentos",
-    "ementa": "Requerimentos", "ementas": "Requerimentos",
-    "horas formativas": "Requerimentos",
-    "processo": "Ofícios",
+
+    # === Legacy categories (migration from pre-sub-label taxonomy) ===
+    "ofícios": "Outros", "oficios": "Outros", "ofício": "Outros", "oficio": "Outros",
+    "memorando": "Outros", "memorandos": "Outros",
+    "portaria": "Outros", "portarias": "Outros",
+    "informe": "Outros", "informes": "Outros", "informativo": "Outros",
+    "processo": "Outros",
+    "coordenação": "Outros", "coordenacao": "Outros",
 }
 
 

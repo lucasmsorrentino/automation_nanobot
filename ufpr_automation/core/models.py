@@ -11,14 +11,19 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-# Valid email categories — used as a Literal type to constrain LLM output
+# Valid email categories — used as a Literal type to constrain LLM output.
+# Hierarchical labels use " / " as separator (e.g. "Acadêmico / Matrícula").
 Categoria = Literal[
     "Estágios",
-    "Ofícios",
-    "Memorandos",
+    "Acadêmico / Matrícula",
+    "Acadêmico / Equivalência de Disciplinas",
+    "Acadêmico / Aproveitamento de Disciplinas",
+    "Acadêmico / Ajuste de Disciplinas",
+    "Diplomação / Diploma",
+    "Diplomação / Colação de Grau",
+    "Extensão",
+    "Formativas",
     "Requerimentos",
-    "Portarias",
-    "Informes",
     "Urgente",
     "Correio Lixo",
     "Outros",
@@ -29,7 +34,13 @@ class EmailClassification(BaseModel):
     """Structured output for LLM email classification."""
 
     categoria: Categoria = Field(
-        description="Categoria do e-mail: Estágios, Ofícios, Memorandos, Requerimentos, Portarias, Informes, Urgente, Correio Lixo, ou Outros."
+        description=(
+            "Categoria do e-mail (use exatamente um destes valores, com acentos e barras): "
+            "Estágios, Acadêmico / Matrícula, Acadêmico / Equivalência de Disciplinas, "
+            "Acadêmico / Aproveitamento de Disciplinas, Acadêmico / Ajuste de Disciplinas, "
+            "Diplomação / Diploma, Diplomação / Colação de Grau, Extensão, Formativas, "
+            "Requerimentos, Urgente, Correio Lixo, Outros."
+        )
     )
     resumo: str = Field(
         description="Breve resumo (1 a 2 sentenças) do conteúdo e intent principal do e-mail."

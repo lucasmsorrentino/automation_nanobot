@@ -124,14 +124,14 @@ class TestPredictionToClassification:
 
     def test_preserves_all_fields(self):
         pred = _default_pred(
-            categoria="Ofícios",
+            categoria="Outros",
             resumo="Um oficio",
             acao_necessaria="Encaminhar para Secretaria",
             sugestao_resposta="Prezado, encaminhamos...",
             confianca=0.88,
         )
         cls = prediction_to_classification(pred)
-        assert cls.categoria == "Ofícios"
+        assert cls.categoria == "Outros"
         assert cls.resumo == "Um oficio"
         assert cls.acao_necessaria == "Encaminhar para Secretaria"
         assert cls.sugestao_resposta == "Prezado, encaminhamos..."
@@ -169,7 +169,7 @@ class TestCategoryMatch:
 
     def test_no_match_when_different(self):
         example = MagicMock()
-        example.expected_categoria = "Ofícios"
+        example.expected_categoria = "Outros"
         pred = _default_pred(categoria="Estágios")
         assert category_match(example, pred) is False
 
@@ -276,7 +276,7 @@ class TestCompositeMetric:
 
     def test_wrong_category_reduces_score(self):
         example = MagicMock()
-        example.expected_categoria = "Ofícios"
+        example.expected_categoria = "Outros"
         pred = _default_pred(categoria="Estágios")  # wrong
         score = composite_metric(example, pred)
         # At most 4/5 since category_match fails
@@ -418,12 +418,12 @@ class TestClassifyEmailDspy:
             body="Corpo do oficio",
         )
 
-        mock_pred = _default_pred(categoria="Ofícios")
+        mock_pred = _default_pred(categoria="Outros")
 
         with patch.object(EmailClassifierModule, "forward", return_value=mock_pred):
             result = classify_email_dspy(email, use_self_refine=False)
 
-        assert result.categoria == "Ofícios"
+        assert result.categoria == "Outros"
 
     def test_uses_body_fallback_to_preview(self):
         from ufpr_automation.dspy_modules.modules import classify_email_dspy

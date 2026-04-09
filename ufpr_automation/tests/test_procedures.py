@@ -72,8 +72,8 @@ class TestProcedureStore:
         r2 = ProcedureRecord(
             run_id="run456",
             email_hash="def789",
-            email_subject="Oficio externo",
-            email_categoria="Oficios",
+            email_subject="Solicitação de diploma",
+            email_categoria="Diplomação / Diploma",
             steps=[ProcedureStep(name="perceber", duration_ms=300)],
             outcome="escalated",
         )
@@ -84,7 +84,7 @@ class TestProcedureStore:
         assert stats["by_outcome"]["draft_saved"] == 1
         assert stats["by_outcome"]["escalated"] == 1
         assert stats["by_categoria"]["Estagios"] == 1
-        assert stats["by_categoria"]["Oficios"] == 1
+        assert stats["by_categoria"]["Diplomação / Diploma"] == 1
         assert stats["sei_consultations"] == 1
         assert stats["avg_duration_by_step"]["perceber"] > 0
 

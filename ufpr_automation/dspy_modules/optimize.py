@@ -31,7 +31,7 @@ OPTIMIZED_DIR = settings.PACKAGE_ROOT / "dspy_modules" / "optimized"
 
 def _load_feedback_examples() -> list[dspy.Example]:
     """Load training examples from the feedback JSONL store."""
-    feedback_path = settings.PACKAGE_ROOT / "feedback_data" / "feedback.jsonl"
+    feedback_path = settings.FEEDBACK_DATA_DIR / "feedback.jsonl"
     if not feedback_path.exists():
         logger.warning("Feedback file not found: %s", feedback_path)
         return []
@@ -91,11 +91,11 @@ def optimize_gepa(module: dspy.Module, examples: list[dspy.Example]) -> dspy.Mod
                 expected_categoria="Estagios",
             ).with_inputs("email_subject", "email_body", "email_sender", "rag_context"),
             dspy.Example(
-                email_subject="Oficio 123/2024 - Reitoria",
-                email_body="Encaminhamos o oficio referente a adequacao curricular.",
-                email_sender="reitoria@ufpr.br",
+                email_subject="Solicitacao de aproveitamento de disciplinas",
+                email_body="Prezados, solicito aproveitamento de disciplinas cursadas em outra IES.",
+                email_sender="aluno@ufpr.br",
                 rag_context="",
-                expected_categoria="Oficios",
+                expected_categoria="Academico / Aproveitamento de Disciplinas",
             ).with_inputs("email_subject", "email_body", "email_sender", "rag_context"),
         ]
 

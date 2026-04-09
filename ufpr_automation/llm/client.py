@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings
 from ufpr_automation.core.models import EmailClassification, EmailData
+from ufpr_automation.gmail.thread import format_for_prompt, split_reply_and_quoted
 from ufpr_automation.llm.router import TaskType, cascaded_completion, cascaded_completion_sync
 from ufpr_automation.utils.logging import logger
 
@@ -88,8 +89,17 @@ class LLMClient:
             email: The email to classify.
             rag_context: Optional RAG-retrieved normative documents to inject.
         """
-        content = email.body if email.body else email.preview
-        content_label = "Corpo completo" if email.body else "Preview"
+        raw_content = email.body if email.body else email.preview
+        # Split the body into (new reply, quoted history) so the LLM can tell
+        # who is asking what. Without this, replies to a prior message read
+        # as a mixed blob and the LLM often confuses the student's new ask
+        # with the secretariat's previous instructions.
+        split = split_reply_and_quoted(raw_content)
+        content = format_for_prompt(split)
+        if split.has_history:
+            content_label = "Corpo (nova mensagem + histórico)"
+        else:
+            content_label = "Corpo completo" if email.body else "Preview"
 
         rag_section = ""
         if rag_context:
@@ -130,8 +140,20 @@ class LLMClient:
             "da UFPR contidas no seu contexto.\n\n"
             "Responda SOMENTE com um JSON válido contendo as chaves: "
             '"categoria", "resumo", "acao_necessaria", "sugestao_resposta", "confianca".\n'
-            "Categorias válidas: Estágios, Ofícios, Memorandos, Requerimentos, "
-            "Portarias, Informes, Urgente, Correio Lixo, Outros.\n"
+            "Categorias válidas (use EXATAMENTE um destes valores, preservando acentos e barras):\n"
+            "  - Estágios\n"
+            "  - Acadêmico / Matrícula\n"
+            "  - Acadêmico / Equivalência de Disciplinas\n"
+            "  - Acadêmico / Aproveitamento de Disciplinas\n"
+            "  - Acadêmico / Ajuste de Disciplinas\n"
+            "  - Diplomação / Diploma\n"
+            "  - Diplomação / Colação de Grau\n"
+            "  - Extensão\n"
+            "  - Formativas\n"
+            "  - Requerimentos\n"
+            "  - Urgente\n"
+            "  - Correio Lixo\n"
+            "  - Outros\n"
             '"confianca" é um número entre 0.0 e 1.0 indicando sua certeza na '
             "classificação e na resposta sugerida (0.0 = muito incerto, 1.0 = totalmente seguro)."
         )
@@ -221,6 +243,12 @@ class LLMClient:
         Returns:
             Refined EmailClassification (or original if no issues found).
         """
+        # Split thread once — both critique and refine reuse the same view
+        # so they see the same "new reply vs. history" separation as the
+        # initial classification step.
+        split = split_reply_and_quoted(email.body or email.preview)
+        body_for_prompt = format_for_prompt(split, max_history_chars=1500)
+
         # Step 1: Critique
         critique_prompt = (
             "Você é um revisor de correspondência institucional da UFPR. "
@@ -228,7 +256,7 @@ class LLMClient:
             f"E-mail original:\n"
             f"  Remetente: {email.sender}\n"
             f"  Assunto: {email.subject}\n"
-            f"  Corpo: {(email.body or email.preview)[:500]}\n\n"
+            f"  Corpo:\n{body_for_prompt}\n\n"
             f"Classificação: {classification.categoria}\n"
             f"Resumo: {classification.resumo}\n"
             f"Ação necessária: {classification.acao_necessaria}\n"
@@ -274,7 +302,7 @@ class LLMClient:
             f"E-mail original:\n"
             f"  Remetente: {email.sender}\n"
             f"  Assunto: {email.subject}\n"
-            f"  Corpo: {(email.body or email.preview)[:500]}\n\n"
+            f"  Corpo:\n{body_for_prompt}\n\n"
             f"Classificação original: {classification.categoria}\n"
             f"Rascunho original:\n{classification.sugestao_resposta}\n\n"
             f"Crítica:\n{critique}\n\n"

@@ -14,8 +14,11 @@ class EmailClassifier(dspy.Signature):
 
     Analise o e-mail e determine sua categoria, resuma o conteudo,
     indique a acao necessaria e redija uma resposta formal se aplicavel.
-    Categorias validas: Estagios, Oficios, Memorandos, Requerimentos,
-    Portarias, Informes, Urgente, Correio Lixo, Outros.
+    Categorias validas (use exatamente uma): Estagios; Academico / Matricula;
+    Academico / Equivalencia de Disciplinas; Academico / Aproveitamento de
+    Disciplinas; Academico / Ajuste de Disciplinas; Diplomacao / Diploma;
+    Diplomacao / Colacao de Grau; Extensao; Formativas; Requerimentos;
+    Urgente; Correio Lixo; Outros.
     """
 
     email_subject: str = dspy.InputField(desc="Assunto do e-mail")
@@ -26,8 +29,11 @@ class EmailClassifier(dspy.Signature):
     )
 
     categoria: str = dspy.OutputField(
-        desc="Categoria do e-mail: Estagios, Oficios, Memorandos, Requerimentos, "
-        "Portarias, Informes, Urgente, Correio Lixo, ou Outros"
+        desc="Categoria do e-mail — uma de: Estagios, Academico / Matricula, "
+        "Academico / Equivalencia de Disciplinas, Academico / Aproveitamento de Disciplinas, "
+        "Academico / Ajuste de Disciplinas, Diplomacao / Diploma, "
+        "Diplomacao / Colacao de Grau, Extensao, Formativas, Requerimentos, "
+        "Urgente, Correio Lixo, Outros"
     )
     resumo: str = dspy.OutputField(
         desc="Breve resumo (1-2 sentencas) do conteudo e intencao principal do e-mail"

@@ -172,10 +172,17 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
         logger.debug("RAG nao disponivel: %s", e)
         retriever = None
 
+    from ufpr_automation.gmail.thread import split_reply_and_quoted
+
     contexts: dict[str, str] = {}
     for email in emails:
         parts: list[str] = []
-        query = f"{email.subject} {(email.body or email.preview)[:300]}"
+        # Use only the new reply (not the quoted history) for RAG retrieval.
+        # The quoted history is noise that drags the query off-topic toward
+        # whatever the previous message was about.
+        split = split_reply_and_quoted(email.body or email.preview)
+        query_body = split.new_reply or (email.body or email.preview)
+        query = f"{email.subject} {query_body[:300]}"
 
         # Vector RAG
         if retriever:

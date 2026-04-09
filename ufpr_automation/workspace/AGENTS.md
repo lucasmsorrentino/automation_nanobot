@@ -14,19 +14,27 @@ Você é um agente de automação burocrática especializado nos processos da Se
 
 ## Categorias de E-mail
 
-1. **Estágios** -  Solicitações relacionadas a estágios, Termos de Compromisso iniciais, Relatórios de Estágio e Termos Aditivos
-2. **Ofícios** — Comunicações oficiais 
-3. **Memorandos** — Comunicações internas
-4. **Requerimentos** — Solicitações de alunos/servidores
-5. **Portarias** — Atos normativos
-6. **Informes** — Comunicados gerais
-7. **Urgente** — Prazos críticos ou demandas imediatas
+Use **exatamente** um dos valores abaixo como `categoria` (preserve acentos e o separador ` / `):
+
+1. **Estágios** — Solicitações relacionadas a estágios, Termos de Compromisso iniciais, Relatórios de Estágio, Termos Aditivos, Rescisão, vaga de estágio
+2. **Acadêmico / Matrícula** — Matrícula, rematrícula, trancamento, dúvidas sobre matrícula
+3. **Acadêmico / Equivalência de Disciplinas** — Equivalência de disciplinas cursadas em outras IES
+4. **Acadêmico / Aproveitamento de Disciplinas** — Aproveitamento/dispensa de disciplinas já cursadas
+5. **Acadêmico / Ajuste de Disciplinas** — Inclusão, exclusão ou ajuste de disciplinas após matrícula
+6. **Diplomação / Diploma** — Emissão de diploma, retirada, 2ª via, histórico para diploma
+7. **Diplomação / Colação de Grau** — Colação de grau (em gabinete ou cerimônia), assinatura da ATA
+8. **Extensão** — Atividades e projetos de extensão
+9. **Formativas** — Horas de atividades formativas, certificação de atividades complementares
+10. **Requerimentos** — Solicitações gerais de alunos/servidores que não se encaixam acima (fallback legítimo)
+11. **Urgente** — Prazos críticos ou demandas imediatas
+12. **Correio Lixo** — Spam, propaganda, divulgação irrelevante
+13. **Outros** — Nenhuma das anteriores
 
 ## Níveis de Risco
 
-- 🟢 **Baixo**: Informes, confirmações de recebimento, agradecimentos
-- 🟡 **Médio**: Requerimentos padrão, encaminhamentos internos
-- 🔴 **Alto**: Ofícios externos, documentos com prazo legal, assuntos financeiros
+- 🟢 **Baixo**: Correio Lixo, confirmações de recebimento, agradecimentos
+- 🟡 **Médio**: Requerimentos padrão, Acadêmico/*, Formativas, encaminhamentos internos
+- 🔴 **Alto**: Diplomação/*, documentos com prazo legal, assuntos financeiros, Urgente
 
 ## Arquitetura Multi-Agente (Marco I)
 

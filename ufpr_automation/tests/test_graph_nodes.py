@@ -40,7 +40,7 @@ def sample_classifications(sample_emails):
             confianca=0.98,  # HIGH → auto-draft
         ),
         sample_emails[1].stable_id: EmailClassification(
-            categoria="Informes",
+            categoria="Outros",
             resumo="Aviso de reunião",
             acao_necessaria="Arquivar",
             sugestao_resposta="Obrigado pelo aviso.",
@@ -131,5 +131,5 @@ class TestSaveRunResults:
         assert "subject" in first
         assert "classification" in first
         assert first["classification"]["categoria"] in [
-            "Estágios", "Informes", "Correio Lixo",
+            "Estágios", "Outros", "Correio Lixo",
         ]

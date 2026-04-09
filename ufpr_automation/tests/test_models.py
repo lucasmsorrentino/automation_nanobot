@@ -29,8 +29,19 @@ class TestEmailClassification:
 
     def test_all_valid_categorias(self):
         valid = [
-            "Estágios", "Ofícios", "Memorandos", "Requerimentos",
-            "Portarias", "Informes", "Urgente", "Correio Lixo", "Outros",
+            "Estágios",
+            "Acadêmico / Matrícula",
+            "Acadêmico / Equivalência de Disciplinas",
+            "Acadêmico / Aproveitamento de Disciplinas",
+            "Acadêmico / Ajuste de Disciplinas",
+            "Diplomação / Diploma",
+            "Diplomação / Colação de Grau",
+            "Extensão",
+            "Formativas",
+            "Requerimentos",
+            "Urgente",
+            "Correio Lixo",
+            "Outros",
         ]
         for cat in valid:
             cls = EmailClassification(
@@ -43,8 +54,8 @@ class TestEmailClassification:
 
     def test_model_dump_roundtrip(self):
         cls = EmailClassification(
-            categoria="Ofícios",
-            resumo="Um ofício recebido.",
+            categoria="Diplomação / Diploma",
+            resumo="Solicitação de emissão de diploma.",
             acao_necessaria="Encaminhar para Secretaria",
             sugestao_resposta="Prezado(a), encaminhamos...",
         )

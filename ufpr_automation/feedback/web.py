@@ -26,18 +26,22 @@ from ufpr_automation.feedback.store import FeedbackStore
 # Valid categories (kept in sync with core/models.py)
 _VALID_CATEGORIES = [
     "Estágios",
-    "Ofícios",
-    "Memorandos",
+    "Acadêmico / Matrícula",
+    "Acadêmico / Equivalência de Disciplinas",
+    "Acadêmico / Aproveitamento de Disciplinas",
+    "Acadêmico / Ajuste de Disciplinas",
+    "Diplomação / Diploma",
+    "Diplomação / Colação de Grau",
+    "Extensão",
+    "Formativas",
     "Requerimentos",
-    "Portarias",
-    "Informes",
     "Urgente",
     "Correio Lixo",
     "Outros",
 ]
 
-FEEDBACK_DIR = settings.PACKAGE_ROOT / "feedback_data"
-PROCEDURES_DIR = settings.PACKAGE_ROOT / "procedures_data"
+FEEDBACK_DIR = settings.FEEDBACK_DATA_DIR
+PROCEDURES_DIR = settings.PROCEDURES_DATA_DIR
 
 
 @st.cache_resource

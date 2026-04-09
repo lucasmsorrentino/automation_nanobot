@@ -18,8 +18,19 @@ from ufpr_automation.feedback.store import FeedbackStore
 
 # Valid categories (kept in sync with core/models.py Categoria literal)
 _VALID_CATEGORIES = [
-    "Estágios", "Ofícios", "Memorandos", "Requerimentos",
-    "Portarias", "Informes", "Urgente", "Correio Lixo", "Outros",
+    "Estágios",
+    "Acadêmico / Matrícula",
+    "Acadêmico / Equivalência de Disciplinas",
+    "Acadêmico / Aproveitamento de Disciplinas",
+    "Acadêmico / Ajuste de Disciplinas",
+    "Diplomação / Diploma",
+    "Diplomação / Colação de Grau",
+    "Extensão",
+    "Formativas",
+    "Requerimentos",
+    "Urgente",
+    "Correio Lixo",
+    "Outros",
 ]
 
 
