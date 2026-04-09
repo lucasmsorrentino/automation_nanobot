@@ -122,6 +122,10 @@ LLM_MODEL=minimax/MiniMax-M2
 RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store
 RAG_DOCS_DIR=G:/Meu Drive/ufpr_rag/docs
 
+# Feedback/procedures compartilhados entre máquinas (trabalho ↔ casa)
+FEEDBACK_DATA_DIR=G:/Meu Drive/ufpr_rag/feedback_data
+PROCEDURES_DATA_DIR=G:/Meu Drive/ufpr_rag/procedures_data
+
 # GraphRAG
 NEO4J_URI=bolt://localhost:7687
 NEO4J_PASSWORD=...
@@ -142,7 +146,10 @@ TELEGRAM_CHAT_ID=...
 - **Human-in-the-loop:** o sistema **nunca** envia e-mails. Sempre salva como rascunho.
 - **Sessão Playwright (OWA):** persistida em `session_data/state.json`. Re-login automático quando expira.
 - **Store RAG:** compartilhado via Google Drive (`G:/Meu Drive/ufpr_rag/store`). 167 MB, contém `ufpr_docs` (flat) + `ufpr_raptor` (hierárquico).
+- **Feedback compartilhado:** apontando `FEEDBACK_DATA_DIR`/`PROCEDURES_DATA_DIR` para o Drive, o painel Streamlit e o ReflexionMemory passam a ser sincronizados entre múltiplas máquinas (trabalho ↔ casa). Default continua local. Append-only JSONL — evitar execuções simultâneas do scheduler nas duas máquinas.
+- **Thread context:** `gmail/thread.py` separa corpo do e-mail em "nova mensagem do remetente" vs "histórico citado" antes de mandar ao LLM, detectando `Em … escreveu:`, `On … wrote:`, `-----Mensagem Original-----` e prefixos `>`. Resolve a confusão do modelo em respostas `Re:`.
+- **Categorias:** taxonomia hierárquica com separador ` / ` — 13 valores (ver `core/models.py` `Categoria` ou `workspace/AGENTS.md`).
 - **Cache de embeddings:** `multilingual-e5-large` em `~/.cache/huggingface/hub/`. Em uso intenso, set `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1` para evitar 429.
-- **Windows + UTF-8:** os CLIs `rag.chat` / `rag.retriever` reconfiguram `sys.stdout` para UTF-8 automaticamente.
+- **Windows + UTF-8:** `utils/logging.py` reconfigura `sys.stdout`/`stderr` para UTF-8 no bootstrap do logger — todos os CLIs herdam.
 - **Segurança:** o `.env` está no `.gitignore` — nunca comite credenciais.
-- **Testes:** `pytest ufpr_automation/tests/ -v` (~160 testes).
+- **Testes:** `pytest ufpr_automation/tests/ -v` (~170 testes).
