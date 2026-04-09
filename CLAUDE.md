@@ -153,6 +153,16 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 - **`docker-compose.yml`** — Two services: `nanobot-gateway` (port 18790, 1 CPU) and `nanobot-cli`.
 - **`nanobot/templates/`** — Default config templates copied during `nanobot onboard`.
 
+## Windows notes
+
+- **RAG store on Google Drive**: `RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store`. Requires Google Drive for Desktop installed and running (mounts at `G:` by default). First access to a file may trigger on-demand download.
+- **HuggingFace offline mode**: the `multilingual-e5-large` model is cached at `~/.cache/huggingface/hub/`. To avoid 429 rate-limit errors from HuggingFace on repeated RAG queries, set before running any `ufpr_automation.rag.*` command:
+  ```bash
+  export HF_HUB_OFFLINE=1
+  export TRANSFORMERS_OFFLINE=1
+  ```
+- **UTF-8 stdout**: RAG CLI entrypoints (`retriever`, `chat`) auto-reconfigure `sys.stdout` to UTF-8 on Windows to handle documents containing characters outside cp1252 (e.g. ligatures). Other scripts printing document text should do the same or the user must set `PYTHONIOENCODING=utf-8`.
+
 ## Branching
 
 - `main` — Production releases

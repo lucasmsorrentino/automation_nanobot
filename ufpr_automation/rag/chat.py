@@ -11,6 +11,15 @@ from __future__ import annotations
 import argparse
 import sys
 
+# Force UTF-8 stdout on Windows so documents containing characters outside
+# cp1252 (e.g. ligatures like "fi" = \ufb01) don't crash the REPL mid-query.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # older Python without reconfigure()
+
 from ufpr_automation.rag.retriever import Retriever
 
 # ANSI colors for terminal output

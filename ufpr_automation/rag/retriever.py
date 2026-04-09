@@ -19,6 +19,15 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Force UTF-8 stdout on Windows so documents containing characters outside
+# cp1252 (e.g. ligatures like "fi" = \ufb01) don't crash the CLI mid-print.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # older Python without reconfigure()
+
 from ufpr_automation.config import settings
 
 STORE_DIR = settings.RAG_STORE_DIR
