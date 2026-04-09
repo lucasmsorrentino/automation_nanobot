@@ -217,7 +217,7 @@ def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
     )
 
     # Configure DSPy LM
-    lm = _dspy.LM(model=f"litellm/{settings.LLM_MODEL}", temperature=0.2)
+    lm = _dspy.LM(model=settings.LLM_MODEL, temperature=0.2)
     _dspy.configure(lm=lm)
 
     # Try loading optimized module
@@ -432,8 +432,12 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
     if not sei_candidates:
         return {"sei_contexts": {}}
 
-    # Check if SEI credentials are configured
-    from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
+    # Check if Playwright is available (SEI requires browser automation)
+    try:
+        from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
+    except ImportError:
+        logger.info("SEI: playwright nao instalado, pulando consultas")
+        return {"sei_contexts": {}}
 
     if not sei_has_credentials():
         logger.info("SEI: credenciais nao configuradas, pulando consultas")
@@ -516,7 +520,11 @@ def consultar_siga(state: EmailState) -> dict[str, Any]:
     if not siga_candidates:
         return {"siga_contexts": {}}
 
-    from ufpr_automation.siga.browser import has_credentials as siga_has_credentials
+    try:
+        from ufpr_automation.siga.browser import has_credentials as siga_has_credentials
+    except ImportError:
+        logger.info("SIGA: playwright nao instalado, pulando consultas")
+        return {"siga_contexts": {}}
 
     if not siga_has_credentials():
         logger.info("SIGA: credenciais nao configuradas, pulando consultas")

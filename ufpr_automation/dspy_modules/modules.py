@@ -93,6 +93,56 @@ class SelfRefineModule(dspy.Module):
         return classification
 
 
+_VALID_CATEGORIES = [
+    "Estágios", "Ofícios", "Memorandos", "Requerimentos",
+    "Portarias", "Informes", "Urgente", "Correio Lixo", "Outros",
+]
+
+# Map common LLM free-form outputs to valid categories
+_CATEGORY_ALIASES: dict[str, str] = {
+    "estagio": "Estágios", "estagios": "Estágios", "estágio": "Estágios",
+    "estágios": "Estágios", "termo aditivo": "Estágios", "tce": "Estágios",
+    "oficio": "Ofícios", "oficios": "Ofícios", "ofício": "Ofícios",
+    "ofícios": "Ofícios",
+    "memorando": "Memorandos", "memorandos": "Memorandos",
+    "requerimento": "Requerimentos", "requerimentos": "Requerimentos",
+    "solicitação": "Requerimentos", "solicitacao": "Requerimentos",
+    "portaria": "Portarias", "portarias": "Portarias",
+    "informe": "Informes", "informes": "Informes", "informativo": "Informes",
+    "divulgação": "Informes", "divulgacao": "Informes", "convite": "Informes",
+    "urgente": "Urgente", "urgência": "Urgente",
+    "spam": "Correio Lixo", "correio lixo": "Correio Lixo", "lixo": "Correio Lixo",
+    "propaganda": "Correio Lixo", "promocional": "Correio Lixo",
+    "outros": "Outros",
+    # Common free-form responses from the LLM
+    "coordenação": "Informes", "coordenacao": "Informes",
+    "consulta": "Requerimentos", "dúvida": "Requerimentos", "duvida": "Requerimentos",
+    "colação": "Requerimentos", "colacao": "Requerimentos",
+    "ementa": "Requerimentos", "ementas": "Requerimentos",
+    "horas formativas": "Requerimentos",
+    "processo": "Ofícios",
+}
+
+
+def _normalize_categoria(raw: str) -> str:
+    """Normalize a free-form category string to a valid Categoria literal."""
+    stripped = raw.strip()
+    # Exact match (case-insensitive)
+    for valid in _VALID_CATEGORIES:
+        if stripped.lower() == valid.lower():
+            return valid
+    # Alias match
+    key = stripped.lower()
+    if key in _CATEGORY_ALIASES:
+        return _CATEGORY_ALIASES[key]
+    # Substring match — check if any alias keyword appears in the raw string
+    for alias, mapped in _CATEGORY_ALIASES.items():
+        if alias in key:
+            return mapped
+    # Default fallback
+    return "Outros"
+
+
 def prediction_to_classification(pred: dspy.Prediction) -> EmailClassification:
     """Convert a DSPy Prediction to an EmailClassification model."""
     confianca = pred.confianca
@@ -104,7 +154,7 @@ def prediction_to_classification(pred: dspy.Prediction) -> EmailClassification:
     confianca = max(0.0, min(1.0, confianca))
 
     return EmailClassification(
-        categoria=pred.categoria,
+        categoria=_normalize_categoria(pred.categoria),
         resumo=pred.resumo,
         acao_necessaria=pred.acao_necessaria,
         sugestao_resposta=pred.sugestao_resposta,

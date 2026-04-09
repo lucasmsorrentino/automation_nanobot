@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import re
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.siga.models import EligibilityResult, EnrollmentInfo, StudentStatus
 from ufpr_automation.utils.logging import logger

@@ -26,18 +26,6 @@ import argparse
 import asyncio
 
 from ufpr_automation.config import settings
-from ufpr_automation.config.settings import OWA_INBOX_URL, OWA_URL
-from ufpr_automation.orchestrator import print_summary, run_pipeline, run_pipeline_gmail
-from ufpr_automation.outlook.browser import (
-    auto_login,
-    create_browser_context,
-    has_credentials,
-    has_saved_session,
-    is_logged_in,
-    launch_browser,
-    save_session_state,
-)
-from ufpr_automation.utils.debug import capture_debug_info
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,6 +81,9 @@ def parse_args() -> argparse.Namespace:
 
 async def run_dry_run() -> None:
     """Launch browser, navigate to OWA, and exit."""
+    from ufpr_automation.config.settings import OWA_URL
+    from ufpr_automation.outlook.browser import create_browser_context, launch_browser
+
     print("\n🧪 DRY RUN — Testando configuração do Playwright")
     print("=" * 60)
     pw, browser = await launch_browser(headless=False)
@@ -114,6 +105,19 @@ async def run_dry_run() -> None:
 
 async def run_main(headed: bool = False, debug: bool = False, perceber_only: bool = False) -> None:
     """Main execution flow — login, then run the multi-agent pipeline."""
+    from ufpr_automation.config.settings import OWA_INBOX_URL
+    from ufpr_automation.orchestrator import print_summary, run_pipeline
+    from ufpr_automation.outlook.browser import (
+        auto_login,
+        create_browser_context,
+        has_credentials,
+        has_saved_session,
+        is_logged_in,
+        launch_browser,
+        save_session_state,
+    )
+    from ufpr_automation.utils.debug import capture_debug_info
+
     print("\n" + "=" * 60)
     print("🤖 UFPR Automation — Marco I — Pipeline Multi-Agente")
     print("    Perceber → Pensar (paralelo) → Agir")
@@ -184,6 +188,23 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
     print("\n👋 Execução finalizada.")
 
 
+def _print_summary(result: dict) -> None:
+    """Print a pipeline summary without importing the orchestrator (avoids Playwright)."""
+    print("=" * 60)
+    print("RESUMO DO PIPELINE")
+    print("=" * 60)
+    print(f"  E-mails nao lidos processados : {result['total_unread']}")
+    print(f"  Classificacoes geradas        : {result['classified']}")
+    print(f"  Rascunhos salvos              : {result['drafts_saved']}")
+    for i, email in enumerate(result.get("emails", []), 1):
+        cls = email.classification
+        cat = cls.categoria if cls else "—"
+        action = cls.acao_necessaria if cls else "—"
+        has_draft = "rascunho salvo" if (cls and cls.sugestao_resposta) else "sem resposta"
+        print(f"  {i}. {email.subject[:55]} | {cat} | {action} | {has_draft}")
+    print("Revise os rascunhos no Gmail antes de enviar.")
+
+
 async def run_gmail_channel(use_langgraph: bool = False) -> None:
     """Run the pipeline using Gmail IMAP as the email source."""
     print("\n" + "=" * 60)
@@ -213,8 +234,9 @@ async def run_gmail_channel(use_langgraph: bool = False) -> None:
             "drafts_saved": len(drafts),
             "emails": emails,
         }
-        print_summary(summary)
+        _print_summary(summary)
     else:
+        from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
         result = await run_pipeline_gmail()
         print_summary(result)
 

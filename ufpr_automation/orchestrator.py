@@ -19,9 +19,11 @@ runs its LLM calls with no browser dependency.
 
 from __future__ import annotations
 
-from playwright.async_api import Page
-
 import json
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.agents.pensar import run_pensar_concurrently
 from ufpr_automation.core.models import EmailClassification, EmailData

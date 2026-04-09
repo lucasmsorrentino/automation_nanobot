@@ -25,8 +25,8 @@ from ufpr_automation.feedback.store import FeedbackStore
 
 # Valid categories (kept in sync with core/models.py)
 _VALID_CATEGORIES = [
-    "Estagios",
-    "Oficios",
+    "Estágios",
+    "Ofícios",
     "Memorandos",
     "Requerimentos",
     "Portarias",
