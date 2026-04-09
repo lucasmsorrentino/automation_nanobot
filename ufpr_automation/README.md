@@ -1,309 +1,148 @@
-# 🤖 UFPR Automation — Sistema de Automação Burocrática
+# 🤖 UFPR Automation
 
-<div align="center">
-  <h3>Marco I — Protótipo de Ingestão Assistida</h3>
-  <p>
-    <img src="https://img.shields.io/badge/python-≥3.12-blue" alt="Python">
-    <img src="https://img.shields.io/badge/framework-nanobot-orange" alt="nanobot">
-    <img src="https://img.shields.io/badge/RPA-Playwright-green" alt="Playwright">
-    <img src="https://img.shields.io/badge/LLM-LiteLLM_%2B_MiniMax-violet" alt="LiteLLM + MiniMax">
-    <img src="https://img.shields.io/badge/MFA-Telegram_Bot-blue" alt="Telegram MFA">
-  </p>
-</div>
+> Sistema de automação burocrática da Universidade Federal do Paraná. Lê e-mails institucionais, classifica via LLM, recupera contexto de normas (RAG vetorial + grafo Neo4j) e gera respostas como rascunho para revisão humana.
 
----
+![Python](https://img.shields.io/badge/python-≥3.12-blue)
+![Stack](https://img.shields.io/badge/stack-LangGraph%20%2B%20DSPy%20%2B%20RAPTOR%20%2B%20Neo4j-violet)
+![Status](https://img.shields.io/badge/status-Marcos%20I%20%2B%20II%20%2B%20II.5%20✅-green)
 
-## 📋 Sobre
+## Sobre
 
-Sistema de automação burocrática para a **Universidade Federal do Paraná (UFPR)** que utiliza RPA (Robotic Process Automation) via Playwright para acessar o **Outlook Web Access (OWA)** e integração com LLMs para classificação e redação de respostas a e-mails institucionais.
+Pipeline `Perceber → Pensar → Agir` orquestrado por **LangGraph**, alimentado por uma base vetorial de **34.285 chunks** de resoluções, atas e instruções normativas da UFPR (LanceDB + RAPTOR), enriquecida por um **grafo de conhecimento Neo4j** com 1.757 nós (hierarquia departamental, normas, fluxos, templates).
 
-> **Por que RPA?** A governança de TI da UFPR bloqueia o registro de aplicativos para a Microsoft Graph API. A integração com o e-mail é feita obrigatoriamente via Web Scraping do OWA usando Playwright.
+O sistema **nunca envia e-mails automaticamente** — sempre salva como rascunho para revisão humana.
 
-### Ciclo Perceber → Pensar → Agir
+> **Por que RPA via Playwright para OWA?** A governança de TI da UFPR bloqueia o registro de aplicativos para a Microsoft Graph API. O canal **Gmail IMAP** é o primário (forwarding do OWA). O canal OWA via Playwright existe como fallback.
 
-| Fase | Descrição | Status |
-|------|-----------|--------|
-| **Perceber** | Playwright/Gmail IMAP extrai e-mails com corpo completo + anexos (PDF, DOCX, XLSX) | ✅ Implementado |
-| **Pensar** | LLM (MiniMax via LiteLLM) classifica cada e-mail (com contexto dos anexos) e redige resposta em paralelo | ✅ Implementado |
-| **Agir** | Playwright clica em "Responder", digita a resposta e salva como **rascunho** | ✅ Implementado |
-| **Notificar** | Relatório no terminal com resumo das ações executadas | ✅ Implementado |
+## Arquitetura
 
----
+| Camada | Componentes |
+|---|---|
+| **Canais** | `gmail/` (IMAP, primário) · `outlook/` (Playwright + auto-login + MFA Telegram, fallback) |
+| **Anexos** | `attachments/` — PDF (PyMuPDF), DOCX, XLSX, OCR Tesseract para escaneados |
+| **Memória vetorial** | `rag/` — LanceDB + RAPTOR hierárquico, multilingual-e5-large, 34K chunks |
+| **Memória relacional** | `graphrag/` — Neo4j, 1.757 nós, normas com vigência (vigente/alterada/revogada) |
+| **Memória episódica** | `feedback/reflexion.py` — análise + recall de erros passados |
+| **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback) |
+| **Otimização** | `dspy_modules/` — DSPy Signatures, GEPA / MIPROv2 |
+| **Orquestrador** | `graph/` — LangGraph StateGraph + SQLite checkpointing |
+| **Sistemas legados** | `sei/`, `siga/` — clients Playwright (read-only por enquanto) |
+| **Procedimentos** | `procedures/store.py` — log JSONL para aprendizado contínuo |
+| **Scheduler** | `scheduler.py` — APScheduler 3x/dia (configurável) |
+| **Feedback UI** | `feedback/web.py` — Streamlit dashboard |
+| **Persona/ICL** | `workspace/SOUL.md` — normas internas, fluxos, templates de e-mail |
 
-## 🗂️ Estrutura do Projeto
+Diagramas Mermaid completos em [`ARCHITECTURE.md`](ARCHITECTURE.md). Roadmap em [`TASKS.md`](TASKS.md).
 
-```
-ufpr_automation/
-├── __init__.py              # Package init
-├── __main__.py              # python -m ufpr_automation
-├── .env.example             # Template de variáveis de ambiente
-├── ARCHITECTURE.md          # 📐 Diagrama de Arquitetura (Mermaid)
-│
-├── config/                  # ⚙️ Configurações
-│   ├── __init__.py
-│   └── settings.py          # URLs, timeouts, API keys (via .env)
-│
-├── core/                    # 🧩 Modelos de domínio
-│   ├── __init__.py
-│   └── models.py            # EmailData, AttachmentData dataclasses
-│
-├── agents/                  # 🤖 Agentes do pipeline
-│   ├── perceber.py          # PerceberAgent — scraping + corpo completo
-│   ├── pensar.py            # PensarAgent — classificação LLM via LiteLLM (paralelo)
-│   └── agir.py              # AgirAgent — salva rascunhos no OWA
-│
-├── orchestrator.py          # 🎯 Coordenador Perceber → Pensar → Agir
-│
-├── attachments/             # 📎 Processamento de anexos de e-mail
-│   ├── __init__.py
-│   └── extractor.py         # Extração de texto: PDF, DOCX, XLSX, texto
-│
-├── llm/                     # 🧠 Integração LLM
-│   └── client.py            # LLMClient via LiteLLM (sync + async)
-│
-├── outlook/                 # 📧 Integração OWA via Playwright
-│   ├── browser.py           # Ciclo de vida do navegador + sessão
-│   ├── scraper.py           # Extração de e-mails (3 estratégias)
-│   ├── body_extractor.py    # Abertura e extração do corpo completo
-│   └── responder.py         # Clica Reply + digita + salva rascunho
-│
-├── cli/                     # 💻 Interface de linha de comando
-│   └── commands.py          # Entry point com argparse
-│
-├── utils/                   # 🔧 Utilitários
-│   └── debug.py             # Captura DOM + screenshot para debug
-│
-├── workspace/               # 🐈 Integração com nanobot
-│   ├── AGENTS.md            # Personalidade do agente
-│   ├── SOUL.md              # Normas UFPR — ICL context (19 seções)
-│   ├── config.json          # Config do provider LLM
-│   └── skills/
-│       └── ufpr-outlook/
-│           └── SKILL.md     # Skill do nanobot
-│
-├── rag/                     # 🔍 RAG — Retrieval-Augmented Generation
-│   ├── __init__.py
-│   ├── ingest.py            # Pipeline: PDF → texto → chunks → embeddings → LanceDB
-│   ├── retriever.py         # Busca vetorial semântica com filtros
-│   ├── chat.py              # CLI interativo (REPL) para consultas
-│   ├── web.py               # Interface web (Streamlit) para consultas
-│   └── store/               # Dados LanceDB (git-ignored, gerado automaticamente)
-│
-├── docs/                    # 📜 Corpus de documentos institucionais (git-ignored)
-│   ├── cepe/                # CEPE: atas, resoluções, instruções normativas
-│   ├── coun/                # COUN: atas, resoluções, instruções normativas
-│   ├── coplad/              # COPLAD: atas, resoluções, instruções normativas
-│   ├── concur/              # CONCUR: atas, resoluções
-│   └── estagio/             # Manuais, leis e regulamentos de estágio
-│
-├── INICIO.md                # Especificação da arquitetura
-└── TASKS.md                 # Tarefas e roadmap
-```
-
----
-
-## 🚀 Quickstart
-
-### 1. Ambiente Virtual
+## Quickstart
 
 ```bash
-cd nanobot
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/Mac
+# 1. Instalar (na raiz do nanobot)
+pip install -e ".[rag,marco2,marco3]"
 
-pip install -e .
-pip install playwright
-python -m playwright install chromium
-```
-
-### 2. Configurar Variáveis de Ambiente
-
-```bash
+# 2. Configurar credenciais
 cp ufpr_automation/.env.example ufpr_automation/.env
+# editar .env: GMAIL_*, MINIMAX_API_KEY, NEO4J_*, RAG_STORE_DIR, ...
+
+# 3. Rodar pipeline (Gmail IMAP + LangGraph)
+python -m ufpr_automation --channel gmail --langgraph
+
+# 4. Ou rodar via scheduler (3x/dia)
+python -m ufpr_automation --schedule
 ```
 
-Edite o `.env` com suas credenciais e chaves:
-
-```env
-# Login automático
-OWA_EMAIL=seu.email@ufpr.br
-OWA_PASSWORD=sua_senha_aqui
-
-# Notificação MFA via Telegram
-TELEGRAM_BOT_TOKEN=token_do_botfather
-TELEGRAM_CHAT_ID=seu_chat_id
-
-# LLM (MiniMax via LiteLLM)
-MINIMAX_API_KEY=sua_chave_aqui
-```
-
-### 3. Primeiro Uso — Login Automático com MFA via Telegram
-
-```bash
-python -m ufpr_automation
-```
-
-O sistema preenche e-mail e senha automaticamente na página da Microsoft. Quando o MFA de **number matching** aparecer, o número de 2 dígitos é enviado para o seu **Telegram** — basta aprovar no Microsoft Authenticator pelo celular. A sessão é salva em `session_data/state.json`.
-
-> **Sem credenciais?** Se `OWA_EMAIL`/`OWA_PASSWORD` não estiverem configurados, o sistema abre o navegador para login manual (comportamento legado).
-
-### 4. Execuções Seguintes — Headless
-
-```bash
-python -m ufpr_automation
-```
-
-O script detecta a sessão salva e executa em background (headless). Se a sessão expirar, o login automático é executado novamente — sem necessidade de intervenção manual.
-
----
-
-## 💻 Comandos CLI
+## CLI
 
 | Comando | Descrição |
-|---------|-----------|
-| `python -m ufpr_automation` | Pipeline completo (scraping + LLM + rascunhos) |
-| `python -m ufpr_automation --perceber-only` | Apenas scraping + extração de corpo, sem LLM |
-| `python -m ufpr_automation --headed` | Força modo com janela visível |
-| `python -m ufpr_automation --debug` | Captura DOM + screenshot para debug |
-| `python -m ufpr_automation --dry-run` | Testa Playwright sem login |
+|---|---|
+| `python -m ufpr_automation` | Pipeline (canal definido por `EMAIL_CHANNEL` no `.env`) |
+| `python -m ufpr_automation --channel gmail --langgraph` | Pipeline LangGraph com Gmail IMAP |
+| `python -m ufpr_automation --channel owa --headed --debug` | OWA Playwright visível com captura de DOM |
+| `python -m ufpr_automation --perceber-only` | Apenas scraping, sem LLM (OWA only) |
+| `python -m ufpr_automation --schedule [--once]` | Scheduler daemon (`--once` para rodar 1 vez) |
 
----
-
-## 🔍 RAG — Base de Conhecimento Vetorial
-
-O módulo RAG indexa os documentos institucionais da UFPR (resoluções, atas, instruções normativas, manuais de estágio) em um banco vetorial local (LanceDB) para busca semântica.
-
-### Instalação
+### RAG
 
 ```bash
-pip install -e ".[rag]"
+# Ingerir documentos (PDF → chunks → embeddings → LanceDB)
+python -m ufpr_automation.rag.ingest [--subset estagio | --dry-run | --ocr-only]
+
+# Construir RAPTOR hierárquico
+python -m ufpr_automation.rag.raptor [--max-levels 3]
+
+# Buscar via CLI
+python -m ufpr_automation.rag.retriever "prazo de estágio obrigatório" --conselho cepe --top-k 5
+
+# REPL interativo
+python -m ufpr_automation.rag.chat [--conselho cepe]
+
+# Web UI (Streamlit, porta 8501)
+streamlit run ufpr_automation/rag/web.py
 ```
 
-### Uso
+### GraphRAG (Neo4j)
 
 ```bash
-# Indexar todos os documentos
-python -m ufpr_automation.rag.ingest
+# Pré-requisito: Neo4j rodando em bolt://localhost:7687
+docker run -d -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/ufpr2026 neo4j:5
 
-# Indexar apenas um subset
-python -m ufpr_automation.rag.ingest --subset estagio
-python -m ufpr_automation.rag.ingest --subset cepe/resolucoes
-
-# Ver estatísticas sem indexar
-python -m ufpr_automation.rag.ingest --dry-run
-
-# Busca semântica via CLI
-python -m ufpr_automation.rag.retriever "prazo máximo para estágio obrigatório"
-python -m ufpr_automation.rag.retriever "rescisão de contrato" --conselho cepe --top-k 5
-
-# Interface interativa (terminal)
-python -m ufpr_automation.rag.chat
-python -m ufpr_automation.rag.chat --conselho cepe    # com filtro pré-definido
-
-# Interface web (Streamlit)
-streamlit run ufpr_automation/rag/web.py               # abre em http://localhost:8501
+python -m ufpr_automation.graphrag.seed              # popular base
+python -m ufpr_automation.graphrag.enrich            # extrair normas do RAG → Neo4j
 ```
 
-### Uso via Python
-
-```python
-from ufpr_automation.rag.retriever import Retriever
-
-r = Retriever()
-results = r.search("regulamento de estágio", conselho="cepe", top_k=3)
-context = r.search_formatted("prazo de estágio obrigatório")  # texto pronto para LLM
-```
-
-### Como adicionar novos documentos
-
-1. **Coloque os PDFs** na estrutura de pastas `ufpr_automation/docs/`:
-
-```
-docs/
-├── {conselho}/              # cepe, coun, coplad, concur (ou novo conselho)
-│   ├── atas/
-│   ├── resolucoes/
-│   └── instrucoes-normativas/
-└── estagio/                 # ou qualquer pasta temática
-```
-
-Os metadados (conselho, tipo) são extraídos automaticamente do caminho:
-- `docs/cepe/resolucoes/res-42.pdf` → conselho=cepe, tipo=resolucoes
-- `docs/estagio/manual.pdf` → conselho=estagio, tipo=estagio
-- `docs/prograd/portarias/port-01.pdf` → conselho=prograd, tipo=portarias
-
-2. **Rode o ingest** — o sistema é idempotente (pula arquivos já indexados):
+### Feedback / DSPy
 
 ```bash
-# Só o subset novo
-python -m ufpr_automation.rag.ingest --subset prograd/portarias
+# Stats e revisão
+python -m ufpr_automation.feedback stats
+python -m ufpr_automation.feedback review
 
-# Ou tudo (detecta e pula os já indexados)
-python -m ufpr_automation.rag.ingest
+# Web UI (porta 8502)
+streamlit run ufpr_automation/feedback/web.py
+
+# Otimizar prompts
+python -m ufpr_automation.dspy_modules.optimize --strategy gepa
 ```
 
-3. **Pronto** — os novos documentos já aparecem nas buscas.
+## Configuração (`.env`)
 
-> **Nota:** Para reindexar um documento atualizado, apague a pasta `ufpr_automation/rag/store/` e rode o ingest novamente.
+Principais variáveis (ver `.env.example` para a lista completa):
 
----
+```env
+# Canal de e-mail
+EMAIL_CHANNEL=gmail
+GMAIL_EMAIL=...
+GMAIL_APP_PASSWORD=...
 
-## 📎 Anexos de E-mail
+# LLM
+MINIMAX_API_KEY=...
+LLM_MODEL=minimax/MiniMax-M2
 
-O sistema baixa e extrai texto dos anexos automaticamente durante a leitura dos e-mails (Gmail IMAP). O conteudo extraido e injetado no prompt do LLM para que ele entenda o contexto completo da solicitacao.
+# RAG (Google Drive compartilhado)
+RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store
+RAG_DOCS_DIR=G:/Meu Drive/ufpr_rag/docs
 
-### Tipos suportados
+# GraphRAG
+NEO4J_URI=bolt://localhost:7687
+NEO4J_PASSWORD=...
 
-| Tipo | Biblioteca | Status |
-|------|-----------|--------|
-| PDF | PyMuPDF | ✅ |
-| DOCX (Word) | python-docx | ✅ |
-| XLSX (Excel) | openpyxl | ✅ |
-| Texto (TXT, CSV) | built-in | ✅ |
-| Imagens (JPG, PNG) | OCR (Tesseract) | Fase 2 |
-| PDFs escaneados | OCR (Tesseract) | Fase 2 |
+# Scheduler
+SCHEDULE_HOURS=8,13,17
+SCHEDULE_TZ=America/Sao_Paulo
 
-Os anexos sao salvos em `ufpr_automation/attachments_data/` para referencia e fluxos posteriores (ex: upload ao SEI). Configuravel via `ATTACHMENTS_DIR` e `ATTACHMENT_MAX_SIZE_MB` no `.env`.
+# OWA fallback (apenas se EMAIL_CHANNEL=owa)
+OWA_EMAIL=...
+OWA_PASSWORD=...
+TELEGRAM_BOT_TOKEN=...    # MFA number-match
+TELEGRAM_CHAT_ID=...
+```
 
----
+## Notas
 
-## 🏗️ Fases de Maturidade
-
-| | Marco I (Completo) | Marco II (Atual ~85%) | Marco III (Futuro) |
-|---|---|---|---|
-| **Orquestrador** | nanobot (sequential) | LangGraph (StateGraph) | LangGraph Fleet |
-| **Motor Cognitivo** | LiteLLM + MiniMax (ICL) | LiteLLM + DSPy + Self-Refine | LiteLLM + GraphRAG |
-| **Memória** | SOUL.md (System Prompt) | LanceDB + RAPTOR + Reflexion | Neo4j (Grafo de Conhecimento) |
-| **Canal E-mail** | OWA (Playwright) | Gmail IMAP (primário) + OWA (fallback) | Gmail + SIGA + SEI |
-| **Autonomia** | Rascunho + Humano | Roteamento por confiança (auto/review/escala) | Totalmente autônomo |
-| **Modelos** | MiniMax-M2 (único) | Model cascading (local + API + fallback) | Cascading + Ollama local |
-
-> Veja o diagrama completo em [`ARCHITECTURE.md`](ARCHITECTURE.md).
-
----
-
-## 🔧 Stack Tecnológica
-
-- **Python** ≥ 3.12
-- **Playwright** — Automação de navegador (RPA)
-- **nanobot** — Framework de agente AI (loop Perceber-Pensar-Agir)
-- **LiteLLM + MiniMax-M2** — Motor cognitivo (provider-agnostic via LiteLLM, facilmente cambiável)
-- **python-telegram-bot** — Notificação MFA via Telegram Bot
-- **python-dotenv** — Gerenciamento de variáveis de ambiente
-- **PyMuPDF** — Extração de texto de PDFs (anexos + RAG ingest)
-- **python-docx** — Extração de texto de documentos Word
-- **openpyxl** — Extração de texto de planilhas Excel
-- **LanceDB** — Banco vetorial local (zero servidor)
-- **sentence-transformers** — Embeddings multilíngue (`multilingual-e5-large`)
-- **LangChain Text Splitters** — Chunking semântico para documentos legais
-
----
-
-## 📝 Notas Importantes
-
-- **Login automático**: Credenciais são lidas do `.env`. O número MFA é enviado via Telegram para aprovação remota no Microsoft Authenticator.
-- **Sessão do browser**: Salva em `session_data/state.json`. Se expirar, o login automático é re-executado automaticamente.
-- **Seletores OWA**: O scraper usa 3 estratégias de fallback. Use `--debug` quando seletores pararem de funcionar.
-- **Segurança**: Nunca comite o `.env` — ele já está no `.gitignore`.
-- **Human-in-the-loop**: O sistema **nunca** envia e-mails automaticamente — sempre salva como rascunho.
+- **Human-in-the-loop:** o sistema **nunca** envia e-mails. Sempre salva como rascunho.
+- **Sessão Playwright (OWA):** persistida em `session_data/state.json`. Re-login automático quando expira.
+- **Store RAG:** compartilhado via Google Drive (`G:/Meu Drive/ufpr_rag/store`). 167 MB, contém `ufpr_docs` (flat) + `ufpr_raptor` (hierárquico).
+- **Cache de embeddings:** `multilingual-e5-large` em `~/.cache/huggingface/hub/`. Em uso intenso, set `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1` para evitar 429.
+- **Windows + UTF-8:** os CLIs `rag.chat` / `rag.retriever` reconfiguram `sys.stdout` para UTF-8 automaticamente.
+- **Segurança:** o `.env` está no `.gitignore` — nunca comite credenciais.
+- **Testes:** `pytest ufpr_automation/tests/ -v` (~160 testes).
