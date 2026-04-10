@@ -35,3 +35,9 @@ ufpr_automation/graph_data/
 ufpr_automation/procedures_data/
 ufpr_automation/logs/
 ufpr_automation/dspy_modules/optimized/
+
+# Local artifacts (scratch files, backups, IDE)
+.claude/
+*.tar.gz
+Parecer_Tecnico_*.docx
+claudeProject.pdf

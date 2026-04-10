@@ -53,6 +53,123 @@ def perceber_owa(state: EmailState) -> dict[str, Any]:
         }
 
 
+def tier0_lookup(state: EmailState) -> dict[str, Any]:
+    """Route each email through the Tier 0 playbook (Hybrid Memory).
+
+    For each email, we score against the playbook:
+      - Keyword match (regex) → score 1.0 → instant Tier 0
+      - Semantic match (e5-large cosine) → score > 0.90 → Tier 0
+      - Otherwise → fall through to Tier 1 (rag_retrieve + classificar)
+
+    Tier 0 hits get a fully-formed :class:`EmailClassification` produced
+    locally from the intent template — *no* RAG retrieval and *no* LLM
+    classification call. ``rag_retrieve`` and ``classificar`` skip any
+    email already present in ``state['classifications']``.
+
+    Staleness: if ``intent.last_update`` is older than the RAG store mtime
+    we treat the intent as out-of-date and force a Tier 1 fallback.
+    """
+    emails = state.get("emails", [])
+    if not emails:
+        return {"tier0_hits": [], "classifications": {}}
+
+    try:
+        from ufpr_automation.procedures.playbook import (
+            extract_variables,
+            get_playbook,
+            missing_required_fields,
+        )
+    except Exception as e:  # pragma: no cover - import-time failures only
+        logger.warning("Tier 0: playbook indisponivel: %s", e)
+        return {"tier0_hits": [], "classifications": {}}
+
+    from ufpr_automation.core.models import EmailClassification
+    from ufpr_automation.gmail.thread import split_reply_and_quoted
+
+    playbook = get_playbook()
+    if not playbook.intents:
+        logger.info("Tier 0: nenhum intent carregado — pulando")
+        return {"tier0_hits": [], "classifications": {}}
+
+    hits: list[str] = []
+    classifications: dict[str, Any] = {}
+    stale_count = 0
+    missing_count = 0
+
+    for email in emails:
+        # Use only the new reply (not the quoted history) so the lookup
+        # query reflects what the sender is asking *now*.
+        split = split_reply_and_quoted(email.body or email.preview)
+        query_body = split.new_reply or (email.body or email.preview)
+        query = f"{email.subject} {query_body[:500]}"
+
+        match = playbook.lookup(query)
+        if match is None:
+            continue
+
+        if playbook.is_stale(match.intent):
+            logger.info(
+                "Tier 0: intent '%s' STALE (last_update=%s) — fallback Tier 1",
+                match.intent.intent_name,
+                match.intent.last_update,
+            )
+            stale_count += 1
+            continue
+
+        # Extract variables and validate required fields
+        variables = extract_variables(email, match.intent)
+        missing = missing_required_fields(match.intent, variables)
+        if missing:
+            logger.info(
+                "Tier 0: intent '%s' faltando %s — fallback Tier 1",
+                match.intent.intent_name,
+                ", ".join(missing),
+            )
+            missing_count += 1
+            continue
+
+        draft = playbook.fill(match.intent, variables)
+        # Confidence = intent.confidence × match score (semantic ≤ 1.0).
+        # Keyword matches keep the intent's declared confidence intact.
+        confianca = max(0.0, min(1.0, match.intent.confidence * match.score))
+
+        try:
+            cls = EmailClassification(
+                categoria=match.intent.categoria,
+                resumo=f"Tier 0 ({match.method}): {match.intent.intent_name}",
+                acao_necessaria=match.intent.action,
+                sugestao_resposta=draft,
+                confianca=confianca,
+            )
+        except Exception as e:
+            logger.warning(
+                "Tier 0: classificacao invalida para intent '%s': %s",
+                match.intent.intent_name,
+                e,
+            )
+            continue
+
+        classifications[email.stable_id] = cls
+        hits.append(email.stable_id)
+        logger.info(
+            "Tier 0 HIT [%s/%.2f] '%s' -> %s (%s)",
+            match.method,
+            match.score,
+            email.subject[:40],
+            match.intent.intent_name,
+            match.intent.categoria,
+        )
+
+    logger.info(
+        "Tier 0: %d hit(s) | %d stale | %d missing fields | %d -> Tier 1",
+        len(hits),
+        stale_count,
+        missing_count,
+        len(emails) - len(hits),
+    )
+    return {"tier0_hits": hits, "classifications": classifications}
+
+
 async def _perceber_owa_async() -> list:
     """Internal async implementation for OWA scraping with full browser lifecycle."""
     from ufpr_automation.agents.perceber import PerceberAgent
@@ -166,6 +283,15 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
     if not emails:
         return {"rag_contexts": {}}
 
+    # Skip Tier 0 hits — they were already classified by tier0_lookup
+    # without paying the RAG retrieval cost. Only Tier 1 emails need RAG.
+    tier0_hits = set(state.get("tier0_hits", []))
+    tier1_emails = [e for e in emails if e.stable_id not in tier0_hits]
+
+    if not tier1_emails:
+        logger.info("RAG: todos os e-mails atendidos pelo Tier 0 — pulando RAG")
+        return {"rag_contexts": {}}
+
     try:
         retriever = _get_retriever()
     except Exception as e:
@@ -175,7 +301,7 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
     from ufpr_automation.gmail.thread import split_reply_and_quoted
 
     contexts: dict[str, str] = {}
-    for email in emails:
+    for email in tier1_emails:
         parts: list[str] = []
         # Use only the new reply (not the quoted history) for RAG retrieval.
         # The quoted history is noise that drags the query off-topic toward
@@ -201,15 +327,19 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
         if parts:
             contexts[email.stable_id] = "\n\n".join(parts)
 
-    # Append Reflexion (past error) contexts
-    reflexion_contexts = _get_reflexion_context(emails)
+    # Append Reflexion (past error) contexts — Tier 1 emails only
+    reflexion_contexts = _get_reflexion_context(tier1_emails)
     for sid, ref_ctx in reflexion_contexts.items():
         if sid in contexts:
             contexts[sid] += f"\n\n{ref_ctx}"
         else:
             contexts[sid] = ref_ctx
 
-    logger.info("RAG: contexto recuperado para %d/%d e-mail(s)", len(contexts), len(emails))
+    logger.info(
+        "RAG: contexto recuperado para %d/%d e-mail(s) Tier 1",
+        len(contexts),
+        len(tier1_emails),
+    )
     return {"rag_contexts": contexts}
 
 
@@ -285,26 +415,50 @@ def classificar(state: EmailState) -> dict[str, Any]:
     Uses DSPy modules if available (pip install dspy), otherwise falls back
     to direct LiteLLM calls. Model cascading routes classification to a
     cheaper/local model when configured (see llm/router.py).
+
+    Tier 0 hits (already classified by ``tier0_lookup``) are preserved
+    untouched. Only emails missing from ``state['classifications']`` are
+    sent to the LLM. The two sets are merged before being returned to the
+    state, since LangGraph replaces dict values rather than merging them.
     """
     from ufpr_automation.llm.router import log_cascade_config
 
     emails = state.get("emails", [])
     rag_contexts = state.get("rag_contexts", {})
+    existing = dict(state.get("classifications") or {})
+
     if not emails:
-        return {"classifications": {}}
+        return {"classifications": existing}
+
+    # Tier 1 = emails not yet classified by Tier 0
+    tier1_emails = [e for e in emails if e.stable_id not in existing]
+
+    if not tier1_emails:
+        logger.info(
+            "Classificar: %d e-mail(s) atendido(s) pelo Tier 0 — pulando LLM",
+            len(existing),
+        )
+        return {"classifications": existing}
 
     log_cascade_config()
 
     try:
         import dspy as _dspy  # noqa: F401
         logger.info("Classificar: usando DSPy modules")
-        classifications = _classify_with_dspy(emails, rag_contexts)
+        new_results = _classify_with_dspy(tier1_emails, rag_contexts)
     except ImportError:
         logger.info("Classificar: DSPy nao disponivel, usando LiteLLM direto")
-        classifications = _classify_with_litellm(emails, rag_contexts)
+        new_results = _classify_with_litellm(tier1_emails, rag_contexts)
 
-    logger.info("Classificar: %d/%d e-mail(s) classificados", len(classifications), len(emails))
-    return {"classifications": classifications}
+    merged = {**existing, **new_results}
+    logger.info(
+        "Classificar: %d Tier 0 + %d Tier 1 = %d/%d total",
+        len(existing),
+        len(new_results),
+        len(merged),
+        len(emails),
+    )
+    return {"classifications": merged}
 
 
 def rotear(state: EmailState) -> dict[str, Any]:

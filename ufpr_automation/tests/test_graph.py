@@ -44,17 +44,35 @@ def _make_cls(
 
 
 class TestHasEmails:
-    def test_routes_to_rag_when_emails_present(self):
+    def test_routes_to_tier0_when_emails_present(self):
+        # After Hybrid Memory: perceber -> tier0_lookup -> (maybe rag_retrieve)
         from ufpr_automation.graph.builder import _has_emails
 
         state = {"emails": [_make_email()]}
-        assert _has_emails(state) == "rag_retrieve"
+        assert _has_emails(state) == "tier0_lookup"
 
     def test_routes_to_end_when_no_emails(self):
         from ufpr_automation.graph.builder import _has_emails
 
         assert _has_emails({"emails": []}) == "end"
         assert _has_emails({}) == "end"
+
+    def test_needs_tier1_skips_rag_when_all_tier0(self):
+        from ufpr_automation.graph.builder import _needs_tier1
+
+        e = _make_email()
+        # Every email is a Tier 0 hit → skip RAG entirely
+        state = {"emails": [e], "tier0_hits": [e.stable_id]}
+        assert _needs_tier1(state) == "rotear"
+
+    def test_needs_tier1_runs_rag_when_misses(self):
+        from ufpr_automation.graph.builder import _needs_tier1
+
+        e1 = _make_email()
+        e2 = _make_email()
+        e2.stable_id = "different"
+        state = {"emails": [e1, e2], "tier0_hits": [e1.stable_id]}
+        assert _needs_tier1(state) == "rag_retrieve"
 
 
 # ===========================================================================

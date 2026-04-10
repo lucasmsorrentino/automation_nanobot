@@ -19,6 +19,11 @@ class EmailState(TypedDict, total=False):
     # Perceber output
     emails: list[EmailData]
 
+    # Tier 0 (Hybrid Memory): stable_ids of emails resolved by the playbook
+    # *before* RAG/LLM. Set by tier0_lookup; consulted by rag_retrieve and
+    # classificar so they can short-circuit and skip those emails.
+    tier0_hits: list[str]
+
     # RAG output (email stable_id -> formatted context: vector + graph + reflexion)
     rag_contexts: dict[str, str]
 

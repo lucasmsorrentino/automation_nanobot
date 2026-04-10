@@ -21,13 +21,23 @@ from ufpr_automation.graph.nodes import (
     registrar_feedback,
     registrar_procedimento,
     rotear,
+    tier0_lookup,
 )
 from ufpr_automation.graph.state import EmailState
 
 
 def _has_emails(state: EmailState) -> str:
     """Route based on whether emails were found."""
-    return "rag_retrieve" if state.get("emails") else "end"
+    return "tier0_lookup" if state.get("emails") else "end"
+
+
+def _needs_tier1(state: EmailState) -> str:
+    """Skip RAG entirely if every email was resolved by the Tier 0 playbook."""
+    emails = state.get("emails", [])
+    tier0_hits = set(state.get("tier0_hits", []))
+    if emails and len(tier0_hits) >= len(emails):
+        return "rotear"
+    return "rag_retrieve"
 
 
 def _needs_sei_siga(state: EmailState) -> str:
@@ -59,6 +69,7 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
         graph.add_node("perceber", perceber_owa)
         graph.add_node("agir", agir_gmail)  # fallback to gmail drafts even with OWA input
 
+    graph.add_node("tier0_lookup", tier0_lookup)
     graph.add_node("rag_retrieve", rag_retrieve)
     graph.add_node("classificar", classificar)
     graph.add_node("rotear", rotear)
@@ -67,10 +78,16 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     graph.add_node("registrar_feedback", registrar_feedback)
     graph.add_node("registrar_procedimento", registrar_procedimento)
 
-    # Define edges
+    # Define edges — Tier 0 (playbook) runs first; only the residual Tier 1
+    # set goes through RAG + classificar.
     graph.set_entry_point("perceber")
     graph.add_conditional_edges(
-        "perceber", _has_emails, {"rag_retrieve": "rag_retrieve", "end": END}
+        "perceber", _has_emails, {"tier0_lookup": "tier0_lookup", "end": END}
+    )
+    graph.add_conditional_edges(
+        "tier0_lookup",
+        _needs_tier1,
+        {"rag_retrieve": "rag_retrieve", "rotear": "rotear"},
     )
     graph.add_edge("rag_retrieve", "classificar")
     graph.add_edge("classificar", "rotear")

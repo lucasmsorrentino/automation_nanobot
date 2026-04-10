@@ -1,0 +1,509 @@
+"""Tier 0 playbook parser and intent router (Hybrid Memory).
+
+Loads ``workspace/PROCEDURES.md`` into a list of :class:`Intent` objects,
+precomputes intent embeddings, and exposes :meth:`Playbook.lookup` which
+returns the best matching intent for an email (or ``None`` for Tier 1
+fallback).
+
+The routing scoring is:
+
+- **Keyword match** — any keyword found in the query by regex boundary
+  search returns ``score=1.0`` (method="keyword").
+- **Semantic match** — cosine similarity of a normalized e5-large
+  embedding of ``intent_name + keywords`` against the query. Above
+  ``semantic_threshold`` (default 0.90) returns ``method="semantic"``.
+- Below threshold → ``None`` → Tier 1 (RAG + LLM).
+
+Staleness: :meth:`Playbook.is_stale` compares ``intent.last_update`` with
+the mtime of the RAG vector store. If the store has been re-ingested more
+recently than the intent was last reviewed, the intent is considered stale
+and routing falls back to Tier 1.
+
+Usage::
+
+    from ufpr_automation.procedures.playbook import get_playbook
+
+    pb = get_playbook()
+    match = pb.lookup("Gostaria de prorrogar meu estágio na X")
+    if match and not pb.is_stale(match.intent):
+        draft = pb.fill_template(match.intent, variables={"nome_aluno": "João"})
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from functools import lru_cache
+from pathlib import Path
+from typing import Optional
+
+import yaml
+from pydantic import BaseModel, Field, field_validator
+
+from ufpr_automation.config import settings
+from ufpr_automation.core.models import EmailData
+from ufpr_automation.utils.logging import logger
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+
+# Override via env var so deployments can share a playbook across machines.
+PROCEDURES_MD_PATH = Path(
+    os.getenv("PROCEDURES_MD_PATH", str(settings.PACKAGE_ROOT / "workspace" / "PROCEDURES.md"))
+)
+
+# Used by is_stale(): mtime of this file is treated as "latest RAG update".
+RAG_STORE_FILE = settings.RAG_STORE_DIR / "ufpr.lance"
+
+
+# ---------------------------------------------------------------------------
+# Data classes
+# ---------------------------------------------------------------------------
+
+
+class Intent(BaseModel):
+    """A single Tier 0 playbook entry."""
+
+    intent_name: str
+    keywords: list[str] = Field(default_factory=list)
+    categoria: str
+    action: str = "Redigir Resposta"
+    required_fields: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    last_update: str = ""  # ISO date (YYYY-MM-DD)
+    confidence: float = 0.90
+    template: str = ""
+
+    @field_validator("intent_name")
+    @classmethod
+    def _non_empty_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("intent_name must be non-empty")
+        return v.strip()
+
+    @field_validator("confidence")
+    @classmethod
+    def _confidence_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("confidence must be in [0.0, 1.0]")
+        return v
+
+    def last_update_date(self) -> Optional[date]:
+        """Parse ``last_update`` as a date (or ``None`` if absent/invalid)."""
+        if not self.last_update:
+            return None
+        try:
+            return datetime.strptime(self.last_update.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+
+@dataclass
+class PlaybookMatch:
+    """Result of :meth:`Playbook.lookup`."""
+
+    intent: Intent
+    score: float
+    method: str  # "keyword" or "semantic"
+    # Optional: keywords that actually matched (for explainability)
+    matched_keywords: list[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Parser — extracts ```intent``` / ```yaml``` blocks from a markdown file
+# ---------------------------------------------------------------------------
+
+# Match fenced blocks tagged ``intent`` (preferred) or ``yaml``.
+_INTENT_BLOCK_RE = re.compile(
+    r"^```(?:intent|yaml)\s*\n(.*?)^```",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def parse_procedures_md(path: Path) -> list[Intent]:
+    """Parse a PROCEDURES.md file into a list of :class:`Intent`.
+
+    Fenced code blocks with the tag ``intent`` (or ``yaml`` for flexibility)
+    are extracted and loaded via PyYAML. Blocks that fail validation are
+    logged and skipped so a single malformed entry does not break the entire
+    playbook.
+    """
+    if not path.exists():
+        logger.warning("Playbook: %s nao encontrado", path)
+        return []
+
+    text = path.read_text(encoding="utf-8")
+    intents: list[Intent] = []
+
+    for match in _INTENT_BLOCK_RE.finditer(text):
+        block = match.group(1)
+        try:
+            data = yaml.safe_load(block)
+        except yaml.YAMLError as e:
+            logger.warning("Playbook: YAML invalido num bloco: %s", e)
+            continue
+        if not isinstance(data, dict):
+            logger.debug("Playbook: bloco ignorado (nao e mapping)")
+            continue
+        try:
+            intents.append(Intent.model_validate(data))
+        except Exception as e:
+            name = data.get("intent_name", "<sem nome>") if isinstance(data, dict) else "?"
+            logger.warning("Playbook: intent '%s' invalido: %s", name, e)
+
+    # Check for duplicate intent names — last one wins but we warn
+    seen: dict[str, int] = {}
+    for i, intent in enumerate(intents):
+        if intent.intent_name in seen:
+            logger.warning(
+                "Playbook: intent duplicado '%s' (posicoes %d e %d)",
+                intent.intent_name,
+                seen[intent.intent_name],
+                i,
+            )
+        seen[intent.intent_name] = i
+
+    return intents
+
+
+# ---------------------------------------------------------------------------
+# Variable extraction — regex-based, best-effort
+# ---------------------------------------------------------------------------
+
+
+def _extract_sender_name(sender: str) -> str:
+    """Extract a human-readable name from an RFC-2822 ``From:`` value.
+
+    Examples::
+
+        "João Silva <joao@ufpr.br>" -> "João Silva"
+        "joao@ufpr.br"              -> "joao"
+        "<joao@ufpr.br>"            -> "joao"
+    """
+    if not sender:
+        return ""
+    sender = sender.strip()
+    # "Name <addr>" form
+    m = re.match(r"^\s*([^<]+?)\s*<[^>]+>\s*$", sender)
+    if m:
+        name = m.group(1).strip().strip('"')
+        if name:
+            return name
+    # Bare address — use local part before @
+    m = re.match(r"^\s*<?([^@<>]+)@", sender)
+    if m:
+        return m.group(1)
+    return sender
+
+
+_TCE_RE = re.compile(
+    r"TCE\s*(?:n[º°o]\.?|num\.?|nr?\.?)?\s*[:\-]?\s*(\d{2,6}(?:[/\-]\d{2,6})?)",
+    re.IGNORECASE,
+)
+_SEI_RE = re.compile(r"\b(\d{5}\.\d{6}/\d{4}-\d{2})\b")
+_GRR_RE = re.compile(r"\bGRR\s*[:\-]?\s*(\d{6,10})\b", re.IGNORECASE)
+_DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
+
+
+def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
+    """Best-effort variable extraction from an email for a Tier 0 intent.
+
+    Returns a dict of ``{field_name: value}``. Missing fields are simply
+    absent from the dict — the caller decides whether to fall back to
+    Tier 1 via :func:`missing_required_fields`.
+
+    Fields handled:
+        - nome_aluno         (from sender header)
+        - assinatura_email   (from settings.ASSINATURA_EMAIL)
+        - numero_tce         (regex in subject+body)
+        - numero_processo_sei
+        - grr
+        - data_inicio / data_termino (first date found)
+    """
+    vars: dict[str, str] = {}
+
+    sender_name = _extract_sender_name(email.sender)
+    if sender_name:
+        vars["nome_aluno"] = sender_name
+
+    if settings.ASSINATURA_EMAIL:
+        vars["assinatura_email"] = settings.ASSINATURA_EMAIL
+
+    text = f"{email.subject}\n{email.body or email.preview}"
+
+    m = _TCE_RE.search(text)
+    if m:
+        vars["numero_tce"] = m.group(1)
+
+    m = _SEI_RE.search(text)
+    if m:
+        vars["numero_processo_sei"] = m.group(1)
+
+    m = _GRR_RE.search(text)
+    if m:
+        vars["grr"] = m.group(1)
+
+    dates = _DATE_RE.findall(text)
+    if dates:
+        vars.setdefault("data_inicio", dates[0])
+        if len(dates) >= 2:
+            vars.setdefault("data_termino", dates[-1])
+
+    return vars
+
+
+def missing_required_fields(intent: Intent, vars: dict[str, str]) -> list[str]:
+    """Return the list of required fields for which no value is present."""
+    return [f for f in intent.required_fields if not vars.get(f)]
+
+
+# ---------------------------------------------------------------------------
+# Template filling
+# ---------------------------------------------------------------------------
+
+
+_PLACEHOLDER_RE = re.compile(r"\[([A-Z_][A-Z0-9_]*)\]")
+_JINJA_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+
+
+def fill_template(template: str, vars: dict[str, str]) -> str:
+    """Substitute ``[UPPER_CASE]`` and ``{{ lower_case }}`` placeholders.
+
+    The two placeholder conventions coexist so SOUL.md's existing
+    ``{{ assinatura_email }}`` style works alongside the ``[NOME_ALUNO]``
+    bracket style used elsewhere. Unknown placeholders are left untouched
+    so a human reviewer can spot them.
+    """
+    if not template:
+        return ""
+
+    # Normalize keys so both UPPER and lower are resolvable from either form.
+    lower_vars = {k.lower(): v for k, v in vars.items()}
+
+    def _upper_sub(m: re.Match[str]) -> str:
+        key = m.group(1).lower()
+        return lower_vars.get(key, m.group(0))
+
+    def _jinja_sub(m: re.Match[str]) -> str:
+        key = m.group(1).lower()
+        return lower_vars.get(key, m.group(0))
+
+    result = _PLACEHOLDER_RE.sub(_upper_sub, template)
+    result = _JINJA_VAR_RE.sub(_jinja_sub, result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Playbook — lookup with caching
+# ---------------------------------------------------------------------------
+
+
+class Playbook:
+    """Tier 0 intent router with lazy-loaded embeddings.
+
+    The embedding model is only loaded on the first semantic lookup, so
+    tests that exercise keyword matching do not pay the model load cost.
+    """
+
+    def __init__(
+        self,
+        path: Optional[Path] = None,
+        *,
+        embedding_model: str = "intfloat/multilingual-e5-large",
+        semantic_threshold: float = 0.90,
+    ):
+        self._path = path or PROCEDURES_MD_PATH
+        self._embedding_model_name = embedding_model
+        self._semantic_threshold = semantic_threshold
+
+        self._intents: list[Intent] = []
+        self._parsed = False
+
+        self._model = None
+        self._embeddings = None  # numpy.ndarray | None
+
+    # -- parsing ---------------------------------------------------------
+
+    def _ensure_parsed(self) -> None:
+        if self._parsed:
+            return
+        self._intents = parse_procedures_md(self._path)
+        self._parsed = True
+        logger.info(
+            "Playbook: %d intent(s) carregado(s) de %s", len(self._intents), self._path
+        )
+
+    @property
+    def intents(self) -> list[Intent]:
+        self._ensure_parsed()
+        return list(self._intents)
+
+    def get(self, intent_name: str) -> Optional[Intent]:
+        self._ensure_parsed()
+        for intent in self._intents:
+            if intent.intent_name == intent_name:
+                return intent
+        return None
+
+    # -- embeddings ------------------------------------------------------
+
+    def _ensure_embeddings(self) -> bool:
+        """Lazy-load sentence-transformers + precompute intent embeddings.
+
+        Returns True on success, False if the model / deps are unavailable.
+        In that case the playbook still works in keyword-only mode.
+        """
+        self._ensure_parsed()
+        if self._embeddings is not None:
+            return True
+        if not self._intents:
+            return False
+
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            logger.info(
+                "Playbook: sentence-transformers indisponivel — modo keyword-only"
+            )
+            return False
+
+        try:
+            self._model = SentenceTransformer(self._embedding_model_name)
+        except Exception as e:  # pragma: no cover - network/cache failures
+            logger.warning("Playbook: falha ao carregar %s: %s", self._embedding_model_name, e)
+            return False
+
+        import numpy as np
+
+        texts = [self._intent_to_passage(i) for i in self._intents]
+        embs = self._model.encode(texts, normalize_embeddings=True)
+        self._embeddings = np.asarray(embs, dtype="float32")
+        logger.info("Playbook: %d embedding(s) precomputado(s)", len(self._intents))
+        return True
+
+    @staticmethod
+    def _intent_to_passage(intent: Intent) -> str:
+        """Build the passage text that represents an intent in embedding space."""
+        kw = ", ".join(intent.keywords)
+        return f"passage: {intent.intent_name}. {kw}. {intent.categoria}."
+
+    # -- lookup ----------------------------------------------------------
+
+    def lookup(self, query: str) -> Optional[PlaybookMatch]:
+        """Route *query* to a Tier 0 intent, or return ``None`` for Tier 1.
+
+        Args:
+            query: Raw text (typically ``subject + new_reply``).
+
+        Returns:
+            :class:`PlaybookMatch` on success, ``None`` if no keyword hit
+            and the best semantic score is below the threshold.
+        """
+        self._ensure_parsed()
+        if not self._intents or not query or not query.strip():
+            return None
+
+        # Tier 0.1 — keyword match (cost zero)
+        kw_match = self._keyword_match(query)
+        if kw_match is not None:
+            return kw_match
+
+        # Tier 0.2 — semantic match (precomputed embeddings → one query encode)
+        if not self._ensure_embeddings():
+            return None
+
+        import numpy as np
+
+        query_vec = self._model.encode(
+            f"query: {query}", normalize_embeddings=True
+        )
+        query_vec = np.asarray(query_vec, dtype="float32")
+        sims = self._embeddings @ query_vec  # cosine since both are L2-normalized
+        best_idx = int(np.argmax(sims))
+        best_score = float(sims[best_idx])
+
+        if best_score > self._semantic_threshold:
+            return PlaybookMatch(
+                intent=self._intents[best_idx],
+                score=best_score,
+                method="semantic",
+            )
+        return None
+
+    def _keyword_match(self, query: str) -> Optional[PlaybookMatch]:
+        """Return the intent with the most keyword hits, or ``None``."""
+        best: tuple[Intent, list[str]] | None = None
+        best_count = 0
+
+        for intent in self._intents:
+            matched = []
+            for kw in intent.keywords:
+                kw_norm = kw.strip()
+                if not kw_norm:
+                    continue
+                # Word-boundary, case-insensitive. Multi-word keywords are matched
+                # as literal phrases (accents/punctuation respected).
+                pattern = re.escape(kw_norm)
+                if re.search(pattern, query, re.IGNORECASE):
+                    matched.append(kw_norm)
+            if matched and len(matched) > best_count:
+                best = (intent, matched)
+                best_count = len(matched)
+
+        if best is None:
+            return None
+
+        intent, matched = best
+        return PlaybookMatch(
+            intent=intent, score=1.0, method="keyword", matched_keywords=matched
+        )
+
+    # -- staleness -------------------------------------------------------
+
+    def is_stale(self, intent: Intent, *, rag_mtime: Optional[float] = None) -> bool:
+        """Return True if the RAG corpus is newer than ``intent.last_update``.
+
+        Args:
+            intent: The matched intent.
+            rag_mtime: Override (used by tests). Defaults to the mtime of
+                the LanceDB store file.
+        """
+        last_update = intent.last_update_date()
+        if last_update is None:
+            # No date declared → can't decide → assume fresh.
+            return False
+
+        if rag_mtime is None:
+            if not RAG_STORE_FILE.exists():
+                return False
+            try:
+                rag_mtime = RAG_STORE_FILE.stat().st_mtime
+            except OSError:
+                return False
+
+        rag_date = datetime.fromtimestamp(rag_mtime).date()
+        return rag_date > last_update
+
+    # -- template convenience -------------------------------------------
+
+    def fill(self, intent: Intent, vars: dict[str, str]) -> str:
+        return fill_template(intent.template, vars)
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton — avoids re-parsing the .md file per pipeline run
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=1)
+def get_playbook() -> Playbook:
+    """Return a process-wide cached :class:`Playbook` singleton."""
+    return Playbook()
+
+
+def reset_playbook_cache() -> None:
+    """Drop the cached singleton (used by tests that tweak PROCEDURES.md)."""
+    get_playbook.cache_clear()

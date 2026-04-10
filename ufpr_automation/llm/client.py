@@ -48,7 +48,19 @@ class LLMClient:
     # ------------------------------------------------------------------
 
     def _build_system_instruction(self) -> str:
-        """Combine AGENTS.md (persona) and SOUL.md (norms) into one system prompt."""
+        """Combine AGENTS.md (persona) and SOUL_ESSENTIALS.md (norms summary).
+
+        We deliberately inject only the **essentials slice** of SOUL.md so the
+        per-call system prompt stays small. Detailed knowledge — full SOUL.md
+        sections, resolution texts, FAQs, despacho templates — lives in:
+
+        - PROCEDURES.md (Tier 0 playbook for repetitive intents)
+        - RAG vector store (RAPTOR / flat retrieval injected per email)
+        - Neo4j GraphRAG (workflows, norms, hierarchy)
+
+        If ``SOUL_ESSENTIALS.md`` is missing the client falls back to the full
+        ``SOUL.md`` and logs a warning so the regression is visible.
+        """
         workspace_dir = settings.PACKAGE_ROOT / "workspace"
 
         agents_file = workspace_dir / "AGENTS.md"
@@ -58,16 +70,32 @@ class LLMClient:
             else "Você é um assistente da UFPR."
         )
 
-        soul_file = workspace_dir / "SOUL.md"
-        soul_content = soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
+        essentials_file = workspace_dir / "SOUL_ESSENTIALS.md"
+        if essentials_file.exists():
+            soul_content = essentials_file.read_text(encoding="utf-8")
+        else:
+            soul_file = workspace_dir / "SOUL.md"
+            soul_content = (
+                soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
+            )
+            if soul_content:
+                logger.warning(
+                    "SOUL_ESSENTIALS.md ausente — usando SOUL.md completo "
+                    "(prompt inflado, fallback temporario)"
+                )
 
         if settings.ASSINATURA_EMAIL:
-            soul_content = soul_content.replace("{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL)
+            soul_content = soul_content.replace(
+                "{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL
+            )
 
         return (
             f"{agents_content}\n\n"
-            "=== NORMAS E CONHECIMENTO INSTITUCIONAL ===\n\n"
-            f"{soul_content}"
+            "=== NORMAS ESSENCIAIS (resumo) ===\n\n"
+            f"{soul_content}\n\n"
+            "Para detalhes normativos, use o contexto recuperado pelo RAG "
+            "(injetado abaixo) ou o playbook Tier 0 (já aplicado antes desta "
+            "chamada quando coube)."
         )
 
     # ------------------------------------------------------------------
