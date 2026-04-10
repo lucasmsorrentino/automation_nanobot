@@ -76,6 +76,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="(With --schedule) Run the pipeline once now and exit, instead of starting the scheduler.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap on number of unread emails to fetch for this run. "
+             "Useful for smoke tests. Default: client default (Gmail: 20).",
+    )
     return parser.parse_args()
 
 
@@ -103,7 +110,12 @@ async def run_dry_run() -> None:
     print("👋 Dry run concluído.")
 
 
-async def run_main(headed: bool = False, debug: bool = False, perceber_only: bool = False) -> None:
+async def run_main(
+    headed: bool = False,
+    debug: bool = False,
+    perceber_only: bool = False,
+    limit: int | None = None,
+) -> None:
     """Main execution flow — login, then run the multi-agent pipeline."""
     from ufpr_automation.config.settings import OWA_INBOX_URL
     from ufpr_automation.orchestrator import print_summary, run_pipeline
@@ -176,9 +188,11 @@ async def run_main(headed: bool = False, debug: bool = False, perceber_only: boo
             from ufpr_automation.agents.perceber import PerceberAgent
             agent = PerceberAgent(page)
             emails = await agent.run()
+            if limit is not None:
+                emails = emails[:limit]
             print(f"\n📊 Perceber-only: {len(emails)} e-mail(s) extraído(s) com corpo completo.")
         else:
-            result = await run_pipeline(page)
+            result = await run_pipeline(page, limit=limit)
             print_summary(result)
 
     finally:
@@ -205,7 +219,7 @@ def _print_summary(result: dict) -> None:
     print("Revise os rascunhos no Gmail antes de enviar.")
 
 
-async def run_gmail_channel(use_langgraph: bool = False) -> None:
+async def run_gmail_channel(use_langgraph: bool = False, limit: int | None = None) -> None:
     """Run the pipeline using Gmail IMAP as the email source."""
     print("\n" + "=" * 60)
     if use_langgraph:
@@ -219,7 +233,10 @@ async def run_gmail_channel(use_langgraph: bool = False) -> None:
     if use_langgraph:
         from ufpr_automation.graph.builder import build_graph
         graph = build_graph(channel="gmail")
-        result = graph.invoke({"channel": "gmail"})
+        initial_state: dict = {"channel": "gmail"}
+        if limit is not None:
+            initial_state["limit"] = limit
+        result = graph.invoke(initial_state)
         # Adapt LangGraph state to summary format
         emails = result.get("emails", [])
         classifications = result.get("classifications", {})
@@ -237,7 +254,7 @@ async def run_gmail_channel(use_langgraph: bool = False) -> None:
         _print_summary(summary)
     else:
         from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
-        result = await run_pipeline_gmail()
+        result = await run_pipeline_gmail(limit=limit)
         print_summary(result)
 
     print("\n👋 Execução finalizada.")
@@ -262,12 +279,13 @@ def main() -> None:
     elif args.dry_run:
         asyncio.run(run_dry_run())
     elif channel == "gmail":
-        asyncio.run(run_gmail_channel(use_langgraph=args.langgraph))
+        asyncio.run(run_gmail_channel(use_langgraph=args.langgraph, limit=args.limit))
     else:
         asyncio.run(
             run_main(
                 headed=args.headed,
                 debug=args.debug,
                 perceber_only=args.perceber_only,
+                limit=args.limit,
             )
         )

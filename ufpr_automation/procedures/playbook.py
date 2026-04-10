@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -65,7 +65,15 @@ RAG_STORE_FILE = settings.RAG_STORE_DIR / "ufpr.lance"
 
 
 class Intent(BaseModel):
-    """A single Tier 0 playbook entry."""
+    """A single Tier 0 playbook entry.
+
+    Beyond the classification fields (``categoria``, ``action``) an intent
+    may also describe an SEI workflow step. Fields with the ``sei_`` /
+    ``required_attachments`` / ``blocking_checks`` / ``despacho_template``
+    prefixes are consumed by the ``agir_estagios`` node and the completeness
+    checker; legacy intents that only produce an email reply leave them
+    empty and continue to work unchanged.
+    """
 
     intent_name: str
     keywords: list[str] = Field(default_factory=list)
@@ -76,6 +84,13 @@ class Intent(BaseModel):
     last_update: str = ""  # ISO date (YYYY-MM-DD)
     confidence: float = 0.90
     template: str = ""
+
+    # --- SEI workflow fields (optional; empty/"none" = email-only intent) ---
+    sei_action: Literal["none", "create_process", "append_to_existing"] = "none"
+    sei_process_type: str = ""
+    required_attachments: list[str] = Field(default_factory=list)
+    blocking_checks: list[str] = Field(default_factory=list)
+    despacho_template: str = ""
 
     @field_validator("intent_name")
     @classmethod
@@ -200,12 +215,50 @@ def _extract_sender_name(sender: str) -> str:
 
 
 _TCE_RE = re.compile(
-    r"TCE\s*(?:n[º°o]\.?|num\.?|nr?\.?)?\s*[:\-]?\s*(\d{2,6}(?:[/\-]\d{2,6})?)",
+    r"(?:TCE|Termo\s+de\s+Compromisso(?:\s+de\s+Est[áa]gio)?)"
+    r"\s*(?:n[º°o]\.?|num\.?|nr?\.?)?\s*[:\-]?\s*(\d{2,6}(?:[/\-]\d{2,6})?)",
     re.IGNORECASE,
 )
 _SEI_RE = re.compile(r"\b(\d{5}\.\d{6}/\d{4}-\d{2})\b")
 _GRR_RE = re.compile(r"\bGRR\s*[:\-]?\s*(\d{6,10})\b", re.IGNORECASE)
 _DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
+
+# TCE-specific regex — operate on attachment text (PDFs digitalized into the email)
+_CONCEDENTE_RE = re.compile(
+    r"(?:Concedente|CONCEDENTE|Empresa|Parte\s+Concedente)\s*[:\-]?\s*([^\n\r]{5,120})",
+    re.IGNORECASE,
+)
+_PERIODO_RE = re.compile(
+    r"(?:per[ií]odo|vig[êe]ncia|in[íi]cio)[^\n]{0,50}?(\d{2}/\d{2}/\d{4})"
+    r"[^\n]{0,30}?(?:a|at[ée]|t[ée]rmino)[^\n]{0,30}?(\d{2}/\d{2}/\d{4})",
+    re.IGNORECASE,
+)
+_JORNADA_DIARIA_RE = re.compile(
+    r"(\d{1,2}(?:[.,]\d)?)\s*(?:horas?|h)\s*(?:di[áa]rias?|por\s*dia|ao\s*dia)",
+    re.IGNORECASE,
+)
+_JORNADA_SEMANAL_RE = re.compile(
+    r"(\d{1,2}(?:[.,]\d)?)\s*(?:horas?|h)\s*(?:semanais?|por\s*semana)",
+    re.IGNORECASE,
+)
+_HORARIO_RE = re.compile(
+    r"(\d{1,2})\s*[:h](\d{2})?\s*(?:às|as|até|-|–)\s*(\d{1,2})\s*[:h](\d{2})?",
+    re.IGNORECASE,
+)
+
+
+def _attachments_text(email: EmailData) -> str:
+    """Concatenate extracted text from all attachments.
+
+    Used by TCE/Aditivo intents that need to pull dates, concedente name,
+    and jornada from the actual document rather than the email body.
+    """
+    parts: list[str] = []
+    for att in getattr(email, "attachments", None) or []:
+        text = getattr(att, "extracted_text", "") or ""
+        if text:
+            parts.append(text)
+    return "\n".join(parts)
 
 
 def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
@@ -216,12 +269,16 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     Tier 1 via :func:`missing_required_fields`.
 
     Fields handled:
-        - nome_aluno         (from sender header)
-        - assinatura_email   (from settings.ASSINATURA_EMAIL)
-        - numero_tce         (regex in subject+body)
-        - numero_processo_sei
-        - grr
-        - data_inicio / data_termino (first date found)
+        - nome_aluno               (from sender header)
+        - assinatura_email         (from settings.ASSINATURA_EMAIL)
+        - numero_tce               (regex in subject+body+attachments)
+        - numero_processo_sei      (idem)
+        - grr                      (idem)
+        - data_inicio / data_fim   (first/last date found in body OR attachments)
+        - nome_concedente          (TCE attachment text)
+        - horas_diarias            (TCE attachment text)
+        - horas_semanais           (TCE attachment text)
+        - jornada_horario_inicio   (TCE attachment text; HH:MM)
     """
     vars: dict[str, str] = {}
 
@@ -232,25 +289,58 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     if settings.ASSINATURA_EMAIL:
         vars["assinatura_email"] = settings.ASSINATURA_EMAIL
 
-    text = f"{email.subject}\n{email.body or email.preview}"
+    body_text = f"{email.subject}\n{email.body or email.preview}"
+    attach_text = _attachments_text(email)
+    # Search body first, then fall back to attachment text — email body
+    # wins when both exist so student edits override TCE PDF boilerplate.
+    combined = f"{body_text}\n{attach_text}"
 
-    m = _TCE_RE.search(text)
+    m = _TCE_RE.search(combined)
     if m:
         vars["numero_tce"] = m.group(1)
 
-    m = _SEI_RE.search(text)
+    m = _SEI_RE.search(combined)
     if m:
         vars["numero_processo_sei"] = m.group(1)
 
-    m = _GRR_RE.search(text)
+    m = _GRR_RE.search(combined)
     if m:
         vars["grr"] = m.group(1)
 
-    dates = _DATE_RE.findall(text)
-    if dates:
-        vars.setdefault("data_inicio", dates[0])
-        if len(dates) >= 2:
-            vars.setdefault("data_termino", dates[-1])
+    # Prefer "período DD/MM/YYYY a DD/MM/YYYY" from the TCE text; otherwise
+    # fall back to first/last bare date in the combined text.
+    m = _PERIODO_RE.search(attach_text) or _PERIODO_RE.search(body_text)
+    if m:
+        vars["data_inicio"] = m.group(1)
+        vars["data_fim"] = m.group(2)
+        vars.setdefault("data_termino", m.group(2))  # legacy alias
+    else:
+        dates = _DATE_RE.findall(combined)
+        if dates:
+            vars.setdefault("data_inicio", dates[0])
+            if len(dates) >= 2:
+                vars.setdefault("data_fim", dates[-1])
+                vars.setdefault("data_termino", dates[-1])
+
+    # Attachment-only fields (TCE body boilerplate)
+    if attach_text:
+        m = _CONCEDENTE_RE.search(attach_text)
+        if m:
+            vars["nome_concedente"] = m.group(1).strip().rstrip(".;,")
+
+        m = _JORNADA_DIARIA_RE.search(attach_text)
+        if m:
+            vars["horas_diarias"] = m.group(1).replace(",", ".")
+
+        m = _JORNADA_SEMANAL_RE.search(attach_text)
+        if m:
+            vars["horas_semanais"] = m.group(1).replace(",", ".")
+
+        m = _HORARIO_RE.search(attach_text)
+        if m:
+            hh = int(m.group(1))
+            mm = int(m.group(2) or 0)
+            vars["jornada_horario_inicio"] = f"{hh:02d}:{mm:02d}"
 
     return vars
 

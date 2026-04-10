@@ -111,8 +111,16 @@ VIEWPORT = {"width": 1366, "height": 768}
 # Institutional Info
 # ============================================================================
 
-# Official Signature of the user/department to append to emails
-ASSINATURA_EMAIL = os.getenv("ASSINATURA_EMAIL")
+# Official Signature of the user/department to append to emails.
+# Stored as a single-line value in .env with literal "\n" — this block
+# decodes them to real line breaks so the signature renders correctly.
+_assinatura_raw = os.getenv("ASSINATURA_EMAIL")
+ASSINATURA_EMAIL = _assinatura_raw.replace("\\n", "\n") if _assinatura_raw else None
+
+# Default Cc applied to every generated email draft (empty = disabled).
+# Intended for the shared secretaria mailbox so every response is archived
+# in the institutional inbox automatically.
+EMAIL_CC_DEFAULT = os.getenv("EMAIL_CC_DEFAULT", "").strip()
 
 
 # ============================================================================
@@ -233,6 +241,16 @@ USE_DSPY = os.getenv("USE_DSPY", "auto").lower()
 SEI_WRITE_ARTIFACTS_DIR = Path(
     os.getenv("SEI_WRITE_ARTIFACTS_DIR", str(_PACKAGE_DIR / "procedures_data" / "sei_writes"))
 )
+
+# SEI write mode — controls whether SEIWriter actually clicks in SEI.
+#   dry_run (default) — logs intended operations, captures screenshots,
+#                       but does NOT click anything in SEI. Safe to run
+#                       in production while the Playwright selectors are
+#                       still being validated.
+#   live              — full Playwright flow (requires selector capture
+#                       from a real SEI session; currently raises
+#                       NotImplementedError in all three write methods).
+SEI_WRITE_MODE = os.getenv("SEI_WRITE_MODE", "dry_run").lower()
 
 
 # ============================================================================

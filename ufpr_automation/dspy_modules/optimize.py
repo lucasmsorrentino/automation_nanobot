@@ -63,7 +63,7 @@ def _load_feedback_examples() -> list[dspy.Example]:
 def _configure_lm():
     """Configure DSPy to use the project's LLM via LiteLLM."""
     lm = dspy.LM(
-        model=f"litellm/{settings.LLM_MODEL}",
+        model=settings.LLM_MODEL,
         temperature=0.2,
     )
     dspy.configure(lm=lm)

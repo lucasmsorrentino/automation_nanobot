@@ -31,6 +31,7 @@ class EmailState(TypedDict, total=False):
 
     # Input
     channel: str  # "gmail" or "owa"
+    limit: int  # optional cap on how many unread emails to fetch (None/absent = default)
 
     # Perceber output
     emails: list[EmailData]

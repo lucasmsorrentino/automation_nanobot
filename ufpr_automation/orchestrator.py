@@ -51,11 +51,15 @@ def _save_run_results_gmail(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-async def run_pipeline_gmail() -> dict:
+async def run_pipeline_gmail(limit: int | None = None) -> dict:
     """Execute the pipeline using Gmail IMAP as the email source.
 
     Reads forwarded emails from Gmail, classifies them via LLM,
     and saves draft replies back to Gmail's Drafts folder.
+
+    Args:
+        limit: Optional cap on number of unread emails to fetch. ``None``
+            defers to :meth:`GmailClient.list_unread` default (20).
 
     Returns:
         Summary dict matching run_pipeline() format.
@@ -65,7 +69,7 @@ async def run_pipeline_gmail() -> dict:
     from ufpr_automation.attachments import extract_text_from_attachment
 
     gmail = GmailClient()
-    emails = gmail.list_unread()
+    emails = gmail.list_unread(limit=limit) if limit is not None else gmail.list_unread()
 
     # Extract text from attachments
     total_atts = 0
@@ -124,11 +128,14 @@ async def run_pipeline_gmail() -> dict:
     }
 
 
-async def run_pipeline(page: Page) -> dict:
+async def run_pipeline(page: Page, limit: int | None = None) -> dict:
     """Execute the full Perceber → Pensar → Agir pipeline.
 
     Args:
         page: An authenticated Playwright page already on the OWA inbox.
+        limit: Optional cap on the number of scraped emails to carry into
+            the Pensar/Agir phases. ``None`` means process everything the
+            PerceberAgent finds.
 
     Returns:
         Summary dict with keys:
@@ -146,6 +153,8 @@ async def run_pipeline(page: Page) -> dict:
     # ------------------------------------------------------------------ #
     perceber = PerceberAgent(page)
     emails = await perceber.run()
+    if limit is not None:
+        emails = emails[:limit]
 
     if not emails:
         return {

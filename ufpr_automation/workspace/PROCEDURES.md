@@ -68,40 +68,89 @@ keywords:
   - "abrir estágio"
   - "encaminhar TCE"
   - "começar estágio"
+  - "assinatura TCE"
 categoria: "Estágios"
 action: "Redigir Resposta"
+sei_action: "create_process"
+sei_process_type: "Graduação/Ensino Técnico: Estágios não Obrigatórios"
 required_fields:
   - nome_aluno
+  - grr
+  - numero_tce
+  - nome_concedente
+  - data_inicio
+  - data_fim
+required_attachments:
+  - "TCE"                 # Termo de Compromisso de Estágio assinado
+                          # (o Plano de Atividades via de regra vem
+                          #  embutido no mesmo PDF do TCE — não é anexo
+                          #  separado no SEI)
+blocking_checks:
+  - "siga_matricula_ativa"              # HARD: trancada/cancelada/integralizada
+  - "siga_reprovacoes_ultimo_semestre"  # SOFT: > 1 → exigir justificativa formal
+  - "siga_reprovacao_por_falta"         # HARD: regra específica Design Gráfico
+  - "siga_curriculo_integralizado"      # HARD: não pode estágio não-obrig. se já integralizou
+  - "siga_ch_simultaneos_30h"           # HARD: soma de estágios > 30h/semana
+  - "siga_concedente_duplicada"         # HARD: dois estágios simultâneos na mesma concedente
+  - "data_inicio_retroativa"            # HARD: início < hoje
+  - "data_inicio_antecedencia_minima"   # HARD: início - hoje < 2 dias úteis
+  - "tce_jornada_sem_horario"           # HARD: TCE não especifica horário da jornada
+  - "tce_jornada_antes_meio_dia"        # HARD (exceto se curriculo_integralizado): aulas de manhã
+  - "sei_processo_vigente_duplicado"    # HARD: já existe processo VIGENTE do mesmo tipo para este aluno
 sources:
   - "Lei 11.788/2008"
   - "Resolução 46/10-CEPE"
   - "IN 01/12-CEPE"
   - "Regulamento de Estágio do Curso de Design Gráfico (2024)"
-  - "manual_sei.txt §Estágio Não Obrigatório"
-last_update: "2026-04-09"
+  - "SOUL.md §7, §8.1, §11, §12, §14.1, §15.1"
+  - "base_conhecimento/manual_sei.txt §Estágio Não Obrigatório"
+last_update: "2026-04-10"
 confidence: 0.90
+
+# Email de acuse ao aluno — usado APÓS o processo SEI ter sido criado e
+# o TCE + Despacho anexados, para que a variável [NUMERO_PROCESSO_SEI] seja
+# preenchida com o número real do processo recém-criado.
 template: |
   Prezado(a) [NOME_ALUNO],
 
-  A Coordenação do Curso de Design Gráfico acusa o recebimento da
-  documentação referente ao Termo de Compromisso de Estágio nº [NUMERO_TCE]
-  do(a) estudante [NOME_ALUNO], GRR [GRR], a ser realizado na
-  [NOME_CONCEDENTE].
+  A Coordenação do Curso de Design Gráfico acusa o recebimento do Termo de
+  Compromisso de Estágio nº [NUMERO_TCE] do(a) estudante [NOME_ALUNO], GRR
+  [GRR], a ser realizado na [NOME_CONCEDENTE], no período de [DATA_INICIO]
+  a [DATA_FIM].
 
-  A documentação será incluída em processo SEI individual do tipo
-  "Graduação/Ensino Técnico: Estágios não Obrigatórios" e encaminhada à
-  COAPPE (estagio@ufpr.br) para verificação e autorização. Eventuais
-  pendências serão comunicadas oportunamente.
+  A documentação foi incluída no processo SEI nº [NUMERO_PROCESSO_SEI] e
+  encaminhada à Unidade de Estágios da COAPPE/PROGRAP (estagio@ufpr.br) para
+  verificação e autorização. Eventuais pendências serão comunicadas
+  oportunamente.
 
   Informamos que o estágio somente poderá ter início após a autorização
-  formal pela COAPPE, conforme estabelece a Resolução 46/10-CEPE e o
+  formal pela UE/COAPPE, conforme estabelece a Resolução 46/10-CEPE e o
   Regulamento de Estágio do Curso de Design Gráfico. Não é permitida
-  homologação com data retroativa, motivo pelo qual o TCE deve chegar
-  com pelo menos 10 dias de antecedência ao início pretendido.
+  homologação com data retroativa, motivo pelo qual o TCE deve chegar com
+  pelo menos 2 dias úteis de antecedência ao início pretendido.
 
   Em caso de dúvidas, a COAPPE atende pelo telefone (41) 3310-2706.
 
   {{ assinatura_email }}
+
+# Despacho SEI (SOUL.md §14.1) — incluído no processo junto com o TCE.
+# Os campos [HORAS_DIARIAS] / [HORAS_SEMANAIS] / datas / nome da concedente
+# são extraídos do texto do TCE anexado pelo ``extract_variables`` estendido.
+despacho_template: |
+  Prezados,
+
+          A Coordenação do Curso de Design Gráfico acusa o recebimento do Termo de
+  Compromisso de Estágio nº [NUMERO_TCE] (SEI [NUMERO_SEI_TCE]) e manifesta-se favorável
+  à realização do Estágio Não Obrigatório do estudante [NOME_ALUNO_MAIUSCULAS],
+  [GRR], na [NOME_CONCEDENTE_MAIUSCULAS], no período de [DATA_INICIO] a [DATA_FIM],
+  com jornada de [HORAS_DIARIAS] horas diárias, totalizando [HORAS_SEMANAIS] horas
+  semanais, sendo a jornada realizada de forma compatível com as atividades
+  acadêmicas.
+
+          Por este despacho, declaro também minha assinatura no referido documento, que
+  corresponde tanto como professora orientadora do estágio quanto como coordenadora de
+  curso, e informamos que ratifica-se integralmente o Termo de Compromisso de Estágio
+  nº [NUMERO_TCE], anexo a este processo, para todos os fins legais.
 ```
 
 ```intent

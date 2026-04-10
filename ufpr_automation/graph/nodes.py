@@ -21,9 +21,10 @@ def perceber_gmail(state: EmailState) -> dict[str, Any]:
     """Read unread emails from Gmail IMAP."""
     from ufpr_automation.gmail.client import GmailClient
 
+    limit = state.get("limit")
     try:
         client = GmailClient()
-        emails = client.list_unread()
+        emails = client.list_unread(limit=limit) if limit is not None else client.list_unread()
         logger.info("Perceber (Gmail): %d e-mail(s) nao lido(s)", len(emails))
         return {"emails": emails, "errors": state.get("errors", [])}
     except Exception as e:
@@ -41,8 +42,11 @@ def perceber_owa(state: EmailState) -> dict[str, Any]:
     (auto-login with MFA via Telegram if credentials configured), scrapes
     inbox, and closes the browser.
     """
+    limit = state.get("limit")
     try:
         emails = asyncio.run(_perceber_owa_async())
+        if limit is not None:
+            emails = emails[:limit]
         logger.info("Perceber (OWA): %d e-mail(s) nao lido(s)", len(emails))
         return {"emails": emails, "errors": state.get("errors", [])}
     except Exception as e:

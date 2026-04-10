@@ -93,9 +93,21 @@ python -m ufpr_automation.aflow.cli --topologies baseline,fleet --limit 10
 AFLOW_TOPOLOGY=baseline python -m ufpr_automation --channel gmail   # força baseline em runtime
 AFLOW_TOPOLOGY=fleet    python -m ufpr_automation --channel gmail   # default
 
-# SEI write ops (Marco III) — APENAS attach + draft, NUNCA sign/send/protocol
-# Verificar API pública (deve listar SÓ attach_document e save_despacho_draft):
+# SEI write ops (Marco III + IV) — NUNCA sign/send/protocol
+# Marco IV expandiu a API para 3 métodos:
+#   create_process, attach_document, save_despacho_draft
 python -c "from ufpr_automation.sei.writer import SEIWriter; print([m for m in dir(SEIWriter) if not m.startswith('_')])"
+
+# SEI_WRITE_MODE (Marco IV) — dry_run (default, safe) | live
+# dry_run: loga intenção + screenshot, NÃO clica em nada no SEI
+# live:    fluxo Playwright completo (requer seletores capturados — pendente)
+SEI_WRITE_MODE=dry_run python -m ufpr_automation --channel gmail --langgraph
+
+# Listar checkers de completeness registrados (Marco IV)
+python -c "from ufpr_automation.procedures.checkers import registered_checkers; print('\n'.join(registered_checkers()))"
+
+# Ver catálogo de classificações de documentos SEI (Marco IV)
+cat ufpr_automation/workspace/SEI_DOC_CATALOG.yaml
 
 # GraphRAG — Neo4j knowledge graph (Marco III, requires neo4j running on bolt://localhost:7687)
 pip install -e ".[marco3]"
@@ -142,7 +154,7 @@ An ultra-lightweight AI agent framework. The agent implements a simple sense →
 
 ### ufpr_automation (sub-project)
 
-A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco I+II+II.5+III unified** phase — all marcos completed (Hybrid Memory Tier 0 + LangGraph Fleet + AFlow + SEIWriter + GraphRAG TemplateRegistry + DSPy USE_DSPY gate). Refinements pending: validation in production, real ablation logic for AFlow variants, BrowserPagePool wire-up in SEI/SIGA helpers.
+A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco IV in progress** — Marcos I/II/II.5/III ✅ complete (Hybrid Memory Tier 0 + LangGraph Fleet + AFlow + SEIWriter + GraphRAG TemplateRegistry + DSPy USE_DSPY gate). Marco IV delivers Estágios end-to-end: extended `Intent` model (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11-checker registry in `procedures/checkers.py`, `SEIWriter.create_process` skeleton, dry-run mode on all 3 write ops. **Blocked on**: Playwright selector capture from a live SEI session to flip `SEI_WRITE_MODE=live`. Refinements pending: validation in production, real ablation logic for AFlow variants, BrowserPagePool wire-up in SEI/SIGA helpers. See `TASKS.md` for the Marco IV priority list.
 
 **Hybrid Memory (Tier 0 / Tier 1)** — the pipeline now routes every incoming email through a zero-cost playbook before spending RAG + LLM cycles:
 

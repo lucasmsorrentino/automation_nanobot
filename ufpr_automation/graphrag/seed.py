@@ -197,9 +197,9 @@ def _seed_orgaos(client: Neo4jClient) -> int:
 def _seed_pessoas(client: Neo4jClient) -> int:
     """Create people nodes (docentes, coordination)."""
     cypher = """
-    MERGE (carol:Pessoa {nome: 'Carolina Calomeno Machado', titulo: 'Dra.',
-           cargo: 'Coordenadora do Curso de Design Gráfico'})
     MERGE (stepha:Pessoa {nome: 'Stephania Padovani', titulo: 'Dra.',
+           cargo: 'Coordenadora do Curso de Design Gráfico'})
+    MERGE (carol:Pessoa {nome: 'Carolina Calomeno Machado', titulo: 'Dra.',
            cargo: 'Vice-Coordenadora do Curso de Design Gráfico'})
     MERGE (lucas:Pessoa {nome: 'Lucas Martins Sorrentino',
            cargo: 'Secretário do Curso de Design Gráfico'})
@@ -226,8 +226,8 @@ def _seed_pessoas(client: Neo4jClient) -> int:
     MERGE (p_coord:Papel {nome: 'Coordenador'})
     MERGE (p_vice:Papel {nome: 'Vice-Coordenador'})
     MERGE (p_secr:Papel {nome: 'Secretário'})
-    MERGE (carol)-[:EXERCE]->(p_coord)
-    MERGE (stepha)-[:EXERCE]->(p_vice)
+    MERGE (stepha)-[:EXERCE]->(p_coord)
+    MERGE (carol)-[:EXERCE]->(p_vice)
     MERGE (lucas)-[:EXERCE]->(p_secr)
 
     RETURN count(*) AS ops

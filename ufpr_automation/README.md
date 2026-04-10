@@ -138,18 +138,41 @@ AFLOW_TOPOLOGY=baseline python -m ufpr_automation --channel gmail
 AFLOW_TOPOLOGY=fleet    python -m ufpr_automation --channel gmail   # default
 ```
 
-### SEI write ops (Marco III)
+### SEI write ops (Marco III + Marco IV)
 
 ```python
-# Apenas attach_document e save_despacho_draft estão disponíveis.
+# Marco IV expandiu a API pública para 3 métodos:
+#   - create_process       (iniciar processo SEI novo)
+#   - attach_document      (anexar documento Externo com classificação)
+#   - save_despacho_draft  (lavrar Despacho no editor rich-text)
 # NUNCA existem métodos sign/send/protocol/finalize.
 from ufpr_automation.sei.writer import SEIWriter
+from ufpr_automation.sei.writer_models import SEIDocClassification
 
-# Verificar API pública (deve listar SÓ attach_document e save_despacho_draft)
+# Verificar API pública
 python -c "from ufpr_automation.sei.writer import SEIWriter; print([m for m in dir(SEIWriter) if not m.startswith('_')])"
 ```
 
-Variável `SEI_WRITE_ARTIFACTS_DIR` controla onde screenshots, DOM dumps e audit JSONL ficam (default: `procedures_data/sei_writes/`).
+**Modo dry-run (Marco IV, default)**: as três operações capturam screenshots + audit mas **não clicam em nada no SEI**. Setado via `SEI_WRITE_MODE=dry_run` no `.env` (ou omitido). Use dry-run para validar a lógica de `agir_estagios` contra emails reais sem risco. Para habilitar `SEI_WRITE_MODE=live`, os seletores Playwright precisam ser capturados primeiro contra uma sessão SEI real (ver `TASKS.md` §"Prioridade — Marco IV").
+
+Variáveis:
+- `SEI_WRITE_ARTIFACTS_DIR` — onde ficam screenshots, DOM dumps e audit JSONL (default: `procedures_data/sei_writes/`).
+- `SEI_WRITE_MODE` — `dry_run` (default, safe) ou `live` (requer seletores).
+
+### Marco IV — Estágios end-to-end (em andamento)
+
+Workflow objetivo: receber TCE por email → extrair dados do PDF anexado → criar processo SEI → anexar TCE (tipo Externo/Termo/Inicial, sigiloso) → lavrar Despacho → rascunhar email de acuse. O pipeline lógico está pronto (Intent estendido, checker registry, doc catalog, SEIWriter dry-run); falta wire-up no graph + captura de seletores Playwright.
+
+```bash
+# Ver o catálogo de classificações SEI
+cat ufpr_automation/workspace/SEI_DOC_CATALOG.yaml
+
+# Ver o intent expandido
+sed -n '/estagio_nao_obrig_acuse_inicial/,/^```$/p' ufpr_automation/workspace/PROCEDURES.md
+
+# Listar checkers registrados
+python -c "from ufpr_automation.procedures.checkers import registered_checkers; print('\n'.join(registered_checkers()))"
+```
 
 ## Configuração (`.env`)
 
@@ -164,6 +187,12 @@ GMAIL_APP_PASSWORD=...
 # LLM
 MINIMAX_API_KEY=...
 LLM_MODEL=minimax/MiniMax-M2
+
+# Assinatura e Cc default (Marco IV)
+# Single-line com "\n" literais; settings.py decodifica para line breaks reais
+ASSINATURA_EMAIL=Att,\nNome\n...\nE-mail\nURL\nTelefone
+# Cc automático em todo rascunho gerado (deixe vazio para desativar)
+EMAIL_CC_DEFAULT=design.grafico@ufpr.br
 
 # RAG (Google Drive compartilhado)
 RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store
@@ -194,6 +223,11 @@ AFLOW_EVAL_LIMIT=20
 
 # SEI write artifacts (Marco III)
 SEI_WRITE_ARTIFACTS_DIR=         # opcional, default: procedures_data/sei_writes
+
+# SEI write mode (Marco IV) — dry_run (safe default) | live
+# dry_run: loga intenção + screenshot, não clica em nada no SEI
+# live:    fluxo Playwright completo (requer seletores capturados)
+SEI_WRITE_MODE=dry_run
 
 # OWA fallback (apenas se EMAIL_CHANNEL=owa)
 OWA_EMAIL=...

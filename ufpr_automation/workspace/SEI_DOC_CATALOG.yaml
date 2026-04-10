@@ -1,0 +1,62 @@
+# SEI_DOC_CATALOG.yaml
+#
+# Catálogo de classificações de documentos no SEI por rótulo semântico.
+#
+# Os rótulos (chaves de nível superior) são consumidos pelo Tier 0 playbook
+# via `required_attachments` em PROCEDURES.md. O nó `agir_estagios` consulta
+# este catálogo para determinar como classificar cada anexo ao chamá-lo
+# através de `SEIWriter.attach_document`.
+#
+# Hierarquia do formulário "Incluir Documento" do SEI (tipo Externo):
+#   tipo       → "Externo" (sempre) ou "Despacho" (gerado no editor SEI)
+#   subtipo    → "Termo" | "Relatório" (para Externo)
+#   classificacao → "Inicial" | "Aditivo" | "Rescisão" | "Parcial" | "Final"
+#
+# Todos os anexos de estágio são marcados como sigilosos com hipótese legal
+# "Informação Pessoal" (LGPD / Art. 31 da Lei nº 12.527/2011). Se o texto
+# exato do selector da hipótese legal mudar no SEI, ajustar `motivo_sigilo`
+# (e os seletores em sei/writer.py).
+
+TCE:
+  sei_tipo: Externo
+  sei_subtipo: Termo
+  sei_classificacao: Inicial
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+  nota: "Plano de Atividades via de regra vem embutido no mesmo PDF; não é anexo separado."
+
+Termo Aditivo:
+  sei_tipo: Externo
+  sei_subtipo: Termo
+  sei_classificacao: Aditivo
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+
+Termo de Rescisão:
+  sei_tipo: Externo
+  sei_subtipo: Termo
+  sei_classificacao: Rescisão
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+
+Relatório Parcial:
+  sei_tipo: Externo
+  sei_subtipo: Relatório
+  sei_classificacao: Parcial
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+
+Relatório Final:
+  sei_tipo: Externo
+  sei_subtipo: Relatório
+  sei_classificacao: Final
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+
+Ficha de Avaliação:
+  sei_tipo: Externo
+  sei_subtipo: Relatório
+  sei_classificacao: Final
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+  nota: "Alguns consideram 'relatório do supervisor'; classificado como Relatório Final no SEI."

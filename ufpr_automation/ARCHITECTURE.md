@@ -1,6 +1,6 @@
 # Arquitetura — Sistema de Automação Burocrática UFPR
 
-> **Status atual:** Marcos I, II, II.5 e III ✅ completos. Refinamentos operacionais pendentes (validação em produção, ablations reais do AFlow, wire-up do BrowserPagePool em SEI/SIGA).
+> **Status atual:** Marcos I, II, II.5, III ✅ completos. Marco IV (Estágios end-to-end) 🟡 em andamento — lógica pronta, bloqueado em captura de seletores Playwright para habilitar `SEI_WRITE_MODE=live`.
 > Veja `TASKS.md` para o roadmap restante.
 
 ## Visão geral das 3 fases
@@ -179,13 +179,89 @@ Pool assíncrono de pages Playwright derivadas de um único `BrowserContext` com
 
 ### SEIWriter (`sei/writer.py`)
 
-Camada de escrita controlada para SEI. **Public API limitada a `attach_document` e `save_despacho_draft`**. Não existem métodos `sign()`, `send()`, `protocol()` ou `finalize()` — a ausência arquitetural é o mecanismo principal de safety. Belt + suspenders:
+Camada de escrita controlada para SEI. **Public API expandida para `attach_document`, `save_despacho_draft` e `create_process`** (Marco IV adicionou o último). Não existem métodos `sign()`, `send()`, `protocol()` ou `finalize()` — a ausência arquitetural continua sendo o mecanismo principal de safety. Belt + suspenders:
 
-1. **Whitelist do public API**: `test_writer_public_api_is_only_attach_and_draft` falha se qualquer método novo aparecer.
+1. **Whitelist do public API**: `test_writer_public_api_is_only_attach_and_draft` verifica a superfície pública.
 2. **6 testes regressivos** verificam ausência de `sign`, `assinar`, `send`, `enviar`, `enviar_processo`, `protocol`, `protocolar`, `finalize`.
 3. **Static scan** do código fonte por `.click('text=Assinar')`, `.click('text=Enviar')`, `.click('text=Protocolar')` em `test_no_method_body_references_forbidden_keywords`.
 4. **`_FORBIDDEN_SELECTORS` runtime guard**: `_safe_click(selector)` valida cada clique contra a lista de tokens proibidos antes de executar; lança `PermissionError` se algum bater.
 5. **Audit trail**: cada operação grava screenshot pré + DOM dump pós + entrada JSONL em `SEI_WRITE_ARTIFACTS_DIR/audit.jsonl` com sha256 do arquivo/conteúdo.
+
+**Dry-run mode (Marco IV)**: o construtor aceita `dry_run: bool` (default vem de `settings.SEI_WRITE_MODE`, que por sua vez default é `"dry_run"`). Em dry-run as três operações capturam screenshots/audit + retornam `success=True, dry_run=True` sem clicar em NADA no SEI. `create_process` retorna um `processo_id` sintético `"DRYRUN-<run_id>"` para que downstream possa encadear `attach_document` e `save_despacho_draft`. O modo `live` ainda raise `NotImplementedError` nas três ops — os seletores Playwright precisam ser capturados contra um SEI real antes de flipar para live.
+
+**`attach_document(processo_id, file_path, classification: SEIDocClassification)`** exige a classificação estruturada do documento, mirroring o formulário "Incluir Documento" do SEI:
+```
+tipo          → "Externo" (upload) | "Despacho" (gerado no editor)
+subtipo       → "Termo" | "Relatório" (apenas Externo)
+classificacao → "Inicial" | "Aditivo" | "Rescisão" | "Parcial" | "Final"
+sigiloso      → True por default (LGPD)
+motivo_sigilo → "Informação Pessoal" (Hipótese Legal)
+data_documento → ISO (vazio = hoje)
+```
+
+**`save_despacho_draft(processo_id, tipo, variables, body_override=None)`** aceita `body_override` (Marco IV) para que o `agir_estagios` node passe direto o `despacho_template` do intent Tier 0 sem depender do lookup via `TemplateRegistry` (evita round-trip ao Neo4j quando o texto já está no playbook).
+
+**`create_process(tipo_processo, especificacao, interessado, motivo="")`** inicia um processo SEI novo, preenchendo "Iniciar Processo" → Tipo do Processo → Especificação → Interessado → Nível de Acesso Restrito → Hipótese Legal Informação Pessoal → Salvar. A única ação permitida é Salvar — nunca tramita.
+
+### Playbook estendido + checker registry (`procedures/`)
+
+Marco IV estendeu o modelo `Intent` (`procedures/playbook.py:67`) com 5 campos opcionais que descrevem o workflow SEI de um intent:
+
+| Campo | Tipo | Semântica |
+|---|---|---|
+| `sei_action` | `"none" \| "create_process" \| "append_to_existing"` | Decide se o `agir_estagios` cria processo novo, anexa em existente, ou só responde email |
+| `sei_process_type` | `str` | Rótulo do "Tipo do Processo" no SEI (ex.: "Graduação/Ensino Técnico: Estágios não Obrigatórios") |
+| `required_attachments` | `list[str]` | Rótulos semânticos exigidos; resolvidos via `SEI_DOC_CATALOG.yaml` para obter a classificação SEI |
+| `blocking_checks` | `list[str]` | IDs de checkers registrados em `procedures/checkers.py` que validam pré-condições (matrícula ativa, reprovações, jornada, datas, etc.) |
+| `despacho_template` | `str` | Corpo do Despacho a ser pasted no rich-text editor do SEI (separado do `template` que é o rascunho de email) |
+
+Os 24 intents legados continuam funcionando sem mudança — os novos campos têm defaults inertes.
+
+**`procedures/checkers.py`** implementa um registry de funções de check com decorator `@register("id")` e modelo tri-state `pass | soft_block | hard_block`. Um `CheckSummary` agrega resultados; `.can_proceed` é `True` só quando não há bloqueios; `.needs_justification` sinaliza quando há soft blocks mas não hard blocks (usado pelo `agir_estagios` para decidir entre "criar processo" ou "pedir justificativa formal ao aluno"). Checkers ausentes do SIGA/SEI context caem em soft_block com `"SIGA não consultado — requer verificação manual"` ao invés de falharem silenciosamente.
+
+11 checkers registrados para o intent `estagio_nao_obrig_acuse_inicial`:
+
+| Checker ID | Tipo | Condição |
+|---|---|---|
+| `siga_matricula_ativa` | HARD | Status ≠ ATIVA (trancada/cancelada/integralizada) |
+| `siga_reprovacoes_ultimo_semestre` | SOFT | > 1 reprovação → exige justificativa formal |
+| `siga_reprovacao_por_falta` | HARD | Reprovação por falta (regra específica DG) |
+| `siga_curriculo_integralizado` | HARD | Currículo já integralizado (não pode estágio não-obrig.) |
+| `siga_ch_simultaneos_30h` | HARD | Soma das CHs de estágios ativos + novo TCE > 30h/semana |
+| `siga_concedente_duplicada` | HARD | Mesma concedente em dois estágios simultâneos |
+| `data_inicio_retroativa` | HARD | Data de início < hoje (homologação retroativa não permitida) |
+| `data_inicio_antecedencia_minima` | HARD | Antecedência < 2 dias úteis |
+| `tce_jornada_sem_horario` | HARD | TCE não especifica horário da jornada |
+| `tce_jornada_antes_meio_dia` | HARD (exceto se integralizado) | Jornada começa < 12h00 e aluno não cursou tudo |
+| `sei_processo_vigente_duplicado` | HARD | Já existe processo SEI vigente do mesmo tipo para o aluno |
+
+### SEI_DOC_CATALOG (`workspace/SEI_DOC_CATALOG.yaml`)
+
+Catálogo YAML que mapeia rótulos semânticos (usados em `required_attachments` no playbook) para a classificação SEI. Exemplo:
+
+```yaml
+TCE:
+  sei_tipo: Externo
+  sei_subtipo: Termo
+  sei_classificacao: Inicial
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+  nota: "Plano de Atividades via de regra vem embutido no mesmo PDF; não é anexo separado."
+```
+
+6 rótulos catalogados: `TCE`, `Termo Aditivo`, `Termo de Rescisão`, `Relatório Parcial`, `Relatório Final`, `Ficha de Avaliação` (classificada como Relatório Final).
+
+### Extração de variáveis do TCE anexado (`procedures/playbook.py:extract_variables`)
+
+Marco IV estendeu `extract_variables` para consumir `email.attachments[*].extracted_text`. Novos regexes capturam do texto do TCE:
+
+- `numero_tce` (agora também reconhece "Termo de Compromisso de Estágio Nº X", não só a sigla "TCE")
+- `nome_concedente` (extraído de "Concedente: NOME" ou "Parte Concedente:")
+- `data_inicio` / `data_fim` (preferência por padrão "Período DD/MM/YYYY a DD/MM/YYYY")
+- `horas_diarias` / `horas_semanais` (padrões "N horas diárias" / "N horas semanais")
+- `jornada_horario_inicio` (formato HH:MM extraído de "13h00 às 19h00")
+
+O corpo do email continua tendo precedência sobre o texto do anexo — assim o aluno pode corrigir manualmente sem reenviar o PDF.
 
 ### TemplateRegistry (`graphrag/templates.py`)
 

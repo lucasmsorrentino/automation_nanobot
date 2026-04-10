@@ -258,12 +258,21 @@ class GmailClient:
     # Send reply (save as draft or send directly)
     # ------------------------------------------------------------------
 
+    def _default_cc(self, explicit_cc: str | None) -> str:
+        """Resolve the Cc header: explicit param wins, otherwise use the
+        settings default (``EMAIL_CC_DEFAULT``). Empty string disables Cc.
+        """
+        if explicit_cc is not None:
+            return explicit_cc
+        return getattr(settings, "EMAIL_CC_DEFAULT", "") or ""
+
     def send_reply(
         self,
         to_addr: str,
         subject: str,
         body: str,
         in_reply_to: str = "",
+        cc_addr: str | None = None,
     ) -> bool:
         """Send a reply email via SMTP.
 
@@ -275,6 +284,8 @@ class GmailClient:
             subject: Email subject (will prepend "Re: " if not present).
             body: Plain text body of the reply.
             in_reply_to: Message-ID of the original email for threading.
+            cc_addr: Explicit Cc header. Pass ``""`` to disable the
+                default Cc; omit to use ``settings.EMAIL_CC_DEFAULT``.
 
         Returns:
             True if sent successfully.
@@ -285,23 +296,39 @@ class GmailClient:
         msg = MIMEText(body, "plain", "utf-8")
         msg["From"] = self.email_addr
         msg["To"] = to_addr
+        cc = self._default_cc(cc_addr)
+        if cc:
+            msg["Cc"] = cc
         msg["Subject"] = subject
         if in_reply_to:
             msg["In-Reply-To"] = in_reply_to
             msg["References"] = in_reply_to
 
+        recipients = [to_addr] + ([cc] if cc else [])
         try:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
                 server.starttls()
                 server.login(self.email_addr, self.app_password)
-                server.send_message(msg)
-            logger.info("Gmail: resposta enviada para %s — %s", to_addr, subject[:50])
+                server.send_message(msg, to_addrs=recipients)
+            logger.info(
+                "Gmail: resposta enviada para %s%s — %s",
+                to_addr,
+                f" (cc {cc})" if cc else "",
+                subject[:50],
+            )
             return True
         except Exception as e:
             logger.error("Gmail: falha ao enviar resposta: %s", e)
             return False
 
-    def save_draft(self, to_addr: str, subject: str, body: str, in_reply_to: str = "") -> bool:
+    def save_draft(
+        self,
+        to_addr: str,
+        subject: str,
+        body: str,
+        in_reply_to: str = "",
+        cc_addr: str | None = None,
+    ) -> bool:
         """Save a reply as a draft in Gmail's Drafts folder via IMAP APPEND.
 
         Args:
@@ -309,6 +336,8 @@ class GmailClient:
             subject: Email subject.
             body: Plain text body.
             in_reply_to: Message-ID of the original email.
+            cc_addr: Explicit Cc header. Pass ``""`` to disable the
+                default Cc; omit to use ``settings.EMAIL_CC_DEFAULT``.
 
         Returns:
             True if draft saved successfully.
@@ -319,6 +348,9 @@ class GmailClient:
         msg = MIMEText(body, "plain", "utf-8")
         msg["From"] = self.email_addr
         msg["To"] = to_addr
+        cc = self._default_cc(cc_addr)
+        if cc:
+            msg["Cc"] = cc
         msg["Subject"] = subject
         if in_reply_to:
             msg["In-Reply-To"] = in_reply_to
@@ -327,7 +359,12 @@ class GmailClient:
         conn = self._connect_imap()
         try:
             conn.append("[Gmail]/Drafts", "\\Draft", None, msg.as_bytes())
-            logger.info("Gmail: rascunho salvo para %s — %s", to_addr, subject[:50])
+            logger.info(
+                "Gmail: rascunho salvo para %s%s — %s",
+                to_addr,
+                f" (cc {cc})" if cc else "",
+                subject[:50],
+            )
             return True
         except Exception as e:
             logger.error("Gmail: falha ao salvar rascunho: %s", e)
