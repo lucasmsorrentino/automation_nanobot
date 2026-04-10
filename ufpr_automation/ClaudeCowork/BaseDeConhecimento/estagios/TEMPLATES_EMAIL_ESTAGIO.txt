@@ -35,7 +35,7 @@ Para dar início ao estágio não obrigatório, você precisará seguir os passo
    formação ou experiência na área de Design. Caso não tenha, será necessário
    apresentar também uma "Declaração de Experiência do Supervisor".
 
-4. Envie a documentação em PDF para coordi@ufpr.br com no mínimo 10 dias
+4. Envie a documentação em PDF para design.grafico@ufpr.br com no mínimo 10 dias
    úteis de antecedência antes da data de início do estágio.
    ⚠️ Não é possível homologar estágios com data retroativa.
 
@@ -70,7 +70,7 @@ Para formalizar o estágio obrigatório, siga os passos abaixo:
 3. Verifique o supervisor: deve ter formação ou experiência na área de Design.
    Se não tiver, inclua também a "Declaração de Experiência do Supervisor".
 
-4. Envie a documentação em PDF para coordi@ufpr.br com no mínimo 10 dias
+4. Envie a documentação em PDF para design.grafico@ufpr.br com no mínimo 10 dias
    úteis de antecedência antes do início.
    ⚠️ Homologação retroativa não é permitida.
 
@@ -107,11 +107,11 @@ pendência(s) que precisam ser corrigidas antes de prosseguirmos:
 Dados corretos do orientador UFPR para o TCE:
   Nome:      [nome do/a coordenador/a atual]
   UORG:      Departamento de Design
-  Telefone:  (41) 3360-5103
-  E-mail:    coordi@ufpr.br
+  Telefone:  (41) 3360-5360
+  E-mail:    design.grafico@ufpr.br
   Formação:  Design
 
-Por favor, corrija e reenvie a documentação para coordi@ufpr.br.
+Por favor, corrija e reenvie a documentação para design.grafico@ufpr.br.
 ⚠️ Lembre-se: a documentação deve ser enviada com no mínimo 10 dias úteis
 de antecedência antes da data de início do estágio.
 
@@ -165,7 +165,7 @@ Documentação necessária:
      (modelo disponível em www.estagios.ufpr.br)
   2. Relatório de Estágio do período realizado até o momento
 
-Envie os documentos em PDF para coordi@ufpr.br com no mínimo 10 dias
+Envie os documentos em PDF para design.grafico@ufpr.br com no mínimo 10 dias
 úteis de antecedência antes do vencimento do TCE atual.
 
 (se aplicável) Lembretes:
@@ -191,7 +191,7 @@ Procedimento:
   1. Preencha o Termo de Rescisão com a concordância da empresa
      (modelo disponível em www.estagios.ufpr.br)
   2. Colete as assinaturas necessárias
-  3. Envie o documento em PDF para coordi@ufpr.br
+  3. Envie o documento em PDF para design.grafico@ufpr.br
 
 Após o recebimento, atualizaremos o processo no SEI e comunicaremos a
 COAPPE para encerrar o registro do estágio.
@@ -297,7 +297,7 @@ Conforme as normas de acompanhamento de estágio da UFPR, solicitamos o
 envio do seu Relatório Parcial de Estágio referente ao período de
 [mês/ano] a [mês/ano].
 
-O relatório deve ser enviado para este e-mail (coordi@ufpr.br) em formato PDF.
+O relatório deve ser enviado para este e-mail (design.grafico@ufpr.br) em formato PDF.
 
 Caso seu estágio já tenha sido encerrado ou haja alguma mudança de situação,
 por favor nos informe para que possamos atualizar o processo.

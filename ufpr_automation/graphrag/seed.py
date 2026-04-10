@@ -49,7 +49,7 @@ def _seed_orgaos(client: Neo4jClient) -> int:
            email: 'estagio@ufpr.br', telefone: '(41) 3310-2706'})
     MERGE (ue:Orgao {sigla: 'UE', nome: 'Unidade de Estágios',
            descricao: 'Execução operacional dentro da COAPPE',
-           email: 'estagio@ufpr.br', telefone: '(41) 3310-2675'})
+           email: 'estagio@ufpr.br', telefone: '(41) 3310-2706'})
 
     // Setor e Departamento
     MERGE (sacod:Orgao {sigla: 'SACOD', nome: 'Setor de Artes, Comunicação e Design'})
@@ -392,7 +392,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "prazo": "10 dias úteis de antecedência antes do início",
             "etapas": [
                 ("Aluno preenche e assina TCE + Plano de Atividades", "Estagiário", None),
-                ("Aluno envia documentação em PDF para coordi@ufpr.br", "Estagiário", None),
+                ("Aluno envia documentação em PDF para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria verifica situação acadêmica no SIGA", "Secretário", "SIGA"),
                 ("Secretaria analisa documentação e condições", "Secretário", None),
                 ("Secretaria abre processo no SEI (tipo: Estágios não Obrigatórios)", "Secretário", "SEI"),
@@ -408,7 +408,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "etapas": [
                 ("Aluno confirma matrícula em OD501/ODDA5", "Estagiário", "SIGA"),
                 ("Aluno preenche e assina TCE + Plano de Atividades", "Estagiário", None),
-                ("Aluno envia documentação em PDF para coordi@ufpr.br", "Estagiário", None),
+                ("Aluno envia documentação em PDF para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria verifica situação acadêmica no SIGA", "Secretário", "SIGA"),
                 ("Secretaria abre processo no SEI (tipo: Estágio Obrigatório)", "Secretário", "SEI"),
                 ("Coordenação gera despacho para docente da disciplina", "Coordenador", "SEI"),
@@ -425,7 +425,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "etapas": [
                 ("Aluno preenche Termo Aditivo com assinaturas", "Estagiário", None),
                 ("Aluno apresenta Relatório Parcial do período", "Estagiário", None),
-                ("Aluno envia documentos para coordi@ufpr.br", "Estagiário", None),
+                ("Aluno envia documentos para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria verifica relatório e documentação", "Secretário", None),
                 ("Secretaria inclui documentos no processo SEI existente", "Secretário", "SEI"),
                 ("Coordenação gera despacho de aditivo", "Coordenador", "SEI"),
@@ -437,7 +437,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "descricao": "Encerramento antecipado de estágio",
             "etapas": [
                 ("Aluno preenche Termo de Rescisão + Relatório Final", "Estagiário", None),
-                ("Aluno coleta assinaturas e envia para coordi@ufpr.br", "Estagiário", None),
+                ("Aluno coleta assinaturas e envia para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria inclui documentos no processo SEI existente", "Secretário", "SEI"),
                 ("Coordenação gera despacho de rescisão/conclusão", "Coordenador", "SEI"),
                 ("Coordenação envia processo para COAPPE", "Coordenador", "SEI"),
@@ -450,7 +450,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "descricao": "Emissão de certificado (apenas estágio não obrigatório)",
             "etapas": [
                 ("Supervisor preenche Ficha de Avaliação", "Supervisor", None),
-                ("Aluno coleta assinaturas e envia para coordi@ufpr.br", "Estagiário", None),
+                ("Aluno coleta assinaturas e envia para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria inclui no processo SEI", "Secretário", "SEI"),
                 ("COE aprecia e emite parecer favorável", "COE", None),
                 ("Coordenação encaminha para COAPPE via SEI", "Coordenador", "SEI"),

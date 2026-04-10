@@ -20,7 +20,7 @@ from ufpr_automation.utils.logging import logger
 _DESPACHO_HEADER = """UNIVERSIDADE FEDERAL DO PARANA
 COORDENACAO DO CURSO DE DESIGN GRAFICO
 Rua General Carneiro, 460, 8o andar - sala 801 - Bairro Centro, Curitiba/PR, CEP 80060-150
-Telefone: 41 3360-5103 - https://ufpr.br/
+Telefone: 41 3360-5360 - https://ufpr.br/
 
 Despacho no [NUMERO]/[ANO]/UFPR/R/AC/CCDG
 

@@ -62,7 +62,7 @@ DIREITOS COMPARADOS:
      (assinaturas físicas, digitais ou eletrônicas)
        │
        ▼
-  2. Enviar por e-mail para coordi@ufpr.br em PDF
+  2. Enviar por e-mail para design.grafico@ufpr.br em PDF
      ⚠️ Mínimo 10 DIAS ÚTEIS antes do início do estágio
      ⚠️ NÃO é permitida homologação retroativa
        │
@@ -97,7 +97,7 @@ DIREITOS COMPARADOS:
   2. Preencher e assinar o TCE + Plano de Atividades
        │
        ▼
-  3. Enviar por e-mail para coordi@ufpr.br em PDF
+  3. Enviar por e-mail para design.grafico@ufpr.br em PDF
      ⚠️ Mínimo 10 DIAS ÚTEIS antes do início do estágio
      ⚠️ NÃO é permitida homologação retroativa
        │
@@ -136,7 +136,7 @@ DIREITOS COMPARADOS:
 
   1. Preencher Termo Aditivo com as devidas assinaturas
   2. Apresentar Relatório de Estágio do período
-  3. Enviar para coordi@ufpr.br (10 dias úteis de antecedência)
+  3. Enviar para design.grafico@ufpr.br (10 dias úteis de antecedência)
   4. Coordenação verifica relatório e documentação
   5. Atualiza o processo SEI e encaminha para COAPPE
   6. COAPPE atualiza período e seguro (quando aplicável)
@@ -186,8 +186,8 @@ DIREITOS COMPARADOS:
 
   Nome do Orientador:        [nome do/a coordenador/a atual]
   Sigla UORG:                Departamento de Design
-  Telefone:                  (41) 3360-5103
-  E-mail institucional:      coordi@ufpr.br
+  Telefone:                  (41) 3360-5360
+  E-mail institucional:      design.grafico@ufpr.br
   Área de formação:          Design
 
   ⚠️ O nome do orientador no TCE deve ser o do professor que efetivamente
@@ -267,9 +267,9 @@ DIREITOS COMPARADOS:
 
 ── CONTATOS IMPORTANTES ────────────────────────────────────────────────────────
 
-  Secretaria / Coordenação DG:   coordi@ufpr.br | (41) 3360-5103
+  Secretaria / Coordenação DG:   design.grafico@ufpr.br | (41) 3360-5360
   Disciplina Estágio Superv.:    ufpr.design.estagio@gmail.com
-  COAPPE / UE (PROGRAP):         estagio@ufpr.br | (41) 3310-2675
+  COAPPE / UE (PROGRAP):         estagio@ufpr.br | (41) 3310-2706
   PROGRAP (geral):                prograp@ufpr.br | (41) 3310-2665
   Formulários UFPR (TCE etc.):   www.estagios.ufpr.br
   Site estágio DG:               https://sacod.ufpr.br/coordesign/estagio-orientacoes/

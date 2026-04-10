@@ -376,7 +376,7 @@ Os despachos são gerados no SEI pela Coordenação e encaminhados à UE/COAPPE 
 UNIVERSIDADE FEDERAL DO PARANÁ
 COORDENAÇÃO DO CURSO DE DESIGN GRÁFICO
 Rua General Carneiro, 460, 8º andar - sala 801 - Bairro Centro, Curitiba/PR, CEP 80060-150
-Telefone: 41 3360-5103 - https://ufpr.br/
+Telefone: 41 3360-5360 - https://ufpr.br/
 
 Despacho nº [NÚMERO]/[ANO]/UFPR/R/AC/CCDG
 
@@ -573,7 +573,7 @@ Solicitamos a regularização das pendências e reenvio da documentação comple
 possamos dar prosseguimento ao processo.
 
 Qualquer dúvida, entre em contato com a Coordenação ou diretamente com a UE/COAPPE
-pelo e-mail estagio@ufpr.br ou telefone (41) 3310-2675.
+pelo e-mail estagio@ufpr.br ou telefone (41) 3310-2706.
 
 {{ ASSINATURA_EMAIL }}
 ```
@@ -684,8 +684,8 @@ Quando um relatório chega por e-mail para análise:
 
 | Unidade | Contato |
 |---------|---------|
-| **UE/COAPPE** (autorização de estágios) | estagio@ufpr.br \| (41) 3310-2675 |
-| **Coordenação Design Gráfico** | (41) 3360-5103 |
+| **UE/COAPPE** (autorização de estágios) | estagio@ufpr.br \| (41) 3310-2706 |
+| **Coordenação Design Gráfico** | (41) 3360-5360 |
 | **Endereço Coordenação** | Rua General Carneiro, 460, 8º andar, sala 801, Centro, Curitiba/PR |
 | **Coordenadora** | Stephania Padovani |
 | **PROGEPE** (estágios remunerados na UFPR) | progepe@ufpr.br |
