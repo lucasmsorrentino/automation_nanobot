@@ -23,6 +23,92 @@ from ufpr_automation.utils.logging import logger
 
 
 # ============================================================================
+# Despacho templates (SOUL.md section 14) — seeded into Template nodes so that
+# sei/client.py can fetch them at runtime via graphrag.templates.TemplateRegistry.
+# ============================================================================
+
+_DESPACHO_HEADER = """UNIVERSIDADE FEDERAL DO PARANA
+COORDENACAO DO CURSO DE DESIGN GRAFICO
+Rua General Carneiro, 460, 8o andar - sala 801 - Bairro Centro, Curitiba/PR, CEP 80060-150
+Telefone: 41 3360-5360 - https://ufpr.br/
+
+Despacho no [NUMERO]/[ANO]/UFPR/R/AC/CCDG
+
+Processo no [NUMERO_PROCESSO_SEI]"""
+
+_DESPACHO_FOOTER = """Certa de sua atencao, solicitamos sequencia nos encaminhamentos devidos.
+
+Atenciosamente,
+
+Stephania Padovani
+Coordenadora do Curso de Design Grafico"""
+
+_DESPACHO_TEMPLATES: dict[str, str] = {
+    "tce_inicial": """Prezados,
+
+        A Coordenacao do Curso de Design Grafico acusa o recebimento do Termo de
+Compromisso de Estagio no [NUMERO_TCE] (SEI [NUMERO_SEI_TCE]) e manifesta-se favoravel
+a realizacao do Estagio [Nao Obrigatorio / Obrigatorio] do estudante [NOME COMPLETO DO
+ALUNO EM MAIUSCULAS], [GRR_MATRICULA], na [NOME DA CONCEDENTE EM MAIUSCULAS],
+[programa: NOME DO PROGRAMA se houver], no periodo de [DD/MM/AAAA] a [DD/MM/AAAA],
+com jornada de [X] horas diarias, totalizando [Y] horas semanais, sendo a jornada realizada de
+forma compativel com as atividades academicas.
+
+        Por este despacho, declaro tambem minha assinatura no referido documento, que
+corresponde tanto como professora orientadora do estagio quanto como coordenadora de curso,
+e informamos que ratifica-se integralmente o Termo de Compromisso de Estagio no [NUMERO_TCE],
+anexo a este processo, para todos os fins legais.""",
+    "aditivo": """Prezadas/os,
+
+        A Coordenacao do Curso de Design Grafico acusa o recebimento do Relatorio Parcial de
+Estagio (SEI [NUMERO_SEI_RELATORIO]), do Termo de Aditivo de Estagio Numero [NUMERO_ADITIVO]
+(SEI [NUMERO_SEI_ADITIVO]), referente ao Termo de Estagio original no [NUMERO_TCE_ORIGINAL]
+[da Agente de Integracao / (SEI NUMERO_SEI_TCE_ORIGINAL)], e manifesta-se favoravel a
+continuacao do Estagio Nao Obrigatorio da estudante [NOME COMPLETO] - [GRR], na
+[NOME DA CONCEDENTE], prorrogando a vigencia ate dia [DD/MM/AAAA], preservadas as demais
+clausulas do termo original.
+
+        Por este despacho, ainda informo que a minha assinatura nos referidos documentos,
+corresponde tanto como professora orientadora do estagio, como coordenadora de curso, e
+informamos que ratifica-se integralmente o Aditivo no [NUMERO_ADITIVO] do Termo de
+Compromisso de Estagio no [NUMERO_TCE_ORIGINAL], anexo a este processo, para todos os
+fins legais.""",
+    "rescisao": """Prezados/as,
+
+        A Coordenacao do Curso de Design Grafico acusa o recebimento do Relatorio [Final /
+de Final] de Estagio (SEI [NUMERO_SEI_RELATORIO]) e do Termo de Rescisao/Conclusao
+[no. NUMERO_RESCISAO] (SEI [NUMERO_SEI_RESCISAO]), referentes ao Contrato "Termo de
+Compromisso de Estagio" no. [NUMERO_TCE] da Parte Concedente e/ou Agente Integradora,
+do(a) estudante [NOME COMPLETO], [GRR], na [NOME DA CONCEDENTE], referente ao periodo
+de [DD/MM/AAAA] ate [DD/MM/AAAA].
+
+        Por este despacho, informo ainda, minha assinatura nos referidos documentos como
+coordenadora de curso e/ou professora orientadora, e informo tambem que ratificam-se
+integralmente os documentos referentes ao Termo de Compromisso de Estagio no. [NUMERO_TCE]
+[e Termo de Rescisao no NUMERO_RESCISAO], anexos a este processo, para todos os fins legais.""",
+}
+
+
+def _compose_despacho(tipo: str) -> str:
+    """Compose full despacho text by joining header + body + footer with blank lines.
+
+    Must match exactly what sei.client.SEIClient.prepare_despacho_draft used to
+    produce so that downstream placeholder substitution keeps working.
+    """
+    body = _DESPACHO_TEMPLATES[tipo]
+    return f"{_DESPACHO_HEADER}\n\n{body}\n\n{_DESPACHO_FOOTER}"
+
+
+# Mapping of existing Template nodes (by their `nome` property as seeded in
+# _seed_templates) to the despacho_tipo string used by sei/models.py.
+_DESPACHO_NODE_MAP: dict[str, str] = {
+    "Despacho SEI: TCE Inicial": "tce_inicial",
+    "Despacho SEI: Termo Aditivo com Relatório": "aditivo",
+    "Despacho SEI: Rescisão/Conclusão": "rescisao",
+}
+
+
+# ============================================================================
 # 1. ORGANIZATIONAL HIERARCHY
 # ============================================================================
 
@@ -568,6 +654,23 @@ def _seed_templates(client: Neo4jClient) -> int:
                 """,
                 {"nome": nome, "fluxo": fluxo_nome},
             )
+
+    # Attach despacho body + despacho_tipo to the three SEI despacho templates
+    # so that sei.client.SEIClient.prepare_despacho_draft can fetch them via
+    # graphrag.templates.TemplateRegistry at runtime.
+    templates_seeded: list[str] = []
+    for nome, despacho_tipo in _DESPACHO_NODE_MAP.items():
+        conteudo = _compose_despacho(despacho_tipo)
+        client.run_write(
+            """
+            MERGE (t:Template {nome: $nome})
+            SET t.despacho_tipo = $despacho_tipo, t.conteudo = $conteudo
+            """,
+            {"nome": nome, "despacho_tipo": despacho_tipo, "conteudo": conteudo},
+        )
+        templates_seeded.append(despacho_tipo)
+
+    logger.info("Seeded %d templates with conteudo", len(templates_seeded))
 
     rows = client.run_query("MATCH (t:Template) RETURN count(t) AS cnt")
     return rows[0]["cnt"]

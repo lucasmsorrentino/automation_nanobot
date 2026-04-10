@@ -2,8 +2,31 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from ufpr_automation.graphrag.seed import _compose_despacho
 from ufpr_automation.sei.client import SEIClient, extract_grr, extract_sei_process_number
 from ufpr_automation.sei.models import DocumentoSEI, ProcessoSEI
+
+
+@pytest.fixture
+def mock_template_registry():
+    """Patch ``graphrag.templates.get_registry`` so SEI tests do not need Neo4j.
+
+    The registry returned serves the real despacho templates (header + body +
+    footer, composed identically to the seeder) straight from
+    ``graphrag.seed._compose_despacho``, so any substring assertions against
+    the canonical text remain valid.
+    """
+    fake = MagicMock()
+    fake.get.side_effect = lambda tipo: _compose_despacho(tipo)
+    with patch(
+        "ufpr_automation.graphrag.templates.get_registry",
+        return_value=fake,
+    ):
+        yield fake
 
 
 class TestExtractSEIProcessNumber:
@@ -59,25 +82,25 @@ class TestProcessoSEI:
 
 
 class TestDespachoDraft:
-    def test_prepare_tce_inicial(self):
+    def test_prepare_tce_inicial(self, mock_template_registry):
         draft = SEIClient.prepare_despacho_draft("tce_inicial")
         assert draft.tipo == "tce_inicial"
         assert "Compromisso de Estagio" in draft.conteudo
         assert "NUMERO_TCE" in draft.campos_pendentes
         assert "SOUL.md" in draft.template_usado
 
-    def test_prepare_aditivo(self):
+    def test_prepare_aditivo(self, mock_template_registry):
         draft = SEIClient.prepare_despacho_draft("aditivo")
         assert draft.tipo == "aditivo"
         assert "Aditivo" in draft.conteudo
         assert "NUMERO_ADITIVO" in draft.campos_pendentes
 
-    def test_prepare_rescisao(self):
+    def test_prepare_rescisao(self, mock_template_registry):
         draft = SEIClient.prepare_despacho_draft("rescisao")
         assert draft.tipo == "rescisao"
         assert "Rescisao" in draft.conteudo
 
-    def test_fill_dados(self):
+    def test_fill_dados(self, mock_template_registry):
         dados = {
             "NUMERO_TCE": "12345",
             "NUMERO_PROCESSO_SEI": "23075.123456/2026-01",
@@ -91,8 +114,22 @@ class TestDespachoDraft:
         assert "NUMERO_TCE" not in draft.campos_pendentes
         assert "GRR_MATRICULA" not in draft.campos_pendentes
 
-    def test_header_and_footer(self):
+    def test_header_and_footer(self, mock_template_registry):
         draft = SEIClient.prepare_despacho_draft("tce_inicial")
         assert "UNIVERSIDADE FEDERAL DO PARANA" in draft.conteudo
         assert "Stephania Padovani" in draft.conteudo
         assert "Coordenadora do Curso de Design Grafico" in draft.conteudo
+
+    def test_neo4j_unavailable_returns_sentinel(self):
+        """When Neo4j is unreachable, prepare_despacho_draft returns a
+        DespachoDraft flagged with campos_pendentes=['neo4j_unavailable']."""
+        fake = MagicMock()
+        fake.get.return_value = None
+        with patch(
+            "ufpr_automation.graphrag.templates.get_registry",
+            return_value=fake,
+        ):
+            draft = SEIClient.prepare_despacho_draft("tce_inicial")
+        assert draft.tipo == "tce_inicial"
+        assert draft.conteudo == ""
+        assert draft.campos_pendentes == ["neo4j_unavailable"]

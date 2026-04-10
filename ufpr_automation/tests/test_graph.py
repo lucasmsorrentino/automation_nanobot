@@ -108,8 +108,11 @@ class TestBuildGraph:
         else:
             node_ids = set(g.nodes)
         assert "perceber" in node_ids
-        assert "rag_retrieve" in node_ids
-        assert "classificar" in node_ids
+        assert "tier0_lookup" in node_ids
+        # Fleet fan-out replaces the sequential rag_retrieve / classificar
+        # / consultar_sei / consultar_siga chain with a single per-email
+        # sub-agent node invoked in parallel via Send.
+        assert "process_one_email" in node_ids
         assert "rotear" in node_ids
         assert "agir" in node_ids
 
@@ -255,6 +258,7 @@ class TestClassificar:
 
         with (
             patch("ufpr_automation.llm.router.log_cascade_config"),
+            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=True),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_dspy",
                 return_value={email.stable_id: cls},
@@ -269,6 +273,33 @@ class TestClassificar:
 # ===========================================================================
 # nodes.py — agir_gmail
 # ===========================================================================
+
+
+class TestStateReducers:
+    """Reducers merge concurrent Fleet sub-agent outputs into EmailState."""
+
+    def test_merge_dict_combines_disjoint(self):
+        from ufpr_automation.graph.state import _merge_dict
+
+        a = {"e1": "ctx1"}
+        b = {"e2": "ctx2"}
+        assert _merge_dict(a, b) == {"e1": "ctx1", "e2": "ctx2"}
+
+    def test_merge_dict_handles_empty(self):
+        from ufpr_automation.graph.state import _merge_dict
+
+        a = {"e1": "ctx1"}
+        assert _merge_dict({}, a) == a
+        assert _merge_dict(a, {}) == a
+        assert _merge_dict({}, {}) == {}
+
+    def test_merge_dict_later_wins_on_conflict(self):
+        """Overlapping keys: later dict wins (dict-spread semantics)."""
+        from ufpr_automation.graph.state import _merge_dict
+
+        a = {"e1": "old"}
+        b = {"e1": "new"}
+        assert _merge_dict(a, b) == {"e1": "new"}
 
 
 class TestAgirGmail:

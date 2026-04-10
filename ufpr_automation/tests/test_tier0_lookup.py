@@ -224,9 +224,15 @@ class TestTier1ShortCircuit:
         }
 
         # Stub the inner LLM helpers so we don't call any model
-        with patch(
-            "ufpr_automation.graph.nodes._classify_with_dspy",
-            return_value={e2.stable_id: cls2},
+        with (
+            patch(
+                "ufpr_automation.graph.nodes._should_use_dspy",
+                return_value=True,
+            ),
+            patch(
+                "ufpr_automation.graph.nodes._classify_with_dspy",
+                return_value={e2.stable_id: cls2},
+            ),
         ):
             result = classificar(state)
 

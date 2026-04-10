@@ -231,6 +231,27 @@ def _get_reflexion_context(emails: list) -> dict[str, str]:
         return {}
 
 
+def _get_reflexion_context_single(email) -> str:
+    """Retrieve past error reflections for a single email (Reflexion pattern).
+
+    Single-email variant of :func:`_get_reflexion_context`, used by the
+    Fleet sub-agent (:func:`ufpr_automation.graph.fleet.process_one_email`)
+    which operates on one email at a time. Returns a formatted context
+    string, or empty string if ReflexionMemory is unavailable or empty.
+    """
+    try:
+        from ufpr_automation.feedback.reflexion import ReflexionMemory
+        memory = ReflexionMemory()
+        if memory.count() == 0:
+            return ""
+        query = f"{email.subject} {(email.body or email.preview)[:200]}"
+        ctx = memory.retrieve_formatted(query, top_k=3)
+        return ctx or ""
+    except Exception as e:
+        logger.debug("Reflexion (single) nao disponivel: %s", e)
+        return ""
+
+
 def _get_retriever():
     """Get the best available retriever (RAPTOR > flat)."""
     try:
@@ -343,8 +364,75 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
     return {"rag_contexts": contexts}
 
 
+def _compiled_prompt_paths() -> list:
+    """Return candidate compiled prompt paths for DSPy.
+    Imports OPTIMIZED_DIR lazily so settings reloads / monkeypatches work in tests.
+    """
+    from ufpr_automation.dspy_modules.optimize import OPTIMIZED_DIR as _OPT_DIR
+    return [
+        _OPT_DIR / "gepa_optimized.json",
+        _OPT_DIR / "mipro_optimized.json",
+    ]
+
+
+def _has_compiled_prompt() -> bool:
+    """True if at least one compiled DSPy prompt file exists on disk."""
+    return any(p.exists() for p in _compiled_prompt_paths())
+
+
+def _should_use_dspy() -> bool:
+    """Tri-state gate for DSPy activation (see settings.USE_DSPY).
+
+    - "off" / "0" / "false" -> never use DSPy.
+    - "on"  / "1" / "true"  -> require DSPy + compiled file (raises otherwise).
+    - "auto" (default)      -> use DSPy only if dspy importable AND compiled
+      prompt file exists; otherwise fall back silently.
+    """
+    from ufpr_automation.config import settings
+
+    flag = (getattr(settings, "USE_DSPY", "auto") or "auto").lower().strip()
+
+    if flag in ("off", "0", "false", "no"):
+        return False
+
+    if flag in ("on", "1", "true", "yes"):
+        try:
+            import dspy  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                "USE_DSPY=1 but dspy package not installed. "
+                "Install with: pip install -e '.[marco2]'"
+            ) from e
+        if not _has_compiled_prompt():
+            raise RuntimeError(
+                "USE_DSPY=1 but no compiled prompt file found in "
+                "dspy_modules/optimized/ (expected gepa_optimized.json or "
+                "mipro_optimized.json). Run: "
+                "python -m ufpr_automation.dspy_modules.optimize --strategy gepa"
+            )
+        return True
+
+    # "auto" (default)
+    try:
+        import dspy  # noqa: F401
+    except ImportError:
+        return False
+    if not _has_compiled_prompt():
+        logger.info(
+            "DSPy USE_DSPY=auto but no compiled prompts yet; "
+            "falling back to litellm"
+        )
+        return False
+    return True
+
+
 def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
-    """Classify emails using DSPy modules (optimizable prompts)."""
+    """Classify emails using DSPy modules (optimizable prompts).
+
+    Raises RuntimeError if called without a compiled file. The
+    ``_should_use_dspy()`` gate should prevent that, but the defensive
+    check helps debugging.
+    """
     import dspy as _dspy
 
     from ufpr_automation.config import settings
@@ -353,20 +441,24 @@ def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
         prediction_to_classification,
     )
 
-    # Configure DSPy LM
     lm = _dspy.LM(model=settings.LLM_MODEL, temperature=0.2)
     _dspy.configure(lm=lm)
 
-    # Try loading optimized module
-    from ufpr_automation.dspy_modules.optimize import OPTIMIZED_DIR
-
     module = SelfRefineModule()
-    for name in ("mipro_optimized.json", "gepa_optimized.json"):
-        path = OPTIMIZED_DIR / name
+    loaded: str | None = None
+    for path in _compiled_prompt_paths():
         if path.exists():
             module.load(str(path))
             logger.info("DSPy: loaded optimized module from %s", path.name)
+            loaded = path.name
             break
+
+    if loaded is None:
+        raise RuntimeError(
+            "_classify_with_dspy called without a compiled prompt file. "
+            "This indicates the USE_DSPY gate was bypassed — check "
+            "_should_use_dspy() invariants."
+        )
 
     results = {}
     for email in emails:
@@ -442,12 +534,11 @@ def classificar(state: EmailState) -> dict[str, Any]:
 
     log_cascade_config()
 
-    try:
-        import dspy as _dspy  # noqa: F401
-        logger.info("Classificar: usando DSPy modules")
+    if _should_use_dspy():
+        logger.info("Classificar: usando DSPy modules (compiled prompt)")
         new_results = _classify_with_dspy(tier1_emails, rag_contexts)
-    except ImportError:
-        logger.info("Classificar: DSPy nao disponivel, usando LiteLLM direto")
+    else:
+        logger.info("Classificar: usando LiteLLM direto (no DSPy)")
         new_results = _classify_with_litellm(tier1_emails, rag_contexts)
 
     merged = {**existing, **new_results}
@@ -741,6 +832,84 @@ async def _consult_siga_async(candidates: dict[str, str]) -> dict[str, Any]:
         await browser.close()
         await pw.stop()
     return results
+
+
+def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
+    """Single-email SEI consultation used by Fleet sub-agents.
+
+    Extracts the process number from the email, spins up a SEI Playwright
+    session, and returns the data dict that would have been stored under
+    ``state["sei_contexts"][email.stable_id]`` by the batch
+    :func:`consultar_sei` node. Returns ``None`` if the classification is
+    not Estágios, no process number is present, Playwright / credentials
+    are missing, or the consultation fails.
+    """
+    if classification is None or classification.categoria != "Estágios":
+        return None
+
+    from ufpr_automation.sei.client import extract_sei_process_number
+
+    text = f"{email.subject} {email.body or email.preview}"
+    proc_num = extract_sei_process_number(text)
+    if not proc_num:
+        return None
+
+    try:
+        from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
+    except ImportError:
+        logger.info("SEI (single): playwright nao instalado, pulando")
+        return None
+
+    if not sei_has_credentials():
+        logger.info("SEI (single): credenciais nao configuradas, pulando")
+        return None
+
+    try:
+        results = asyncio.run(_consult_sei_async({email.stable_id: proc_num}))
+    except Exception as e:
+        logger.warning("SEI (single) consulta falhou para '%s': %s", email.subject[:40], e)
+        return None
+
+    return results.get(email.stable_id)
+
+
+def _consult_siga_for_email(email, classification) -> dict[str, Any] | None:
+    """Single-email SIGA consultation used by Fleet sub-agents.
+
+    Extracts the GRR from the email, spins up a SIGA Playwright session,
+    and returns the data dict that would have been stored under
+    ``state["siga_contexts"][email.stable_id]`` by the batch
+    :func:`consultar_siga` node. Returns ``None`` if the classification is
+    not Estágios, no GRR is present, Playwright / credentials are missing,
+    or the consultation fails.
+    """
+    if classification is None or classification.categoria != "Estágios":
+        return None
+
+    from ufpr_automation.sei.client import extract_grr
+
+    text = f"{email.subject} {email.body or email.preview}"
+    grr = extract_grr(text)
+    if not grr:
+        return None
+
+    try:
+        from ufpr_automation.siga.browser import has_credentials as siga_has_credentials
+    except ImportError:
+        logger.info("SIGA (single): playwright nao instalado, pulando")
+        return None
+
+    if not siga_has_credentials():
+        logger.info("SIGA (single): credenciais nao configuradas, pulando")
+        return None
+
+    try:
+        results = asyncio.run(_consult_siga_async({email.stable_id: grr}))
+    except Exception as e:
+        logger.warning("SIGA (single) consulta falhou para '%s': %s", email.subject[:40], e)
+        return None
+
+    return results.get(email.stable_id)
 
 
 def registrar_procedimento(state: EmailState) -> dict[str, Any]:

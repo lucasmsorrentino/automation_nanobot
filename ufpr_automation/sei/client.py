@@ -16,68 +16,6 @@ if TYPE_CHECKING:
 from ufpr_automation.sei.models import DespachoDraft, DespachoTipo, DocumentoSEI, ProcessoSEI
 from ufpr_automation.utils.logging import logger
 
-# Despacho templates from SOUL.md section 14
-_DESPACHO_HEADER = """UNIVERSIDADE FEDERAL DO PARANA
-COORDENACAO DO CURSO DE DESIGN GRAFICO
-Rua General Carneiro, 460, 8o andar - sala 801 - Bairro Centro, Curitiba/PR, CEP 80060-150
-Telefone: 41 3360-5360 - https://ufpr.br/
-
-Despacho no [NUMERO]/[ANO]/UFPR/R/AC/CCDG
-
-Processo no [NUMERO_PROCESSO_SEI]"""
-
-_DESPACHO_FOOTER = """Certa de sua atencao, solicitamos sequencia nos encaminhamentos devidos.
-
-Atenciosamente,
-
-Stephania Padovani
-Coordenadora do Curso de Design Grafico"""
-
-_TEMPLATES: dict[DespachoTipo, str] = {
-    "tce_inicial": """Prezados,
-
-        A Coordenacao do Curso de Design Grafico acusa o recebimento do Termo de
-Compromisso de Estagio no [NUMERO_TCE] (SEI [NUMERO_SEI_TCE]) e manifesta-se favoravel
-a realizacao do Estagio [Nao Obrigatorio / Obrigatorio] do estudante [NOME COMPLETO DO
-ALUNO EM MAIUSCULAS], [GRR_MATRICULA], na [NOME DA CONCEDENTE EM MAIUSCULAS],
-[programa: NOME DO PROGRAMA se houver], no periodo de [DD/MM/AAAA] a [DD/MM/AAAA],
-com jornada de [X] horas diarias, totalizando [Y] horas semanais, sendo a jornada realizada de
-forma compativel com as atividades academicas.
-
-        Por este despacho, declaro tambem minha assinatura no referido documento, que
-corresponde tanto como professora orientadora do estagio quanto como coordenadora de curso,
-e informamos que ratifica-se integralmente o Termo de Compromisso de Estagio no [NUMERO_TCE],
-anexo a este processo, para todos os fins legais.""",
-    "aditivo": """Prezadas/os,
-
-        A Coordenacao do Curso de Design Grafico acusa o recebimento do Relatorio Parcial de
-Estagio (SEI [NUMERO_SEI_RELATORIO]), do Termo de Aditivo de Estagio Numero [NUMERO_ADITIVO]
-(SEI [NUMERO_SEI_ADITIVO]), referente ao Termo de Estagio original no [NUMERO_TCE_ORIGINAL]
-[da Agente de Integracao / (SEI NUMERO_SEI_TCE_ORIGINAL)], e manifesta-se favoravel a
-continuacao do Estagio Nao Obrigatorio da estudante [NOME COMPLETO] - [GRR], na
-[NOME DA CONCEDENTE], prorrogando a vigencia ate dia [DD/MM/AAAA], preservadas as demais
-clausulas do termo original.
-
-        Por este despacho, ainda informo que a minha assinatura nos referidos documentos,
-corresponde tanto como professora orientadora do estagio, como coordenadora de curso, e
-informamos que ratifica-se integralmente o Aditivo no [NUMERO_ADITIVO] do Termo de
-Compromisso de Estagio no [NUMERO_TCE_ORIGINAL], anexo a este processo, para todos os
-fins legais.""",
-    "rescisao": """Prezados/as,
-
-        A Coordenacao do Curso de Design Grafico acusa o recebimento do Relatorio [Final /
-de Final] de Estagio (SEI [NUMERO_SEI_RELATORIO]) e do Termo de Rescisao/Conclusao
-[no. NUMERO_RESCISAO] (SEI [NUMERO_SEI_RESCISAO]), referentes ao Contrato "Termo de
-Compromisso de Estagio" no. [NUMERO_TCE] da Parte Concedente e/ou Agente Integradora,
-do(a) estudante [NOME COMPLETO], [GRR], na [NOME DA CONCEDENTE], referente ao periodo
-de [DD/MM/AAAA] ate [DD/MM/AAAA].
-
-        Por este despacho, informo ainda, minha assinatura nos referidos documentos como
-coordenadora de curso e/ou professora orientadora, e informo tambem que ratificam-se
-integralmente os documentos referentes ao Termo de Compromisso de Estagio no. [NUMERO_TCE]
-[e Termo de Rescisao no NUMERO_RESCISAO], anexos a este processo, para todos os fins legais.""",
-}
-
 
 class SEIClient:
     """Client for read-only operations on SEI via Playwright.
@@ -202,6 +140,11 @@ class SEIClient:
         This is a LOCAL operation -- nothing is submitted to SEI.
         Unfilled [BRACKET] fields are listed in campos_pendentes.
 
+        The full template text (header + body + footer, already composed) is
+        fetched from the Neo4j knowledge graph via TemplateRegistry. If Neo4j
+        is unreachable, returns a DespachoDraft with an empty body and
+        ``campos_pendentes=["neo4j_unavailable"]``.
+
         Args:
             tipo: Type of despacho (tce_inicial, aditivo, rescisao).
             dados: Optional dict mapping placeholder names to values.
@@ -210,12 +153,19 @@ class SEIClient:
         Returns:
             DespachoDraft with the formatted text and pending fields.
         """
-        template_body = _TEMPLATES.get(tipo, "")
-        if not template_body:
-            return DespachoDraft(tipo=tipo, campos_pendentes=["template_nao_encontrado"])
+        from ufpr_automation.graphrag.templates import get_registry
 
-        # Combine header + body + footer
-        full_text = f"{_DESPACHO_HEADER}\n\n{template_body}\n\n{_DESPACHO_FOOTER}"
+        full_text = get_registry().get(tipo)
+        if full_text is None:
+            logger.error(
+                "SEI: nao foi possivel obter template '%s' do Neo4j (grafo indisponivel)",
+                tipo,
+            )
+            return DespachoDraft(
+                tipo=tipo,
+                conteudo="",
+                campos_pendentes=["neo4j_unavailable"],
+            )
 
         # Fill in provided data
         if dados:
@@ -234,7 +184,10 @@ class SEIClient:
             conteudo=full_text,
             processo_sei=processo_sei,
             campos_pendentes=pendentes,
-            template_usado=f"SOUL.md secao 14.{['1', '2', '3'][['tce_inicial', 'aditivo', 'rescisao'].index(tipo)]}",
+            template_usado=(
+                "SOUL.md secao 14."
+                f"{['1', '2', '3'][['tce_inicial', 'aditivo', 'rescisao'].index(tipo)]}"
+            ),
         )
 
 

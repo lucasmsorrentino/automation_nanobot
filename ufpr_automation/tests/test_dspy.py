@@ -6,6 +6,10 @@ must be installed (pip install dspy) for these tests to run.
 
 from __future__ import annotations
 
+import importlib
+import json as _json
+import logging
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -442,3 +446,94 @@ class TestClassifyEmailDspy:
 
         call_kwargs = mock_fwd.call_args[1]
         assert call_kwargs["email_body"] == "Preview text"
+
+
+# ===========================================================================
+# USE_DSPY tri-state feature flag (WS1)
+# ===========================================================================
+
+
+class TestUseDspyFlag:
+    """Tests for the ``USE_DSPY`` tri-state gate in graph/nodes.py.
+
+    Each test reloads the settings and nodes modules so the fresh
+    ``USE_DSPY`` env value is picked up, and monkeypatches
+    ``OPTIMIZED_DIR`` on the optimize module so compiled-prompt
+    presence can be simulated without touching the real package dir.
+    """
+
+    def _reload_modules(self):
+        """Reload settings + nodes so USE_DSPY env is picked up fresh."""
+        from ufpr_automation.config import settings as settings_mod
+        from ufpr_automation.graph import nodes as nodes_mod
+
+        importlib.reload(settings_mod)
+        importlib.reload(nodes_mod)
+        return settings_mod, nodes_mod
+
+    def _point_optimized_dir(self, monkeypatch, tmp_path: Path):
+        """Monkeypatch OPTIMIZED_DIR on the optimize module to tmp_path."""
+        from ufpr_automation.dspy_modules import optimize as optimize_mod
+
+        monkeypatch.setattr(optimize_mod, "OPTIMIZED_DIR", tmp_path)
+        return optimize_mod
+
+    def _write_fake_compiled(self, tmp_path: Path, name: str = "gepa_optimized.json"):
+        """Write a fake compiled prompt file so _has_compiled_prompt() is True."""
+        path = tmp_path / name
+        path.write_text(_json.dumps({"dummy": True}), encoding="utf-8")
+        return path
+
+    def test_off_never_uses_dspy(self, monkeypatch, tmp_path):
+        """USE_DSPY=off -> _should_use_dspy() returns False even if compiled file exists."""
+        monkeypatch.setenv("USE_DSPY", "off")
+        _, nodes_mod = self._reload_modules()
+        self._point_optimized_dir(monkeypatch, tmp_path)
+        # Even with a compiled file present, off must win.
+        self._write_fake_compiled(tmp_path)
+
+        assert nodes_mod._should_use_dspy() is False
+
+    def test_on_without_compiled_raises(self, monkeypatch, tmp_path):
+        """USE_DSPY=on with no compiled file -> RuntimeError."""
+        monkeypatch.setenv("USE_DSPY", "on")
+        _, nodes_mod = self._reload_modules()
+        self._point_optimized_dir(monkeypatch, tmp_path)
+        # tmp_path is empty — no compiled file.
+
+        with pytest.raises(RuntimeError, match="no compiled prompt file"):
+            nodes_mod._should_use_dspy()
+
+    def test_auto_without_compiled_falls_back(self, monkeypatch, tmp_path, caplog):
+        """USE_DSPY=auto with no compiled file -> False + info log."""
+        monkeypatch.setenv("USE_DSPY", "auto")
+        _, nodes_mod = self._reload_modules()
+        self._point_optimized_dir(monkeypatch, tmp_path)
+
+        with caplog.at_level(logging.INFO, logger="ufpr_automation"):
+            result = nodes_mod._should_use_dspy()
+
+        assert result is False
+        # Assert the fallback log line was captured
+        assert any(
+            "USE_DSPY=auto but no compiled prompts yet" in record.getMessage()
+            for record in caplog.records
+        ), f"Expected fallback log line, got: {[r.getMessage() for r in caplog.records]}"
+
+    def test_auto_with_compiled_uses_dspy(self, monkeypatch, tmp_path):
+        """USE_DSPY=auto with compiled file present -> True."""
+        monkeypatch.setenv("USE_DSPY", "auto")
+        _, nodes_mod = self._reload_modules()
+        self._point_optimized_dir(monkeypatch, tmp_path)
+        self._write_fake_compiled(tmp_path)
+
+        assert nodes_mod._should_use_dspy() is True
+
+    def test_on_with_compiled_uses_dspy(self, monkeypatch, tmp_path):
+        """USE_DSPY=on with compiled file present -> True (no raise)."""
+        monkeypatch.setenv("USE_DSPY", "on")
+        _, nodes_mod = self._reload_modules()
+        self._point_optimized_dir(monkeypatch, tmp_path)
+        self._write_fake_compiled(tmp_path)
+
+        assert nodes_mod._should_use_dspy() is True
