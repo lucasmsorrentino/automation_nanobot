@@ -1,6 +1,6 @@
 # Arquitetura — Sistema de Automação Burocrática UFPR
 
-> **Status atual:** Marcos I, II e II.5 ✅ completos. Marco III parcial (GraphRAG ✅, demais pendentes).
+> **Status atual:** Marcos I, II, II.5 e III ✅ completos. Refinamentos operacionais pendentes (validação em produção, ablations reais do AFlow, wire-up do BrowserPagePool em SEI/SIGA).
 > Veja `TASKS.md` para o roadmap restante.
 
 ## Visão geral das 3 fases
@@ -38,16 +38,18 @@ graph TB
         LANGGRAPH2 --> DSPY --> CASCADE
     end
 
-    subgraph PHASE3["🔴 MARCO III — Cognição Relacional ⚙️"]
+    subgraph PHASE3["🔴 MARCO III — Cognição Relacional ✅"]
         direction TB
-        NEO4J["🕸️ Neo4j (1.757 nós, 2.296 rels) ✅<br/>Hierarquia + Normas + Fluxos"]
-        SEI_M["📁 SEI Client (read-only) ✅<br/>Playwright + templates SOUL"]
+        NEO4J["🕸️ Neo4j (1.757 nós, 2.296 rels) ✅<br/>Hierarquia + Normas + Fluxos<br/>+ TemplateRegistry (despachos)"]
+        SEI_M["📁 SEI Client (read) ✅<br/>+ SEIWriter (attach + draft) ✅<br/>sem sign/send/protocol"]
         SIGA_M["🎓 SIGA Client (read-only) ✅<br/>Playwright + elegibilidade"]
-        FLEET["🚀 LangGraph Fleet<br/>(sub-agentes paralelos)<br/>⏳ pendente"]
+        FLEET["🚀 LangGraph Fleet ✅<br/>Send API + reducers<br/>+ BrowserPagePool"]
+        AFLOW["📊 AFlow ✅<br/>5 topology variants<br/>+ evaluator + CLI"]
 
         NEO4J --> SEI_M
         NEO4J --> SIGA_M
         NEO4J --> FLEET
+        FLEET --> AFLOW
     end
 
     PHASE1 ==>|"Evolução"| PHASE2
@@ -76,24 +78,40 @@ graph TB
 | **Scheduler** | APScheduler (3x/dia configurável) | `--schedule [--once]` |
 | **Feedback UI** | Streamlit | Dashboard, revisão, estatísticas |
 
-## Pipeline LangGraph (Marco II+)
+## Pipeline LangGraph (Marco II + III com Fleet)
+
+Após Marco III, o pipeline default usa **fan-out via `Send` API**: cada email Tier 1 (não resolvido pelo playbook Tier 0) vira um sub-agent paralelo que faz `rag_retrieve + classificar + consultar_sei + consultar_siga` independentemente. Reducers `Annotated[..., _merge_dict]` em `graph/state.py` mesclam os dicts paralelos sem last-write-wins.
 
 ```mermaid
 graph LR
-    PERCEBER[perceber<br/>Gmail/OWA + anexos] --> RAG[rag_retrieve<br/>RAPTOR + GraphRAG + Reflexion]
-    RAG --> CLASSIFY[classificar<br/>DSPy SelfRefine]
-    CLASSIFY --> ROUTE{rotear<br/>por confiança}
+    PERCEBER[perceber<br/>Gmail/OWA + anexos] --> TIER0[tier0_lookup<br/>Hybrid Memory<br/>playbook YAML]
+    TIER0 -->|todos resolvidos| ROUTE{rotear}
+    TIER0 -->|residual Tier 1| FANOUT{{dispatch_tier1<br/>Send API}}
+    FANOUT -.->|Send| SUB1[process_one_email #1<br/>RAG + classify + SEI/SIGA]
+    FANOUT -.->|Send| SUB2[process_one_email #2<br/>RAG + classify + SEI/SIGA]
+    FANOUT -.->|Send| SUBN[process_one_email #N<br/>RAG + classify + SEI/SIGA]
+    SUB1 --> ROUTE
+    SUB2 --> ROUTE
+    SUBN --> ROUTE
     ROUTE -->|≥ 0.95| AGIR_AUTO[agir auto]
     ROUTE -->|≥ 0.70| AGIR_REVIEW[agir review]
     ROUTE -->|< 0.70| ESCALAR[escalar]
-    ROUTE -->|categoria=Estágios| SEI[consultar_sei]
-    SEI --> SIGA[consultar_siga]
-    SIGA --> AGIR_REVIEW
-    AGIR_AUTO --> REGISTRAR[registrar_procedimento]
-    AGIR_REVIEW --> REGISTRAR
-    ESCALAR --> REGISTRAR
-    REGISTRAR --> FEEDBACK[registrar_feedback]
+    AGIR_AUTO --> FEEDBACK[registrar_feedback]
+    AGIR_REVIEW --> FEEDBACK
+    ESCALAR --> FEEDBACK
+    FEEDBACK --> AGIR[agir / save draft]
+    AGIR --> REGISTRAR[registrar_procedimento]
 ```
+
+A topologia é selecionável via `AFLOW_TOPOLOGY`. Variantes registradas em `aflow/topologies.py`:
+
+| Topologia | Descrição |
+|---|---|
+| `fleet` (default) | Fan-out via `Send` API — paraleliza Tier 1 |
+| `baseline` | Pipeline linear pré-Fleet (sequencial) — para AFlow ablations |
+| `skip_rag_high_tier0` | Variante baseline ablation (alias no MVP) |
+| `no_self_refine` | Variante fleet ablation (alias no MVP) |
+| `fleet_no_siga` | Variante fleet sem consulta SIGA (alias no MVP) |
 
 ## RAG — Pipeline de ingestão e busca
 
@@ -140,9 +158,47 @@ Grafo Neo4j construído via `seed.py` (conhecimento estruturado: hierarquia, flu
 
 **Vigência:** cada norma tem `status` (`vigente` 1.281 / `alterada` 174 / `revogada` 148). Relações `ALTERA`, `REVOGA`, `CONSOLIDADA_EM` formam a cadeia de linhagem. `fonte_rag` aponta para o PDF original no LanceDB.
 
-**Retrieval:** o nó `rag_retrieve` do LangGraph combina:
+**Templates de despacho** (Marco III): movidos de `sei/client.py` para o grafo. `_seed_templates` em `graphrag/seed.py` persiste `Template.conteudo` e `Template.despacho_tipo`. `graphrag/templates.py:TemplateRegistry` busca por tipo via Cypher com cache in-memory; é consumido por `sei/client.py:prepare_despacho_draft` e `sei/writer.py:save_despacho_draft`.
+
+**Retrieval:** o nó `rag_retrieve` (ou `process_one_email` no Fleet) combina:
 1. `RaptorRetriever.search()` — collapsed-tree vetorial
 2. `GraphRetriever` — workflow + normas + templates + hints SIGA + contatos
 3. `ReflexionMemory.retrieve()` — erros passados como contexto negativo
 
 Ver `graphrag/README.md` para detalhes.
+
+## Marco III — Componentes novos
+
+### LangGraph Fleet (`graph/fleet.py`)
+
+Sub-agents paralelos via `langgraph.types.Send`. `dispatch_tier1` é a conditional edge router após `tier0_lookup`: se todos os emails foram resolvidos pelo playbook, retorna `"rotear"`; caso contrário, retorna `[Send("process_one_email", SubState(email=e, ...)) for e in tier1_emails]`. Cada sub-agent executa o pipeline Tier 1 completo (RAG + classify + SEI/SIGA conditional) e retorna um partial state cujos dicts são mesclados pelos reducers `Annotated[..., _merge_dict]` em `graph/state.py`.
+
+### BrowserPagePool (`graph/browser_pool.py`)
+
+Pool assíncrono de pages Playwright derivadas de um único `BrowserContext` compartilhado. `acquire()` é um `asynccontextmanager` com `asyncio.Semaphore` (default size 3, configurável via `FLEET_BROWSER_POOL_SIZE`). Pronto para reuso pelos helpers `_consult_sei_for_email` / `_consult_siga_for_email` (wire-up final pendente — atualmente cada call ainda spawna browser próprio).
+
+### SEIWriter (`sei/writer.py`)
+
+Camada de escrita controlada para SEI. **Public API limitada a `attach_document` e `save_despacho_draft`**. Não existem métodos `sign()`, `send()`, `protocol()` ou `finalize()` — a ausência arquitetural é o mecanismo principal de safety. Belt + suspenders:
+
+1. **Whitelist do public API**: `test_writer_public_api_is_only_attach_and_draft` falha se qualquer método novo aparecer.
+2. **6 testes regressivos** verificam ausência de `sign`, `assinar`, `send`, `enviar`, `enviar_processo`, `protocol`, `protocolar`, `finalize`.
+3. **Static scan** do código fonte por `.click('text=Assinar')`, `.click('text=Enviar')`, `.click('text=Protocolar')` em `test_no_method_body_references_forbidden_keywords`.
+4. **`_FORBIDDEN_SELECTORS` runtime guard**: `_safe_click(selector)` valida cada clique contra a lista de tokens proibidos antes de executar; lança `PermissionError` se algum bater.
+5. **Audit trail**: cada operação grava screenshot pré + DOM dump pós + entrada JSONL em `SEI_WRITE_ARTIFACTS_DIR/audit.jsonl` com sha256 do arquivo/conteúdo.
+
+### TemplateRegistry (`graphrag/templates.py`)
+
+Busca despachos do Neo4j com cache in-memory. Substitui as constantes hardcoded antes embutidas em `sei/client.py` (lines 20-79, removidas pelo Wave 1). Lazy import dentro de `prepare_despacho_draft` para evitar ciclo SEI ↔ GraphRAG. Fallback `campos_pendentes=["neo4j_unavailable"]` se Neo4j off.
+
+### USE_DSPY tri-state gate (`graph/nodes.py`)
+
+`_should_use_dspy()` lê `settings.USE_DSPY` e roteia entre `_classify_with_dspy` (DSPy SelfRefineModule com prompt compilado) e `_classify_with_litellm` (LiteLLM direto):
+
+- `"off"` → sempre LiteLLM
+- `"on"` → DSPy obrigatório (raise se `dspy` ausente ou se não houver `gepa_optimized.json`/`mipro_optimized.json`)
+- `"auto"` (default) → DSPy se importável e prompt compilado existe, senão LiteLLM com log INFO
+
+### AFlow (`aflow/`)
+
+Topology evaluator mínimo. **Não é busca neural** — é um registry de topologias hand-authored + evaluator + CLI. `aflow/topologies.py` registra 5 variantes (atualmente 3 são aliases para futura implementação de ablations reais). `aflow/evaluator.py:evaluate()` roda cada topologia contra um eval set (vindo de `feedback_data/` ou synthetic do `optimize.py`) com `metric_fn` e `invoke_fn` plugáveis (stub-friendly para testes). `aflow/optimizer.py:pick_best_topology()` retorna a melhor por (accuracy, -latency, -errors) e escreve report JSON. CLI: `python -m ufpr_automation.aflow.cli --topologies all --limit 20`.

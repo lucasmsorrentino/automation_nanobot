@@ -3,8 +3,8 @@
 > Sistema de automação burocrática da Universidade Federal do Paraná. Lê e-mails institucionais, classifica via LLM, recupera contexto de normas (RAG vetorial + grafo Neo4j) e gera respostas como rascunho para revisão humana.
 
 ![Python](https://img.shields.io/badge/python-≥3.12-blue)
-![Stack](https://img.shields.io/badge/stack-LangGraph%20%2B%20DSPy%20%2B%20RAPTOR%20%2B%20Neo4j-violet)
-![Status](https://img.shields.io/badge/status-Marcos%20I%20%2B%20II%20%2B%20II.5%20✅-green)
+![Stack](https://img.shields.io/badge/stack-LangGraph%20Fleet%20%2B%20DSPy%20%2B%20RAPTOR%20%2B%20Neo4j%20%2B%20AFlow-violet)
+![Status](https://img.shields.io/badge/Marcos%20I%2BII%2BII.5%2BIII-✅-green)
 
 ## Sobre
 
@@ -21,16 +21,19 @@ O sistema **nunca envia e-mails automaticamente** — sempre salva como rascunho
 | **Canais** | `gmail/` (IMAP, primário) · `outlook/` (Playwright + auto-login + MFA Telegram, fallback) |
 | **Anexos** | `attachments/` — PDF (PyMuPDF), DOCX, XLSX, OCR Tesseract para escaneados |
 | **Memória vetorial** | `rag/` — LanceDB + RAPTOR hierárquico, multilingual-e5-large, 34K chunks |
-| **Memória relacional** | `graphrag/` — Neo4j, 1.757 nós, normas com vigência (vigente/alterada/revogada) |
+| **Memória relacional** | `graphrag/` — Neo4j, 1.757 nós, normas com vigência (vigente/alterada/revogada). `templates.py` (TemplateRegistry) serve despachos a partir do grafo. |
 | **Memória episódica** | `feedback/reflexion.py` — análise + recall de erros passados |
-| **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback) |
-| **Otimização** | `dspy_modules/` — DSPy Signatures, GEPA / MIPROv2 |
-| **Orquestrador** | `graph/` — LangGraph StateGraph + SQLite checkpointing |
-| **Sistemas legados** | `sei/`, `siga/` — clients Playwright (read-only por enquanto) |
+| **Memória híbrida (Tier 0)** | `procedures/playbook.py` + `workspace/PROCEDURES.md` — playbook YAML curto-circuita RAG/LLM em emails reconhecidos |
+| **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback). DSPy via `USE_DSPY=auto` (ativa quando há prompt compilado) |
+| **Otimização** | `dspy_modules/` — DSPy Signatures, GEPA / MIPROv2; gate `_should_use_dspy()` em `graph/nodes.py` |
+| **Orquestrador** | `graph/` — LangGraph StateGraph + SQLite checkpointing. **`fleet.py`** paraleliza Tier 1 via `Send` API + reducers `Annotated[..., _merge_dict]`. **`browser_pool.py`** compartilha pages Playwright. |
+| **Topology evaluator** | `aflow/` — 5 topologias hand-authored (baseline, fleet, ablations) + evaluator + CLI. Selecionável via `AFLOW_TOPOLOGY`. |
+| **Sistemas legados (read)** | `sei/client.py`, `siga/client.py` — Playwright, read-only |
+| **SEI write ops** | `sei/writer.py` — `SEIWriter` com APENAS `attach_document` + `save_despacho_draft`. **Sem** `sign()`/`send()`/`protocol()` (safety arquitetural + 6 testes regressivos + `_FORBIDDEN_SELECTORS` runtime guard). |
 | **Procedimentos** | `procedures/store.py` — log JSONL para aprendizado contínuo |
 | **Scheduler** | `scheduler.py` — APScheduler 3x/dia (configurável) |
 | **Feedback UI** | `feedback/web.py` — Streamlit dashboard |
-| **Persona/ICL** | `workspace/SOUL.md` — normas internas, fluxos, templates de e-mail |
+| **Persona/ICL** | `workspace/SOUL.md` (full) + `workspace/SOUL_ESSENTIALS.md` (slim system prompt) + `workspace/PROCEDURES.md` (Tier 0 intents) |
 
 Diagramas Mermaid completos em [`ARCHITECTURE.md`](ARCHITECTURE.md). Roadmap em [`TASKS.md`](TASKS.md).
 
@@ -101,8 +104,52 @@ python -m ufpr_automation.feedback review
 streamlit run ufpr_automation/feedback/web.py
 
 # Otimizar prompts
-python -m ufpr_automation.dspy_modules.optimize --strategy gepa
+python -m ufpr_automation.dspy_modules.optimize --strategy gepa  # bootstrap (synthetic ok)
+python -m ufpr_automation.dspy_modules.optimize --strategy mipro # 20+ feedback exemplos
+python -m ufpr_automation.dspy_modules.optimize --evaluate-only
+
+# Após gerar gepa_optimized.json, USE_DSPY=auto ativa o classifier DSPy automaticamente
+USE_DSPY=auto python -m ufpr_automation --channel gmail --limit 5
+USE_DSPY=off  python -m ufpr_automation --channel gmail   # força LiteLLM
+USE_DSPY=on   python -m ufpr_automation --channel gmail   # exige prompt compilado
 ```
+
+### LangGraph Fleet (Marco III)
+
+```bash
+# Default já é Fleet — paraleliza rag_retrieve + classificar + consultar_sei/siga
+python -m ufpr_automation --channel gmail --limit 10
+
+# Pool de Playwright pages compartilhado entre sub-agents
+FLEET_BROWSER_POOL_SIZE=5 python -m ufpr_automation --channel gmail
+```
+
+### AFlow — topology evaluator (Marco III)
+
+```bash
+# Avaliar todas as 5 topologias contra o feedback set (ou synthetic se vazio)
+python -m ufpr_automation.aflow.cli --topologies all --limit 20
+
+# Avaliar apenas baseline vs fleet
+python -m ufpr_automation.aflow.cli --topologies baseline,fleet --limit 10
+
+# Forçar topologia específica em runtime
+AFLOW_TOPOLOGY=baseline python -m ufpr_automation --channel gmail
+AFLOW_TOPOLOGY=fleet    python -m ufpr_automation --channel gmail   # default
+```
+
+### SEI write ops (Marco III)
+
+```python
+# Apenas attach_document e save_despacho_draft estão disponíveis.
+# NUNCA existem métodos sign/send/protocol/finalize.
+from ufpr_automation.sei.writer import SEIWriter
+
+# Verificar API pública (deve listar SÓ attach_document e save_despacho_draft)
+python -c "from ufpr_automation.sei.writer import SEIWriter; print([m for m in dir(SEIWriter) if not m.startswith('_')])"
+```
+
+Variável `SEI_WRITE_ARTIFACTS_DIR` controla onde screenshots, DOM dumps e audit JSONL ficam (default: `procedures_data/sei_writes/`).
 
 ## Configuração (`.env`)
 
@@ -134,6 +181,20 @@ NEO4J_PASSWORD=...
 SCHEDULE_HOURS=8,13,17
 SCHEDULE_TZ=America/Sao_Paulo
 
+# DSPy gate (Marco III)
+USE_DSPY=auto                    # auto | on | off
+
+# Fleet pool de browsers (Marco III)
+FLEET_BROWSER_POOL_SIZE=3
+
+# AFlow topology dispatcher (Marco III)
+AFLOW_TOPOLOGY=fleet             # fleet | baseline | skip_rag_high_tier0 | no_self_refine | fleet_no_siga
+AFLOW_METRIC=composite
+AFLOW_EVAL_LIMIT=20
+
+# SEI write artifacts (Marco III)
+SEI_WRITE_ARTIFACTS_DIR=         # opcional, default: procedures_data/sei_writes
+
 # OWA fallback (apenas se EMAIL_CHANNEL=owa)
 OWA_EMAIL=...
 OWA_PASSWORD=...
@@ -152,4 +213,6 @@ TELEGRAM_CHAT_ID=...
 - **Cache de embeddings:** `multilingual-e5-large` em `~/.cache/huggingface/hub/`. Em uso intenso, set `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1` para evitar 429.
 - **Windows + UTF-8:** `utils/logging.py` reconfigura `sys.stdout`/`stderr` para UTF-8 no bootstrap do logger — todos os CLIs herdam.
 - **Segurança:** o `.env` está no `.gitignore` — nunca comite credenciais.
-- **Testes:** `pytest ufpr_automation/tests/ -v` (~170 testes).
+- **Testes:** `pytest ufpr_automation/tests/ -v` (429 testes).
+- **SEI safety arquitetural:** `SEIWriter` não expõe `sign()`, `send()`, `protocol()` ou `finalize()`. Adicionar qualquer um quebra o teste regressivo `test_writer_public_api_is_only_attach_and_draft`. O `_FORBIDDEN_SELECTORS` runtime guard ainda impede clicks em "Assinar/Enviar Processo/Protocolar/btnAssinar" mesmo se um selector escapar. Belt + suspenders.
+- **Fleet reducers:** os campos paralelos em `graph/state.py` (`rag_contexts`, `classifications`, `sei_contexts`, `siga_contexts`, `errors`) usam `Annotated[..., reducer]` para que sub-agents do Fleet façam merge de dicts ao invés de last-write-wins. Sem isso, dispatches paralelos via `Send` API perderiam dados.

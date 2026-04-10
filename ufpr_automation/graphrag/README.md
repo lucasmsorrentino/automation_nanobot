@@ -32,7 +32,7 @@ graphrag/
 | `Etapa` | 47 | Passo de um fluxo de trabalho | `id`, `descricao`, `ordem` |
 | `Orgao` | 21 | Unidade organizacional | `sigla`, `nome`, `email`, `telefone` |
 | `TipoProcesso` | 20 | Tipo de processo SEI | `nome`, `frequencia` |
-| `Template` | 15 | Template de email ou despacho SEI | `nome`, `tipo`, `descricao` |
+| `Template` | 15 | Template de email ou despacho SEI. Após Marco III, os 3 templates de despacho SEI também carregam `conteudo` + `despacho_tipo`, servidos em runtime via `graphrag/templates.py:TemplateRegistry` | `nome`, `tipo`, `descricao`, `conteudo` (despachos), `despacho_tipo` (despachos) |
 | `Documento` | 14 | Tipo de documento (TCE, Relatório, etc.) | `nome`, `descricao` |
 | `Pessoa` | 12 | Docente, coordenador, secretário | `nome`, `titulo`, `cargo` |
 | `Papel` | 10 | Papel em um fluxo (Coordenador, Estagiário, etc.) | `nome`, `descricao` |
