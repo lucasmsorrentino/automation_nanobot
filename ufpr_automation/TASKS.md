@@ -21,13 +21,14 @@
 
 Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Despacho → rascunhar email de acuse. Infraestrutura lógica pronta (modelo `Intent` estendido, `SEI_DOC_CATALOG.yaml`, checker registry com 11 checks, `SEIWriter` com dry-run), falta o fluxo Playwright ao vivo e o wire-up no graph.
 
+**▶ SDD detalhado:** [`SDD_SEI_SELECTOR_CAPTURE.md`](SDD_SEI_SELECTOR_CAPTURE.md) — especificação completa pra rodar a sprint de captura via Claude Code (plano Max, sem API key).
+
 - [ ] **Smoke test `SEIWriter` dry-run end-to-end** — criar teste que exercita `create_process` → `attach_document` → `save_despacho_draft` em modo dry-run com page mockada e valida o JSONL de audit. (Ficou pendente da sessão anterior por interrupção de tool, mas a implementação já compila.)
 - [ ] **Captura de seletores Playwright em sessão SEI ao vivo** (BLOQUEANTE para live mode):
-  - [ ] Form "Iniciar Processo" — seletores para Tipo do Processo (dropdown), Especificação, Interessado, Nível de Acesso Restrito, Hipótese Legal, botão Salvar
-  - [ ] Form "Incluir Documento" (tipo Externo) — Tipo, Subtipo, Classificação, Data do Documento, checkbox Sigiloso, dropdown Hipótese Legal (`Informação Pessoal`), file picker, Salvar
-  - [ ] Form "Incluir Documento" (tipo Despacho) — rich-text editor iframe, botão Salvar do editor
-  - [ ] Preencher as 3 chamadas `NotImplementedError` em `sei/writer.py` com os seletores capturados
-  - [ ] Flipar `SEI_WRITE_MODE=live` em ambiente de teste e rodar o smoke test acima contra processo fictício
+  - [ ] **Sprint 1 — Captura** (ver SDD §6): rodar Claude Code dirigindo Playwright headed contra SEI de teste, gerar `procedures_data/sei_capture/<ts>/sei_selectors.yaml` no schema da SDD §5
+  - [ ] **Sprint 2 — Wire-up** (ver SDD §7): criar `sei/writer_selectors.py`, substituir os 3 `NotImplementedError` em `sei/writer.py` usando o YAML capturado
+  - [ ] **Sprint 3 — Validação** (ver SDD §8): smoke dry_run + smoke live em SEI de teste com processo fictício
+  - [ ] Flipar `SEI_WRITE_MODE=live` em produção depois das 3 sprints validadas
 - [ ] **`get_doc_classification(label)` loader** para `workspace/SEI_DOC_CATALOG.yaml` em `procedures/doc_catalog.py` (novo módulo, lazy-cached como o Playbook)
 - [ ] **`agir_estagios` node** novo em `graph/nodes.py`:
   - [ ] Input: email classificado como `Estágios` + intent com `sei_action != "none"`
