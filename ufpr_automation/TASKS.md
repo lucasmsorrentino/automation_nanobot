@@ -12,7 +12,7 @@
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
 
-**Testes:** 533 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
+**Testes:** 552 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
 
 ## Pendente
@@ -67,7 +67,7 @@ Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max 
 - [ ] **Fase 3 — Feedback Review Chat** — adiciona via conversacional **ao lado** do Streamlit (Streamlit continua como fallback obrigatório quando claude/Anthropic indisponível ou pra batch triage visual; ver SDD §4.7-4.8)
 - [ ] **Fase 4 — Classification Debugger** — diagnóstico interativo de classificações erradas via stable_id
 - [ ] **Fase 5 — RAG Quality Auditor** — monitora drift do RAG mensalmente contra ground truth curado
-- [ ] **Fase 6 — PROCEDURES Staleness Checker** — detecta intents desalinhados com SOUL.md/Neo4j
+- [x] **Fase 6 — PROCEDURES Staleness Checker** — `agent_sdk/procedures_staleness.py` (checks blocking_checks registration, SOUL.md §X references, last_update age, SEI action consistency), Markdown report output, 19 testes em `test_procedures_staleness.py`
 - [ ] **Fase 7 — Maintainer Tool polish** — slash commands + skills curados pra DX
 
 ### Out of scope (decisão alinhada com a coordenação)
