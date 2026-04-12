@@ -123,15 +123,15 @@ def topology_fleet(channel: str = "gmail", checkpointer=None):
 
 
 def topology_skip_rag_high_tier0(channel: str = "gmail", checkpointer=None):
-    """Baseline variant that skips rag_retrieve when Tier 0 semantic score > 0.85.
+    """Baseline variant that skips rag_retrieve for emails with Tier 0 near-miss > threshold.
 
-    Ablation: tests how much RAG matters for high-confidence Tier 0 fall-through.
-
-    Note: tier0_lookup already short-circuits emails above its threshold, so
-    emails that reach Tier 1 have scores *below* threshold. This topology
-    therefore behaves identically to baseline for now — a proper implementation
-    would require tier0_lookup to emit near-miss scores into state so
-    rag_retrieve can consult them. Kept as a placeholder for future work.
+    tier0_lookup now emits per-email best semantic scores (even when below
+    the routing threshold) into ``state["tier0_near_miss_scores"]``. When
+    ``AFLOW_TOPOLOGY=skip_rag_high_tier0`` is set, ``rag_retrieve`` consults
+    those scores and skips RAG retrieval for any email whose near-miss score
+    exceeded ``SKIP_RAG_NEAR_MISS_THRESHOLD`` (default 0.80). Ablation tests
+    how much incremental accuracy the RAG step provides for emails that
+    were already "almost" a Tier 0 hit.
     """
     return topology_baseline(channel=channel, checkpointer=checkpointer)
 

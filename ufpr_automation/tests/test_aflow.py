@@ -186,6 +186,53 @@ class TestAblationBehavior:
         mock_client.classify_email_async.assert_called_once()
         mock_client.self_refine_async.assert_called_once()
 
+    def test_skip_rag_high_tier0_skips_near_miss_emails(self, monkeypatch):
+        """When AFLOW_TOPOLOGY=skip_rag_high_tier0, rag_retrieve skips emails
+        whose Tier 0 near-miss score exceeded the threshold."""
+        monkeypatch.setenv("AFLOW_TOPOLOGY", "skip_rag_high_tier0")
+        monkeypatch.setenv("SKIP_RAG_NEAR_MISS_THRESHOLD", "0.75")
+
+        from unittest.mock import MagicMock, patch
+
+        from ufpr_automation.core.models import EmailData
+        from ufpr_automation.graph.nodes import rag_retrieve
+
+        email_high = EmailData(sender="a@a.com", subject="High near-miss", body="body1")
+        email_high.compute_stable_id()
+        email_low = EmailData(sender="b@b.com", subject="Low near-miss", body="body2")
+        email_low.compute_stable_id()
+
+        state = {
+            "emails": [email_high, email_low],
+            "tier0_hits": [],
+            "tier0_near_miss_scores": {
+                email_high.stable_id: 0.85,  # above 0.75 -> skip
+                email_low.stable_id: 0.60,   # below 0.75 -> keep
+            },
+        }
+
+        # Stub the retriever — we just need to see which emails get queried
+        searched_subjects: list[str] = []
+
+        fake_retriever = MagicMock()
+
+        def fake_search(query, conselho=None, top_k=5):
+            searched_subjects.append(query[:20])
+            return []
+
+        fake_retriever.search_formatted.side_effect = lambda q, top_k=5: searched_subjects.append(q[:20]) or ""
+
+        with patch("ufpr_automation.graph.nodes._get_retriever", return_value=fake_retriever), \
+             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""), \
+             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""):
+            result = rag_retrieve(state)
+
+        # The high-near-miss email should NOT have been queried
+        high_subject_queried = any("High near-miss" in s for s in searched_subjects)
+        low_subject_queried = any("Low near-miss" in s for s in searched_subjects)
+        assert high_subject_queried is False
+        assert low_subject_queried is True
+
     def test_fleet_no_siga_skips_siga_in_process_one_email(self, monkeypatch):
         """When AFLOW_TOPOLOGY=fleet_no_siga, process_one_email skips SIGA."""
         monkeypatch.setenv("AFLOW_TOPOLOGY", "fleet_no_siga")

@@ -41,6 +41,11 @@ class EmailState(TypedDict, total=False):
     # classificar so they can short-circuit and skip those emails.
     tier0_hits: list[str]
 
+    # Tier 0 near-miss scores — stable_id -> best semantic similarity even
+    # when below the routing threshold. Used by the AFlow skip_rag_high_tier0
+    # topology to skip RAG retrieval for emails that came close to a match.
+    tier0_near_miss_scores: Annotated[dict[str, float], _merge_dict]
+
     # RAG output (email stable_id -> formatted context: vector + graph + reflexion)
     # Reduced — populated by Fleet sub-agents in parallel.
     rag_contexts: Annotated[dict[str, str], _merge_dict]

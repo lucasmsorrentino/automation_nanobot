@@ -523,6 +523,28 @@ class Playbook:
             )
         return None
 
+    def best_semantic_score(self, query: str) -> float:
+        """Return the best semantic similarity score regardless of threshold.
+
+        Useful for ablations / diagnostics that need to know *how close* a
+        query came to a Tier 0 match even when below the routing threshold.
+        Returns 0.0 if embeddings unavailable or query empty.
+        """
+        self._ensure_parsed()
+        if not self._intents or not query or not query.strip():
+            return 0.0
+        if not self._ensure_embeddings():
+            return 0.0
+
+        import numpy as np
+
+        query_vec = self._model.encode(
+            f"query: {query}", normalize_embeddings=True
+        )
+        query_vec = np.asarray(query_vec, dtype="float32")
+        sims = self._embeddings @ query_vec
+        return float(np.max(sims))
+
     def _keyword_match(self, query: str) -> Optional[PlaybookMatch]:
         """Return the intent with the most keyword hits, or ``None``."""
         best: tuple[Intent, list[str]] | None = None

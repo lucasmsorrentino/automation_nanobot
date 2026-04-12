@@ -12,7 +12,7 @@
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
 
-**Testes:** 623 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
+**Testes:** 625 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
 
 ## Pendente
@@ -52,7 +52,7 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 
 ### Marco III — refinamentos pendentes
 - [ ] **`BrowserPagePool` wire-up**: pool de Playwright pages criado em `graph/browser_pool.py` mas `_consult_sei_for_email`/`_consult_siga_for_email` ainda spawnam browser próprio. Refator para reaproveitar pages do pool.
-- [x] **AFlow ablations reais**: `no_self_refine` (skips `self_refine_async` via `AFLOW_TOPOLOGY` env check in `_classify_with_litellm`), `fleet_no_siga` (skips SIGA consult in `process_one_email`). `skip_rag_high_tier0` permanece alias de baseline (tier0_lookup já short-circuits acima do threshold — implementação real requer emitir near-miss scores no state). 3 testes de ablation em `test_aflow.py`.
+- [x] **AFlow ablations reais (todas as 3)**: `no_self_refine` (skips `self_refine_async`), `fleet_no_siga` (skips SIGA consult), `skip_rag_high_tier0` (agora real — `Playbook.best_semantic_score()` + `tier0_lookup` emite `tier0_near_miss_scores` no state; `rag_retrieve` skipa emails com score > `SKIP_RAG_NEAR_MISS_THRESHOLD` (default 0.80)). 4 testes de ablation + 1 teste de near-miss emission.
 - [ ] **Ollama/Qwen3-8B**: cascade pronto em `llm/router.py`, falta deploy operacional do modelo local.
 - [x] **3 testes flaky LiteLLM** — corrigido: mocks agora patcham `cascaded_completion` / `cascaded_completion_sync` no namespace do client (antes patchavam `litellm` que o router reimportava internamente). Todos offline, <1s.
 

@@ -98,6 +98,7 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
 
     hits: list[str] = []
     classifications: dict[str, Any] = {}
+    near_miss_scores: dict[str, float] = {}
     stale_count = 0
     missing_count = 0
 
@@ -110,6 +111,15 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
 
         match = playbook.lookup(query)
         if match is None:
+            # Record the best semantic score (below threshold) for
+            # ablations / diagnostics. Cheap — reuses precomputed embeddings.
+            try:
+                score = playbook.best_semantic_score(query)
+                if score > 0:
+                    near_miss_scores[email.stable_id] = score
+            except Exception as e:
+                logger.debug("Tier 0: could not compute near-miss for %s: %s",
+                             email.stable_id[:8], e)
             continue
 
         if playbook.is_stale(match.intent):
@@ -172,7 +182,11 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
         missing_count,
         len(emails) - len(hits),
     )
-    return {"tier0_hits": hits, "classifications": classifications}
+    return {
+        "tier0_hits": hits,
+        "classifications": classifications,
+        "tier0_near_miss_scores": near_miss_scores,
+    }
 
 
 async def _perceber_owa_async() -> list:
@@ -313,6 +327,29 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
     # without paying the RAG retrieval cost. Only Tier 1 emails need RAG.
     tier0_hits = set(state.get("tier0_hits", []))
     tier1_emails = [e for e in emails if e.stable_id not in tier0_hits]
+
+    # AFlow ablation: skip_rag_high_tier0 skips RAG retrieval for emails
+    # whose Tier 0 semantic score came close to the routing threshold but
+    # didn't clear it. Cheaper but may hurt classification accuracy.
+    if os.environ.get("AFLOW_TOPOLOGY") == "skip_rag_high_tier0":
+        near_miss = state.get("tier0_near_miss_scores", {}) or {}
+        threshold = float(os.environ.get("SKIP_RAG_NEAR_MISS_THRESHOLD", "0.80"))
+        skipped = []
+        kept = []
+        for e in tier1_emails:
+            score = near_miss.get(e.stable_id, 0.0)
+            if score > threshold:
+                skipped.append((e, score))
+            else:
+                kept.append(e)
+        if skipped:
+            logger.info(
+                "RAG skip_rag_high_tier0: skipping %d email(s) with near-miss > %.2f",
+                len(skipped), threshold,
+            )
+            for e, s in skipped:
+                logger.debug("  skip '%s' (score=%.3f)", e.subject[:40], s)
+        tier1_emails = kept
 
     if not tier1_emails:
         logger.info("RAG: todos os e-mails atendidos pelo Tier 0 — pulando RAG")

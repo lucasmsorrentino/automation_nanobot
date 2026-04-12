@@ -117,6 +117,21 @@ class TestTier0Lookup:
         assert result["tier0_hits"] == []
         assert result["classifications"] == {}
 
+    def test_miss_records_near_miss_scores(self, patch_get_playbook):
+        """tier0_lookup should emit best_semantic_score for Tier 1 emails."""
+        # Force all emails to miss in lookup()
+        patch_get_playbook.lookup = lambda q: None
+        # Return a known near-miss score for any query
+        patch_get_playbook.best_semantic_score = lambda q: 0.72
+
+        emails = [_make_email("a@b.c", "Assunto aleatório")]
+        result = tier0_lookup({"emails": emails})
+
+        assert result["tier0_hits"] == []
+        near_miss = result.get("tier0_near_miss_scores", {})
+        assert emails[0].stable_id in near_miss
+        assert near_miss[emails[0].stable_id] == 0.72
+
     def test_required_field_missing_falls_back(self, patch_get_playbook):
         # "encaminho TCE" matches needs_tce_number but no TCE number in body
         emails = [_make_email("Ana <ana@ufpr.br>", "encaminho TCE", "sem número")]
