@@ -64,7 +64,7 @@ Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max 
 
 - [ ] **Fase 1 — Infra compartilhada** (`agent_sdk/runner.py` + skills + audit) — bloqueia tudo abaixo
 - [ ] **Fase 2 — Intent Drafter** (Marco IV.2 do plano antigo, agora consolidado aqui) — auto-aprendizado do Tier 0 playbook
-- [ ] **Fase 3 — Feedback Review Chat** — substitui o Streamlit feedback UI por sessão conversacional
+- [ ] **Fase 3 — Feedback Review Chat** — adiciona via conversacional **ao lado** do Streamlit (Streamlit continua como fallback obrigatório quando claude/Anthropic indisponível ou pra batch triage visual; ver SDD §4.7-4.8)
 - [ ] **Fase 4 — Classification Debugger** — diagnóstico interativo de classificações erradas via stable_id
 - [ ] **Fase 5 — RAG Quality Auditor** — monitora drift do RAG mensalmente contra ground truth curado
 - [ ] **Fase 6 — PROCEDURES Staleness Checker** — detecta intents desalinhados com SOUL.md/Neo4j

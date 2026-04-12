@@ -358,22 +358,26 @@ Resumo do conteúdo (a fazer na sprint de implementação):
 
 ---
 
-## 4. Spec — Feedback Review Chat
+## 4. Spec — Feedback Review Chat (complementa Streamlit, não substitui)
 
-> **Prioridade:** ALTA — substitui (ou augmenta) o Streamlit feedback UI atual com uma interface conversacional muito mais poderosa  
-> **Frequência:** ad-hoc (você abre quando quiser revisar)  
-> **Custo:** muito baixo (sessões de ~5-15 min, dentro da quota Max)
+> **Prioridade:** ALTA — adiciona uma interface conversacional poderosa **ao lado** do Streamlit feedback UI existente  
+> **Frequência:** ad-hoc (você escolhe qual usar conforme o caso)  
+> **Custo:** muito baixo (sessões de ~5-15 min, dentro da quota Max)  
+> **Streamlit continua disponível como fallback obrigatório** (ver §4.7 abaixo)
 
 ### 4.1 Goal
 
-Substituir o ciclo "abre Streamlit → vê tabela → clica → corrige → next" por uma sessão de chat onde você dialoga com o agent sobre as classificações pendentes. O agent tem tools para:
+Adicionar uma **segunda via** de revisão de feedback ao lado do `feedback/web.py` (Streamlit), para casos onde o chat conversacional é mais produtivo: investigação profunda, consultas live a SEI/SIGA durante a revisão, captura de "por quê" para o Reflexion. O Streamlit continua sendo a via primária para batch triage visual e o **fallback obrigatório** para qualquer situação onde o Claude Code não esteja disponível (quota Max esgotada, sem rede, sem `claude` autenticado, Anthropic com outage, operador prefere clicar a digitar).
+
+O agent do Feedback Chat tem tools para:
 
 - Ler `feedback_data/last_run.jsonl` (resultado da última execução do pipeline)
 - Consultar SIGA (read-only) para validar dados de aluno
 - Consultar SEI (read-only) para validar processos
 - Consultar RAG para buscar normativas
-- Aplicar correções no `feedback.jsonl` (com confirmação humana)
+- Aplicar correções no `feedback.jsonl` via `FeedbackStore.add_correction()` (com confirmação humana)
 - Explicar por que o pipeline classificou de uma forma específica
+- Capturar entries de Reflexion quando o operador explica o erro
 
 ### 4.2 Trigger
 
@@ -417,18 +421,37 @@ A sessão é interativa, então o "procedure" é o briefing inicial que define o
 - Tone: cordial, técnico, cita fontes
 - **Permissão:** pode rodar Bash, Read, Edit em `feedback_data/`. NÃO pode tocar `PROCEDURES.md` (esse caminho passa pelo intent_drafter + revisão humana separada)
 
-### 4.7 Vantagens vs Streamlit atual
+### 4.7 Quando usar cada via — Streamlit vs Feedback Chat
 
-| Streamlit (`feedback/web.py`) | Feedback Chat |
-|---|---|
-| Tabela estática + formulários | Conversação contextual |
-| Sem acesso a SIGA/SEI durante review | Pode consultar live |
-| Sem explicação do "por quê" | Pergunta + capta motivo do erro |
-| Não roda RAG durante review | Roda quando precisar |
-| Não captura insight para Reflexion | Salva auto |
-| Requer manter um servidor web | CLI puro, zero infra |
+**Os dois caminhos coexistem permanentemente.** Não há plano de deprecação do Streamlit. A escolha entre os dois é situacional:
 
-### 4.8 Critérios de sucesso
+| Cenário | Use Streamlit | Use Feedback Chat |
+|---|---|---|
+| Triagem rápida de muitos emails (visual scan, "esses 5 ok, esses 2 errados") | ✅ vence (tabela compacta) | — |
+| Investigação profunda de 1-2 emails ("por que classificou X?") | — | ✅ vence (chat com tools) |
+| Precisa consultar SEI/SIGA durante a revisão | — | ✅ vence (tools live) |
+| Operador não-técnico, prefere clicar | ✅ vence (form-based) | — |
+| Capturar motivo do erro pra Reflexion | — | ✅ vence (chat natural) |
+| Acesso de múltiplas máquinas / múltiplos operadores | ✅ vence (web UI) | — |
+| Sem `claude` autenticado / quota Max esgotada / Anthropic offline | ✅ **OBRIGATÓRIO** (único caminho) | ❌ indisponível |
+| Modificar prompts DSPy a partir de feedback acumulado | ✅ (export → optimize) | ✅ (chat pode rodar `optimize`) |
+| Onboarding de novo operador | ✅ vence (curva de aprendizado menor) | — |
+
+**Regra prática para o operador:** abre Streamlit por padrão. Se durante a revisão de um email específico você sentir que precisa de investigação profunda ou consulta a SEI/SIGA, abre o Feedback Chat para esse email pontual.
+
+**Regra prática para o sistema:** o `FeedbackStore` é a fonte única da verdade. Os dois caminhos escrevem nele via `add_correction()` — nenhum dos dois bypassa o outro nem causa conflito.
+
+### 4.8 Garantia de fallback (CRÍTICO)
+
+O Streamlit `feedback/web.py` **deve continuar funcionando sem dependência alguma do Claude Code**:
+
+- [ ] Nenhum import novo em `feedback/web.py` referenciando `agent_sdk/`
+- [ ] Nenhum dado em `feedback_data/` em formato exclusivo de uma das vias
+- [ ] `streamlit run ufpr_automation/feedback/web.py` continua iniciando a UI sem warnings
+- [ ] Documentação no README mantém o comando do Streamlit como **primeira opção** de revisão de feedback
+- [ ] Test de regressão: `test_feedback_streamlit_independent` garante que `feedback.web` importa sem `claude` no PATH
+
+### 4.9 Critérios de sucesso
 
 - [ ] `agent_sdk/feedback_chat.py` cria o bootstrap e exec `claude`
 - [ ] `agent_sdk/skills/feedback_chat_bootstrap.md` está completo
@@ -436,7 +459,8 @@ A sessão é interativa, então o "procedure" é o briefing inicial que define o
 - [ ] Correções são gravadas via `FeedbackStore.add_correction()` (não escrita direta)
 - [ ] Transcript salvo em `procedures_data/agent_sdk/feedback_chat/<run_id>/`
 - [ ] Reflexion entries criadas quando o user explica o erro
-- [ ] (Opcional) Streamlit `feedback/web.py` deprecated com link no README pro novo flow
+- [ ] **Streamlit `feedback/web.py` continua funcionando sem mudança** — `streamlit run` segue funcional
+- [ ] README documenta as duas vias com a tabela §4.7
 
 ---
 
@@ -749,6 +773,7 @@ Marco V — Claude Code Automations (este SDD):
 | **Misturar credenciais de teste e produção no `.env`** | Para o SEI capture e similar, usar `.env.test` separado e carregar explicitamente via `load_dotenv(".env.test", override=True)`. |
 | **Rodar automações sem audit trail** | Toda invocação de `claude -p` deve gerar pelo menos um JSONL row. |
 | **Loop infinito de drafting** | Se o intent drafter ficar produzindo o mesmo candidato de novo (via hash), o sistema deve detectar e parar — não floodar `PROCEDURES_CANDIDATES.md`. |
+| **Deprecar o Streamlit feedback UI** | O Feedback Chat (§4) é uma via *adicional*, não substituta. Streamlit continua sendo fallback obrigatório quando: quota Max esgotada, `claude` não autenticado, Anthropic offline, operador prefere clicar a digitar, batch triage visual. Os dois escrevem no mesmo `FeedbackStore`. |
 
 ---
 
