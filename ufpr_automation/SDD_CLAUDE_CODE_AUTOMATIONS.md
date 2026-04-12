@@ -421,23 +421,25 @@ A sessão é interativa, então o "procedure" é o briefing inicial que define o
 - Tone: cordial, técnico, cita fontes
 - **Permissão:** pode rodar Bash, Read, Edit em `feedback_data/`. NÃO pode tocar `PROCEDURES.md` (esse caminho passa pelo intent_drafter + revisão humana separada)
 
-### 4.7 Quando usar cada via — Streamlit vs Feedback Chat
+### 4.7 Quando usar cada via — Feedback Chat (default) vs Streamlit (fallback)
 
-**Os dois caminhos coexistem permanentemente.** Não há plano de deprecação do Streamlit. A escolha entre os dois é situacional:
+**Os dois caminhos coexistem permanentemente.** O Feedback Chat é o caminho padrão; o Streamlit é a rede de segurança obrigatória — usado quando o chat não está disponível ou quando algum cenário específico favorece a tabela visual.
 
-| Cenário | Use Streamlit | Use Feedback Chat |
+**Default:** Feedback Chat. A tabela abaixo marca **exceções** onde Streamlit vence ou é o único caminho viável.
+
+| Cenário | Default (Chat) | Fallback (Streamlit) |
 |---|---|---|
-| Triagem rápida de muitos emails (visual scan, "esses 5 ok, esses 2 errados") | ✅ vence (tabela compacta) | — |
-| Investigação profunda de 1-2 emails ("por que classificou X?") | — | ✅ vence (chat com tools) |
-| Precisa consultar SEI/SIGA durante a revisão | — | ✅ vence (tools live) |
-| Operador não-técnico, prefere clicar | ✅ vence (form-based) | — |
-| Capturar motivo do erro pra Reflexion | — | ✅ vence (chat natural) |
-| Acesso de múltiplas máquinas / múltiplos operadores | ✅ vence (web UI) | — |
-| Sem `claude` autenticado / quota Max esgotada / Anthropic offline | ✅ **OBRIGATÓRIO** (único caminho) | ❌ indisponível |
-| Modificar prompts DSPy a partir de feedback acumulado | ✅ (export → optimize) | ✅ (chat pode rodar `optimize`) |
-| Onboarding de novo operador | ✅ vence (curva de aprendizado menor) | — |
+| Investigação profunda de 1-2 emails ("por que classificou X?") | ✅ default | — |
+| Precisa consultar SEI/SIGA durante a revisão | ✅ default | — |
+| Capturar motivo do erro pra Reflexion | ✅ default | — |
+| Modificar prompts DSPy a partir de feedback acumulado | ✅ default (chat pode rodar `optimize`) | ✅ alternativa (export → optimize) |
+| Triagem rápida de muitos emails (visual scan, "esses 5 ok, esses 2 errados") | — | ✅ exceção (tabela compacta é mais rápida) |
+| Operador não-técnico, prefere clicar a digitar | — | ✅ exceção (form-based) |
+| Acesso simultâneo de múltiplas máquinas / múltiplos operadores | — | ✅ exceção (web UI multi-tab) |
+| Onboarding de novo operador (curva de aprendizado menor) | — | ✅ exceção |
+| **Sem `claude` autenticado / quota Max esgotada / Anthropic offline** | ❌ indisponível | ✅ **OBRIGATÓRIO — único caminho** |
 
-**Regra prática para o operador:** abre Streamlit por padrão. Se durante a revisão de um email específico você sentir que precisa de investigação profunda ou consulta a SEI/SIGA, abre o Feedback Chat para esse email pontual.
+**Regra prática para o operador:** abra o Feedback Chat por padrão. Se o chat estiver indisponível (sem `claude` autenticado, quota Max esgotada, Anthropic com outage), ou se a tarefa do dia for batch triage visual de muitos emails, abra o Streamlit.
 
 **Regra prática para o sistema:** o `FeedbackStore` é a fonte única da verdade. Os dois caminhos escrevem nele via `add_correction()` — nenhum dos dois bypassa o outro nem causa conflito.
 
@@ -448,7 +450,7 @@ O Streamlit `feedback/web.py` **deve continuar funcionando sem dependência algu
 - [ ] Nenhum import novo em `feedback/web.py` referenciando `agent_sdk/`
 - [ ] Nenhum dado em `feedback_data/` em formato exclusivo de uma das vias
 - [ ] `streamlit run ufpr_automation/feedback/web.py` continua iniciando a UI sem warnings
-- [ ] Documentação no README mantém o comando do Streamlit como **primeira opção** de revisão de feedback
+- [ ] Documentação no README lista o Feedback Chat como **opção default** e o Streamlit como **fallback explícito** (com a tabela §4.7 ou link pra ela)
 - [ ] Test de regressão: `test_feedback_streamlit_independent` garante que `feedback.web` importa sem `claude` no PATH
 
 ### 4.9 Critérios de sucesso
