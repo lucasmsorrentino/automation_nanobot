@@ -1,5 +1,6 @@
 """Tests for SEIWriter — safety regression suite."""
 import inspect
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,7 +8,12 @@ import pytest
 
 from ufpr_automation.sei import writer as writer_module
 from ufpr_automation.sei.writer import SEIWriter, _FORBIDDEN_SELECTORS, _is_forbidden
-from ufpr_automation.sei.writer_models import AttachResult, DraftResult
+from ufpr_automation.sei.writer_models import (
+    AttachResult,
+    CreateProcessResult,
+    DraftResult,
+    SEIDocClassification,
+)
 
 
 # ============================================================================
@@ -35,15 +41,19 @@ class TestWriterArchitecturalSafety:
     def test_writer_has_no_finalize_method(self):
         assert not hasattr(SEIWriter, "finalize")
 
-    def test_writer_public_api_is_only_attach_and_draft(self):
+    def test_writer_public_api_is_only_whitelisted_write_ops(self):
         public_methods = {
             name for name in dir(SEIWriter)
             if not name.startswith("_") and callable(getattr(SEIWriter, name))
         }
-        # Allow run_id property and constructor; everything else must be one
-        # of the two write operations.
+        # Allow run_id property; everything else must be one of the three
+        # authorized write operations (attach/draft/create).
         public_methods.discard("run_id")
-        assert public_methods == {"attach_document", "save_despacho_draft"}, (
+        assert public_methods == {
+            "attach_document",
+            "save_despacho_draft",
+            "create_process",
+        }, (
             f"SEIWriter exposes unexpected methods: {public_methods}. "
             f"Adding new write operations requires explicit safety review."
         )
@@ -120,37 +130,53 @@ def writer(mock_page, tmp_path, monkeypatch):
     return SEIWriter(mock_page, run_id="test-run-1234")
 
 
+@pytest.fixture
+def tce_classification():
+    return SEIDocClassification(
+        sei_tipo="Externo",
+        sei_subtipo="Termo",
+        sei_classificacao="Inicial",
+    )
+
+
 class TestAttachDocument:
     @pytest.mark.asyncio
-    async def test_attach_returns_failure_for_missing_file(self, writer):
+    async def test_attach_returns_failure_for_missing_file(self, writer, tce_classification):
         result = await writer.attach_document(
             "12345.000123/2026-01",
             Path("/nonexistent/file.pdf"),
+            tce_classification,
         )
         assert result.success is False
         assert "file_not_found" in result.error
 
     @pytest.mark.asyncio
-    async def test_attach_captures_screenshots(self, writer, tmp_path):
+    async def test_attach_captures_screenshot(self, writer, tce_classification, tmp_path):
         fake_pdf = tmp_path / "doc.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4 fake")
         result = await writer.attach_document(
             "12345.000123/2026-01",
             fake_pdf,
+            tce_classification,
         )
         assert result.success is True
-        assert len(result.artifacts) >= 2  # pre + post
+        # Dry-run captures one pre-state screenshot; no post-click artifact
+        # exists because no click happens.
+        assert len(result.artifacts) >= 1
 
     @pytest.mark.asyncio
-    async def test_attach_writes_audit_log(self, writer, tmp_path):
+    async def test_attach_writes_audit_log(self, writer, tce_classification, tmp_path):
         fake_pdf = tmp_path / "doc.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4 fake")
-        await writer.attach_document("12345.000123/2026-01", fake_pdf)
+        await writer.attach_document("12345.000123/2026-01", fake_pdf, tce_classification)
         audit_path = tmp_path / "audit.jsonl"
         assert audit_path.exists()
         content = audit_path.read_text(encoding="utf-8")
         assert "attach_document" in content
         assert "12345.000123/2026-01" in content
+        # Classification fields must be persisted for later audit.
+        assert "Termo" in content
+        assert "Inicial" in content
 
 
 class TestSaveDespachoDraft:
@@ -204,3 +230,159 @@ class TestSafeClickGuard:
     async def test_safe_click_passes_for_salvar(self, writer, mock_page):
         await writer._safe_click("text=Salvar")
         mock_page.click.assert_awaited_once_with("text=Salvar")
+
+
+class TestCreateProcess:
+    @pytest.mark.asyncio
+    async def test_create_dryrun_returns_synthetic_id(self, writer):
+        result = await writer.create_process(
+            tipo_processo="Graduação/Ensino Técnico: Estágios não Obrigatórios",
+            especificacao="Design Gráfico",
+            interessado="ALANIS ROCHA - GRR20230091",
+        )
+        assert result.success is True
+        assert result.dry_run is True
+        assert result.processo_id == f"DRYRUN-{writer.run_id}"
+        assert result.tipo_processo.startswith("Graduação")
+        assert result.interessado == "ALANIS ROCHA - GRR20230091"
+
+    @pytest.mark.asyncio
+    async def test_create_dryrun_writes_audit(self, writer, tmp_path):
+        await writer.create_process(
+            tipo_processo="Estágios não Obrigatórios",
+            especificacao="Design Gráfico",
+            interessado="ALANIS ROCHA - GRR20230091",
+            motivo="Termo de Compromisso",
+        )
+        audit_path = tmp_path / "audit.jsonl"
+        assert audit_path.exists()
+        content = audit_path.read_text(encoding="utf-8")
+        assert "create_process" in content
+        assert "ALANIS ROCHA - GRR20230091" in content
+        assert "dry_run" in content
+
+    @pytest.mark.asyncio
+    async def test_create_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
+        """Live mode must remain blocked until Playwright selectors are captured."""
+        from ufpr_automation.config import settings
+        monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
+        live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
+        with pytest.raises(NotImplementedError, match="selector capture"):
+            await live_writer.create_process(
+                tipo_processo="Estágios não Obrigatórios",
+                especificacao="Design Gráfico",
+                interessado="ALANIS ROCHA - GRR20230091",
+            )
+
+
+class TestAttachDocumentLiveMode:
+    @pytest.mark.asyncio
+    async def test_attach_live_mode_raises_not_implemented(
+        self, mock_page, tce_classification, tmp_path, monkeypatch
+    ):
+        from ufpr_automation.config import settings
+        monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
+        live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
+        fake_pdf = tmp_path / "doc.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4 fake")
+        with pytest.raises(NotImplementedError, match="selector capture"):
+            await live_writer.attach_document(
+                "12345.000123/2026-01", fake_pdf, tce_classification
+            )
+
+
+class TestSaveDespachoDraftLiveMode:
+    @pytest.mark.asyncio
+    async def test_draft_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
+        from ufpr_automation.config import settings
+        monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
+        live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
+        with patch("ufpr_automation.graphrag.templates.get_registry") as gr:
+            gr.return_value.get.return_value = "Despacho body: [NOME]"
+            with pytest.raises(NotImplementedError, match="selector capture"):
+                await live_writer.save_despacho_draft(
+                    "12345.000123/2026-01",
+                    tipo="tce_inicial",
+                    variables={"NOME": "Aluno"},
+                )
+
+
+# ============================================================================
+# End-to-end dry-run smoke test
+# ----------------------------------------------------------------------------
+# Exercises the full Estágios chain: create_process → attach_document
+# → save_despacho_draft with a mocked page, and verifies audit.jsonl captures
+# all three operations in order with mode=dry_run. Protects the dry-run path
+# against regressions while live mode is blocked on selector capture
+# (see SDD_SEI_SELECTOR_CAPTURE.md).
+# ============================================================================
+
+class TestSEIWriterDryRunEndToEnd:
+    @pytest.mark.asyncio
+    async def test_full_estagios_chain_dryrun(
+        self, writer, tce_classification, tmp_path
+    ):
+        # 1. create_process → synthetic id
+        create_result = await writer.create_process(
+            tipo_processo="Graduação/Ensino Técnico: Estágios não Obrigatórios",
+            especificacao="Design Gráfico",
+            interessado="ALANIS ROCHA - GRR20230091",
+        )
+        assert create_result.success is True
+        assert create_result.dry_run is True
+        processo_id = create_result.processo_id
+        assert processo_id.startswith("DRYRUN-")
+
+        # 2. attach_document → TCE PDF
+        fake_tce = tmp_path / "tce.pdf"
+        fake_tce.write_bytes(b"%PDF-1.4 fake-tce-content")
+        attach_result = await writer.attach_document(
+            processo_id, fake_tce, tce_classification
+        )
+        assert attach_result.success is True
+        assert attach_result.dry_run is True
+        assert attach_result.processo_id == processo_id
+
+        # 3. save_despacho_draft using body_override (no TemplateRegistry lookup)
+        draft_result = await writer.save_despacho_draft(
+            processo_id,
+            tipo="tce_inicial",
+            variables={"NOME_ALUNO": "ALANIS ROCHA", "GRR": "GRR20230091"},
+            body_override=(
+                "Despacho: encaminha-se o TCE de [NOME_ALUNO] ([GRR]) "
+                "para análise da Coordenação."
+            ),
+        )
+        assert draft_result.success is True
+        assert draft_result.dry_run is True
+        assert draft_result.processo_id == processo_id
+        assert draft_result.tipo == "tce_inicial"
+
+        # 4. audit.jsonl must have 3 records in order, all with mode=dry_run
+        audit_path = tmp_path / "audit.jsonl"
+        assert audit_path.exists()
+        records = [
+            json.loads(line)
+            for line in audit_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(records) == 3
+        assert [r["op"] for r in records] == [
+            "create_process",
+            "attach_document",
+            "save_despacho_draft",
+        ]
+        for r in records:
+            assert r["mode"] == "dry_run"
+            assert r["run_id"] == "test-run-1234"
+
+        # 5. Classification and template override are persisted in audit
+        assert records[1]["sei_subtipo"] == "Termo"
+        assert records[1]["sei_classificacao"] == "Inicial"
+        assert records[1]["file_sha256"]
+        assert records[2]["content_sha256"]
+        assert records[2]["content_length"] > 0
+
+        # 6. No clicks happened — the forbidden-selector guard was never
+        # triggered, and the mock page's click was never awaited.
+        writer._page.click.assert_not_called()

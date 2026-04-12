@@ -130,6 +130,79 @@ class TestParser:
         )
         assert i.last_update_date() is None
 
+    def test_intent_extended_fields_default_empty(self):
+        """A legacy intent without SEI workflow fields must still parse
+        with sensible defaults so existing PROCEDURES.md entries keep
+        working unchanged.
+        """
+        i = Intent(intent_name="x", categoria="Outros", keywords=["x"])
+        assert i.sei_action == "none"
+        assert i.sei_process_type == ""
+        assert i.required_attachments == []
+        assert i.blocking_checks == []
+        assert i.despacho_template == ""
+
+    def test_intent_extended_fields_parse_from_yaml(self, tmp_path):
+        """All 5 new SEI workflow fields round-trip through the YAML parser."""
+        md = tmp_path / "PROCEDURES.md"
+        md.write_text(
+            """\
+```intent
+intent_name: tce_inicial_estagios
+keywords:
+  - "TCE inicial"
+  - "termo de compromisso"
+categoria: "Estágios"
+action: "Abrir Processo SEI"
+required_fields:
+  - nome_aluno
+  - numero_tce
+  - data_inicio
+last_update: "2026-04-10"
+confidence: 0.92
+template: "Despacho enviado — processo [NUMERO_PROCESSO_SEI] criado."
+sei_action: create_process
+sei_process_type: "Graduação/Ensino Técnico: Estágios não Obrigatórios"
+required_attachments:
+  - TCE_assinado
+blocking_checks:
+  - siga_matricula_ativa
+  - siga_reprovacoes_ultimo_semestre
+  - data_inicio_retroativa
+  - tce_jornada_sem_horario
+despacho_template: |
+  Ao Setor X,
+  Encaminha-se o TCE de [NOME_ALUNO] (GRR[GRR]) para análise.
+```
+""",
+            encoding="utf-8",
+        )
+        intents = parse_procedures_md(md)
+        assert len(intents) == 1
+        intent = intents[0]
+        assert intent.intent_name == "tce_inicial_estagios"
+        assert intent.sei_action == "create_process"
+        assert intent.sei_process_type.startswith("Graduação")
+        assert intent.required_attachments == ["TCE_assinado"]
+        assert intent.blocking_checks == [
+            "siga_matricula_ativa",
+            "siga_reprovacoes_ultimo_semestre",
+            "data_inicio_retroativa",
+            "tce_jornada_sem_horario",
+        ]
+        assert "[NOME_ALUNO]" in intent.despacho_template
+        assert "análise" in intent.despacho_template
+
+    def test_intent_sei_action_rejects_invalid_literal(self):
+        """sei_action is a Literal — invalid values must fail validation."""
+        with pytest.raises(Exception):  # pydantic ValidationError
+            Intent(
+                intent_name="x",
+                categoria="Estágios",
+                keywords=["x"],
+                sei_action="delete_process",  # type: ignore[arg-type]
+            )
+
 
 # ---------------------------------------------------------------------------
 # Keyword lookup (S = 1.0, no embedding model loaded)

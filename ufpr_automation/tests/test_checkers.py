@@ -1,0 +1,527 @@
+"""Tests for procedures/checkers.py — the 11 blocking checks for Estágios.
+
+Covers each registered checker with a happy path and its primary failure
+mode, plus the ``run_checks`` aggregator's behavior for unknown IDs and
+checkers that raise exceptions. The goal is to protect the Marco IV hard
+blocks against silent regressions while the rest of the Estágios pipeline
+is being wired up.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+
+import pytest
+
+from ufpr_automation.core.models import EmailData
+from ufpr_automation.procedures.checkers import (
+    CheckContext,
+    CheckResult,
+    CheckSummary,
+    _CHECKERS,
+    register,
+    registered_checkers,
+    run_checks,
+)
+from ufpr_automation.procedures.playbook import Intent
+
+
+# ---------------------------------------------------------------------------
+# Registry baseline
+# ---------------------------------------------------------------------------
+
+
+EXPECTED_CHECKERS = {
+    "siga_matricula_ativa",
+    "siga_reprovacoes_ultimo_semestre",
+    "siga_reprovacao_por_falta",
+    "siga_curriculo_integralizado",
+    "siga_ch_simultaneos_30h",
+    "siga_concedente_duplicada",
+    "data_inicio_retroativa",
+    "data_inicio_antecedencia_minima",
+    "tce_jornada_sem_horario",
+    "tce_jornada_antes_meio_dia",
+    "sei_processo_vigente_duplicado",
+}
+
+
+def test_all_11_checkers_registered():
+    registered = set(registered_checkers())
+    assert registered == EXPECTED_CHECKERS, (
+        f"Unexpected checker registry. "
+        f"Missing: {EXPECTED_CHECKERS - registered}. "
+        f"Extra: {registered - EXPECTED_CHECKERS}."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_ctx(
+    *,
+    intent: Intent | None = None,
+    vars: dict[str, str] | None = None,
+    siga: dict | None = None,
+    sei: dict | None = None,
+) -> CheckContext:
+    email = EmailData(sender="aluno@ufpr.br", subject="test", body="")
+    return CheckContext(
+        email=email,
+        intent=intent or Intent(intent_name="t", categoria="Estágios", keywords=["t"]),
+        vars=vars or {},
+        siga_context=siga,
+        sei_context=sei,
+    )
+
+
+def _br(d: date) -> str:
+    return d.strftime("%d/%m/%Y")
+
+
+def _invoke(check_id: str, ctx: CheckContext) -> CheckResult:
+    return _CHECKERS[check_id](ctx)
+
+
+# ---------------------------------------------------------------------------
+# SIGA-dependent checkers
+# ---------------------------------------------------------------------------
+
+
+class TestSigaMatriculaAtiva:
+    def test_pass_when_ativa(self):
+        r = _invoke("siga_matricula_ativa", _make_ctx(siga={"matricula_status": "ATIVA"}))
+        assert r.status == "pass"
+
+    def test_hard_block_when_trancada(self):
+        r = _invoke("siga_matricula_ativa", _make_ctx(siga={"matricula_status": "TRANCADA"}))
+        assert r.status == "hard_block"
+        assert "TRANCADA" in r.reason
+
+    def test_soft_block_when_siga_missing(self):
+        r = _invoke("siga_matricula_ativa", _make_ctx(siga=None))
+        assert r.status == "soft_block"
+        assert "SIGA" in r.reason
+
+
+class TestSigaReprovacoesUltimoSemestre:
+    def test_pass_when_one_reprovacao(self):
+        r = _invoke(
+            "siga_reprovacoes_ultimo_semestre",
+            _make_ctx(siga={"reprovacoes_ultimo_semestre": 1}),
+        )
+        assert r.status == "pass"
+
+    def test_soft_block_when_more_than_one(self):
+        r = _invoke(
+            "siga_reprovacoes_ultimo_semestre",
+            _make_ctx(siga={"reprovacoes_ultimo_semestre": 2}),
+        )
+        assert r.status == "soft_block"
+        assert "justificativa" in r.reason.lower()
+
+    def test_hard_block_for_invalid_value(self):
+        r = _invoke(
+            "siga_reprovacoes_ultimo_semestre",
+            _make_ctx(siga={"reprovacoes_ultimo_semestre": "muitas"}),
+        )
+        assert r.status == "hard_block"
+
+    def test_soft_block_when_siga_missing(self):
+        r = _invoke("siga_reprovacoes_ultimo_semestre", _make_ctx(siga=None))
+        assert r.status == "soft_block"
+
+
+class TestSigaReprovacaoPorFalta:
+    def test_pass_when_false(self):
+        r = _invoke(
+            "siga_reprovacao_por_falta",
+            _make_ctx(siga={"reprovacao_por_falta_ultimo_semestre": False}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_true(self):
+        r = _invoke(
+            "siga_reprovacao_por_falta",
+            _make_ctx(siga={"reprovacao_por_falta_ultimo_semestre": True}),
+        )
+        assert r.status == "hard_block"
+        assert "Design Gráfico" in r.reason
+
+
+class TestSigaCurriculoIntegralizado:
+    def test_pass_when_not_integralizado(self):
+        r = _invoke(
+            "siga_curriculo_integralizado",
+            _make_ctx(siga={"curriculo_integralizado": False}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_integralizado(self):
+        r = _invoke(
+            "siga_curriculo_integralizado",
+            _make_ctx(siga={"curriculo_integralizado": True}),
+        )
+        assert r.status == "hard_block"
+
+
+class TestSigaChSimultaneos30h:
+    def test_pass_under_30h(self):
+        r = _invoke(
+            "siga_ch_simultaneos_30h",
+            _make_ctx(
+                siga={"estagios_ativos": [{"ch_semanal": 10}]},
+                vars={"horas_semanais": "15"},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_pass_at_exactly_30h(self):
+        r = _invoke(
+            "siga_ch_simultaneos_30h",
+            _make_ctx(
+                siga={"estagios_ativos": [{"ch_semanal": 20}]},
+                vars={"horas_semanais": "10"},
+            ),
+        )
+        assert r.status == "pass"  # 30 is not > 30
+
+    def test_hard_block_over_30h(self):
+        r = _invoke(
+            "siga_ch_simultaneos_30h",
+            _make_ctx(
+                siga={"estagios_ativos": [{"ch_semanal": 20}]},
+                vars={"horas_semanais": "20"},
+            ),
+        )
+        assert r.status == "hard_block"
+        assert "40.0" in r.reason
+
+    def test_pass_with_no_existing_and_missing_hours(self):
+        r = _invoke(
+            "siga_ch_simultaneos_30h",
+            _make_ctx(siga={"estagios_ativos": []}, vars={}),
+        )
+        assert r.status == "pass"
+
+
+class TestSigaConcedenteDuplicada:
+    def test_pass_when_different_concedente(self):
+        r = _invoke(
+            "siga_concedente_duplicada",
+            _make_ctx(
+                siga={"estagios_ativos": [{"concedente": "Empresa A"}]},
+                vars={"nome_concedente": "Empresa B"},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_same_concedente(self):
+        r = _invoke(
+            "siga_concedente_duplicada",
+            _make_ctx(
+                siga={"estagios_ativos": [{"concedente": "Empresa A"}]},
+                vars={"nome_concedente": "empresa a"},  # case-insensitive
+            ),
+        )
+        assert r.status == "hard_block"
+        assert "Lei 11.788" in r.reason
+
+    def test_hard_block_when_concedente_missing(self):
+        r = _invoke(
+            "siga_concedente_duplicada",
+            _make_ctx(siga={"estagios_ativos": []}, vars={}),
+        )
+        assert r.status == "hard_block"
+        assert "não extraído" in r.reason
+
+
+# ---------------------------------------------------------------------------
+# Date checkers (no SIGA dependency)
+# ---------------------------------------------------------------------------
+
+
+class TestDataInicioRetroativa:
+    def test_pass_future_date(self):
+        future = date.today() + timedelta(days=30)
+        r = _invoke(
+            "data_inicio_retroativa",
+            _make_ctx(vars={"data_inicio": _br(future)}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_past_date(self):
+        past = date.today() - timedelta(days=1)
+        r = _invoke(
+            "data_inicio_retroativa",
+            _make_ctx(vars={"data_inicio": _br(past)}),
+        )
+        assert r.status == "hard_block"
+        assert "retroativa" in r.reason
+
+    def test_hard_block_missing_date(self):
+        r = _invoke("data_inicio_retroativa", _make_ctx(vars={}))
+        assert r.status == "hard_block"
+        assert "não extraída" in r.reason
+
+
+class TestDataInicioAntecedenciaMinima:
+    def test_pass_far_future(self):
+        # +14 calendar days guarantees > 2 working days regardless of weekday.
+        far = date.today() + timedelta(days=14)
+        r = _invoke(
+            "data_inicio_antecedencia_minima",
+            _make_ctx(vars={"data_inicio": _br(far)}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_today(self):
+        # Zero working days ahead.
+        r = _invoke(
+            "data_inicio_antecedencia_minima",
+            _make_ctx(vars={"data_inicio": _br(date.today())}),
+        )
+        assert r.status == "hard_block"
+        assert "dia(s) útil" in r.reason
+
+    def test_pass_when_retroativa_deferred_to_sibling_checker(self):
+        # Past dates return pass so data_inicio_retroativa handles them
+        # without double-blocking.
+        past = date.today() - timedelta(days=10)
+        r = _invoke(
+            "data_inicio_antecedencia_minima",
+            _make_ctx(vars={"data_inicio": _br(past)}),
+        )
+        assert r.status == "pass"
+
+
+# ---------------------------------------------------------------------------
+# Jornada / TCE content checkers
+# ---------------------------------------------------------------------------
+
+
+class TestTceJornadaSemHorario:
+    def test_pass_with_horario(self):
+        r = _invoke(
+            "tce_jornada_sem_horario",
+            _make_ctx(vars={"jornada_horario_inicio": "13:00"}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_without_horario(self):
+        r = _invoke("tce_jornada_sem_horario", _make_ctx(vars={}))
+        assert r.status == "hard_block"
+        assert "horário" in r.reason
+
+
+class TestTceJornadaAntesMeioDia:
+    def test_pass_after_noon(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(vars={"jornada_horario_inicio": "13:00"}),
+        )
+        assert r.status == "pass"
+
+    def test_pass_exactly_noon(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(vars={"jornada_horario_inicio": "12:00"}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_before_noon_without_integralizacao(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={"curriculo_integralizado": False},
+            ),
+        )
+        assert r.status == "hard_block"
+        assert "meio-dia" in r.reason
+
+    def test_pass_before_noon_when_integralizado(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={"curriculo_integralizado": True},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_pass_when_horario_missing_to_avoid_double_block(self):
+        # Missing horário is already a hard block in tce_jornada_sem_horario;
+        # this checker must not duplicate the block.
+        r = _invoke("tce_jornada_antes_meio_dia", _make_ctx(vars={}))
+        assert r.status == "pass"
+
+
+# ---------------------------------------------------------------------------
+# SEI checker
+# ---------------------------------------------------------------------------
+
+
+class TestSeiProcessoVigenteDuplicado:
+    def test_soft_block_when_sei_not_consulted(self):
+        intent = Intent(
+            intent_name="tce_inicial",
+            categoria="Estágios",
+            keywords=["tce"],
+            sei_process_type="Estágios não Obrigatórios",
+        )
+        r = _invoke("sei_processo_vigente_duplicado", _make_ctx(intent=intent, sei=None))
+        assert r.status == "soft_block"
+        assert "SEI" in r.reason
+
+    def test_pass_when_no_vigente_of_same_type(self):
+        intent = Intent(
+            intent_name="tce_inicial",
+            categoria="Estágios",
+            keywords=["tce"],
+            sei_process_type="Estágios não Obrigatórios",
+        )
+        r = _invoke(
+            "sei_processo_vigente_duplicado",
+            _make_ctx(
+                intent=intent,
+                sei={"processos_vigentes": [{"tipo": "Diploma", "numero": "X/2025"}]},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_same_type_vigente(self):
+        intent = Intent(
+            intent_name="tce_inicial",
+            categoria="Estágios",
+            keywords=["tce"],
+            sei_process_type="Graduação/Ensino Técnico: Estágios não Obrigatórios",
+        )
+        r = _invoke(
+            "sei_processo_vigente_duplicado",
+            _make_ctx(
+                intent=intent,
+                sei={
+                    "processos_vigentes": [
+                        {
+                            "tipo": "Graduação/Ensino Técnico: Estágios Não Obrigatórios",
+                            "numero": "23075.123/2026-01",
+                        }
+                    ]
+                },
+            ),
+        )
+        assert r.status == "hard_block"
+        assert "23075.123/2026-01" in r.reason
+
+
+# ---------------------------------------------------------------------------
+# run_checks aggregator
+# ---------------------------------------------------------------------------
+
+
+class TestRunChecks:
+    def test_aggregates_all_passes(self):
+        intent = Intent(
+            intent_name="t",
+            categoria="Estágios",
+            keywords=["t"],
+            blocking_checks=[
+                "siga_matricula_ativa",
+                "tce_jornada_sem_horario",
+            ],
+        )
+        ctx = _make_ctx(
+            intent=intent,
+            vars={"jornada_horario_inicio": "14:00"},
+            siga={"matricula_status": "ATIVA"},
+        )
+        summary = run_checks(intent, ctx)
+        assert summary.can_proceed is True
+        assert len(summary.results) == 2
+        assert all(r.status == "pass" for r in summary.results)
+
+    def test_hard_block_wins_over_soft(self):
+        intent = Intent(
+            intent_name="t",
+            categoria="Estágios",
+            keywords=["t"],
+            blocking_checks=[
+                "siga_matricula_ativa",  # hard
+                "siga_reprovacoes_ultimo_semestre",  # soft
+            ],
+        )
+        ctx = _make_ctx(
+            intent=intent,
+            siga={"matricula_status": "TRANCADA", "reprovacoes_ultimo_semestre": 3},
+        )
+        summary = run_checks(intent, ctx)
+        assert summary.can_proceed is False
+        assert summary.needs_justification is False  # hard block supersedes
+        assert len(summary.hard_blocks) == 1
+        assert len(summary.soft_blocks) == 1
+
+    def test_soft_block_triggers_needs_justification(self):
+        intent = Intent(
+            intent_name="t",
+            categoria="Estágios",
+            keywords=["t"],
+            blocking_checks=["siga_reprovacoes_ultimo_semestre"],
+        )
+        ctx = _make_ctx(
+            intent=intent,
+            siga={"reprovacoes_ultimo_semestre": 3},
+        )
+        summary = run_checks(intent, ctx)
+        assert summary.can_proceed is False
+        assert summary.needs_justification is True
+
+    def test_unknown_checker_id_is_hard_block(self):
+        intent = Intent(
+            intent_name="t",
+            categoria="Estágios",
+            keywords=["t"],
+            blocking_checks=["checker_que_nao_existe"],
+        )
+        summary = run_checks(intent, _make_ctx(intent=intent))
+        assert len(summary.hard_blocks) == 1
+        assert summary.hard_blocks[0].reason == "checker_not_registered"
+
+    def test_checker_exception_becomes_hard_block(self):
+        """A raising checker must degrade to hard_block, not crash the pipeline."""
+        @register("__test_boom")
+        def _boom(ctx):
+            raise RuntimeError("simulated bug")
+
+        try:
+            intent = Intent(
+                intent_name="t",
+                categoria="Estágios",
+                keywords=["t"],
+                blocking_checks=["__test_boom"],
+            )
+            summary = run_checks(intent, _make_ctx(intent=intent))
+            assert len(summary.hard_blocks) == 1
+            assert "simulated bug" in summary.hard_blocks[0].reason
+        finally:
+            _CHECKERS.pop("__test_boom", None)
+
+    def test_human_readable_summary_formats_blocks(self):
+        summary = CheckSummary(
+            results=[
+                CheckResult("a", "hard_block", "hard reason"),
+                CheckResult("b", "soft_block", "soft reason"),
+                CheckResult("c", "pass"),
+            ]
+        )
+        out = summary.human_readable()
+        assert "Impedimentos (hard)" in out
+        assert "a: hard reason" in out
+        assert "Requer justificativa (soft)" in out
+        assert "b: soft reason" in out
+
+    def test_human_readable_all_pass(self):
+        summary = CheckSummary(results=[CheckResult("a", "pass")])
+        assert "Todas as condições satisfeitas" in summary.human_readable()
