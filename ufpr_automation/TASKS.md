@@ -12,7 +12,7 @@
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
 
-**Testes:** 509 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
+**Testes:** 530 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
 
 ## Pendente
@@ -63,7 +63,7 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max (custo zero adicional). Estrita separação do path crítico online (LangGraph + LiteLLM continua intacto). Ordem de adoção:
 
 - [x] **Fase 1 — Infra compartilhada** — `agent_sdk/runner.py` (`run_claude_oneshot`, `is_claude_available`, `ClaudeRunResult`, audit JSONL), 15 testes em `test_agent_sdk_runner.py`
-- [ ] **Fase 2 — Intent Drafter** (Marco IV.2 do plano antigo, agora consolidado aqui) — auto-aprendizado do Tier 0 playbook
+- [x] **Fase 2 — Intent Drafter** (Marco IV.2 do plano antigo, agora consolidado aqui) — `agent_sdk/intent_drafter.py` (clustering + Claude CLI invocation + YAML validation + idempotency), `skills/intent_drafter.md` briefing, 21 testes em `test_intent_drafter.py`
 - [ ] **Fase 3 — Feedback Review Chat** — adiciona via conversacional **ao lado** do Streamlit (Streamlit continua como fallback obrigatório quando claude/Anthropic indisponível ou pra batch triage visual; ver SDD §4.7-4.8)
 - [ ] **Fase 4 — Classification Debugger** — diagnóstico interativo de classificações erradas via stable_id
 - [ ] **Fase 5 — RAG Quality Auditor** — monitora drift do RAG mensalmente contra ground truth curado
