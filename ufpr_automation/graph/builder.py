@@ -12,6 +12,7 @@ from langgraph.graph import END, StateGraph
 
 from ufpr_automation.graph.fleet import dispatch_tier1, process_one_email
 from ufpr_automation.graph.nodes import (
+    agir_estagios,
     agir_gmail,
     perceber_gmail,
     perceber_owa,
@@ -112,6 +113,7 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
 
     graph.add_node("rotear", rotear)
     graph.add_node("registrar_feedback", registrar_feedback)
+    graph.add_node("agir_estagios", agir_estagios)
     graph.add_node("registrar_procedimento", registrar_procedimento)
 
     # Define edges — Tier 0 (playbook) runs first; only the residual Tier 1
@@ -132,7 +134,8 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     # directly from rotear to registrar_feedback.
     graph.add_edge("rotear", "registrar_feedback")
 
-    graph.add_edge("registrar_feedback", "agir")
+    graph.add_edge("registrar_feedback", "agir_estagios")
+    graph.add_edge("agir_estagios", "agir")
     graph.add_edge("agir", "registrar_procedimento")
     graph.add_edge("registrar_procedimento", END)
 

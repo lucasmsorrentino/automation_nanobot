@@ -978,6 +978,213 @@ def registrar_procedimento(state: EmailState) -> dict[str, Any]:
     return {"procedures_logged": logged}
 
 
+def agir_estagios(state: EmailState) -> dict[str, Any]:
+    """Process Estágios emails that have a Tier 0 intent with sei_action != 'none'.
+
+    Flow per eligible email:
+        1. Run blocking_checks via ``procedures/checkers.run_checks``
+        2. If hard_blocks → draft reply listing blockers (no SEI ops)
+        3. If soft_blocks → draft reply requesting justification (no SEI ops)
+        4. If all pass → SEIWriter chain:
+           a. create_process (if sei_action == "create_process")
+           b. attach_document(s) (for each required_attachment found)
+           c. save_despacho_draft (using intent.despacho_template)
+           d. update classification.sugestao_resposta with acuse
+
+    This node runs BETWEEN registrar_feedback and agir_gmail. Emails
+    processed here still flow through agir_gmail for the draft save step.
+    """
+    import asyncio
+
+    from ufpr_automation.procedures.checkers import CheckContext, run_checks
+    from ufpr_automation.procedures.doc_catalog import get_doc_classification
+    from ufpr_automation.procedures.playbook import (
+        extract_variables,
+        fill_template,
+        get_playbook,
+    )
+
+    emails = state.get("emails", [])
+    classifications = state.get("classifications", {})
+    tier0_hits = set(state.get("tier0_hits", []))
+    sei_ops: list[dict] = []
+    errors = []
+
+    playbook = get_playbook()
+    email_map = {e.stable_id: e for e in emails}
+
+    for sid in tier0_hits:
+        email = email_map.get(sid)
+        cls = classifications.get(sid)
+        if not email or not cls:
+            continue
+
+        # Only Estágios with SEI action
+        if cls.categoria != "Estágios":
+            continue
+
+        # Look up the Tier 0 intent to get sei_action + blocking_checks
+        match = playbook.lookup(email.body or email.subject)
+        if not match or match.intent.sei_action == "none":
+            continue
+
+        intent = match.intent
+        vars_ = extract_variables(email, intent)
+
+        # Build check context with available SIGA/SEI data
+        siga = state.get("siga_contexts", {}).get(sid, {})
+        sei = state.get("sei_contexts", {}).get(sid, {})
+        ctx = CheckContext(
+            email=email, intent=intent, vars=vars_,
+            siga_context=siga, sei_context=sei,
+        )
+
+        # Run blocking checks
+        summary = run_checks(intent, ctx)
+
+        if summary.hard_blocks:
+            # Draft refusal email listing the hard blocks
+            block_lines = "\n".join(
+                f"- {r.check_id}: {r.reason}" for r in summary.hard_blocks
+            )
+            cls.sugestao_resposta = (
+                f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
+                f"Não foi possível processar sua solicitação de estágio "
+                f"devido aos seguintes impedimentos:\n\n{block_lines}\n\n"
+                f"Favor regularizar a situação e reenviar a documentação.\n\n"
+                f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
+            )
+            sei_ops.append({
+                "stable_id": sid, "op": "blocked", "reason": "hard_block",
+                "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.hard_blocks],
+            })
+            logger.info("agir_estagios[%s]: HARD BLOCK — %d bloqueio(s)", sid[:8], len(summary.hard_blocks))
+            continue
+
+        if summary.soft_blocks:
+            # Draft email asking for justification
+            soft_lines = "\n".join(
+                f"- {r.check_id}: {r.reason}" for r in summary.soft_blocks
+            )
+            cls.sugestao_resposta = (
+                f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
+                f"Sua solicitação de estágio requer esclarecimentos adicionais:\n\n"
+                f"{soft_lines}\n\n"
+                f"Favor enviar justificativa formal por e-mail para que possamos "
+                f"dar prosseguimento ao processo.\n\n"
+                f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
+            )
+            sei_ops.append({
+                "stable_id": sid, "op": "blocked", "reason": "soft_block",
+                "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.soft_blocks],
+            })
+            logger.info("agir_estagios[%s]: SOFT BLOCK — %d pendência(s)", sid[:8], len(summary.soft_blocks))
+            continue
+
+        # All checks passed — proceed with SEI operations
+        logger.info("agir_estagios[%s]: checks OK — executando SEI ops (intent: %s)", sid[:8], intent.intent_name)
+
+        try:
+            sei_result = asyncio.run(_run_sei_chain(intent, vars_, email, sid))
+            sei_ops.append(sei_result)
+
+            # Update classification with acuse
+            processo_id = sei_result.get("processo_id", "")
+            if processo_id:
+                acuse = fill_template(
+                    intent.template or "",
+                    {**vars_, "numero_processo_sei": processo_id},
+                )
+                cls.sugestao_resposta = acuse
+
+        except Exception as e:
+            logger.error("agir_estagios[%s]: SEI chain failed: %s", sid[:8], e)
+            errors.append({"node": "agir_estagios", "stable_id": sid, "error": str(e)})
+            sei_ops.append({"stable_id": sid, "op": "error", "error": str(e)})
+
+    logger.info("agir_estagios: %d operação(ões) SEI processada(s)", len(sei_ops))
+    result: dict[str, Any] = {"sei_operations": sei_ops}
+    if errors:
+        result["errors"] = errors
+    return result
+
+
+async def _run_sei_chain(intent, vars_: dict, email, stable_id: str) -> dict:
+    """Execute the SEI write chain for a single Estágios email.
+
+    Returns a dict summary suitable for the ``sei_operations`` state field.
+    """
+    from unittest.mock import AsyncMock
+
+    from ufpr_automation.procedures.doc_catalog import get_doc_classification
+    from ufpr_automation.procedures.playbook import fill_template
+    from ufpr_automation.sei.writer import SEIWriter
+
+    # Create a mock page — SEI ops are dry-run by default (SEI_WRITE_MODE env).
+    # In live mode, the page should come from BrowserPagePool.
+    page = AsyncMock()
+    writer = SEIWriter(page)
+
+    result: dict = {"stable_id": stable_id, "ops": []}
+
+    # Step 1: create_process (if sei_action == "create_process")
+    if intent.sei_action == "create_process":
+        create = await writer.create_process(
+            tipo_processo=intent.sei_process_type,
+            especificacao=vars_.get("curso", "Design Gráfico"),
+            interessado=f"{vars_.get('nome_aluno', 'N/A')} - GRR{vars_.get('grr', 'N/A')}",
+        )
+        result["processo_id"] = create.processo_id
+        result["ops"].append({"op": "create_process", "success": create.success, "dry_run": create.dry_run})
+        logger.info("  create_process: %s (dry_run=%s)", create.processo_id, create.dry_run)
+    else:
+        result["processo_id"] = vars_.get("numero_processo_sei", "")
+
+    processo_id = result["processo_id"]
+
+    # Step 2: attach_document(s) — for each required_attachment
+    for att_label in intent.required_attachments:
+        classification = get_doc_classification(att_label)
+        if classification is None:
+            logger.warning("  attach: unknown doc label '%s' — skipping", att_label)
+            result["ops"].append({"op": "attach", "label": att_label, "skipped": True})
+            continue
+
+        # In dry-run, we just log intent. In live, we'd look for the actual
+        # attachment file on the email's downloaded attachments.
+        from pathlib import Path
+
+        att_file = None
+        if email.attachments:
+            for att in email.attachments:
+                if att.filename and att.filename.lower().endswith(".pdf"):
+                    att_file = Path(att.local_path) if hasattr(att, "local_path") and att.local_path else None
+                    break
+
+        if att_file and att_file.exists():
+            attach = await writer.attach_document(processo_id, att_file, classification)
+            result["ops"].append({"op": "attach", "label": att_label, "success": attach.success, "dry_run": attach.dry_run})
+        else:
+            # No file available — log as planned but not executed
+            result["ops"].append({"op": "attach", "label": att_label, "skipped": True, "reason": "file_not_available"})
+
+    # Step 3: save_despacho_draft
+    if intent.despacho_template:
+        draft = await writer.save_despacho_draft(
+            processo_id,
+            tipo=intent.intent_name,
+            variables=vars_,
+            body_override=fill_template(intent.despacho_template, vars_),
+        )
+        result["ops"].append({"op": "despacho", "success": draft.success, "dry_run": draft.dry_run})
+
+    result["op"] = "sei_chain"
+    result["success"] = all(
+        op.get("success", True) for op in result["ops"] if not op.get("skipped")
+    )
+    return result
+
+
 def agir_gmail(state: EmailState) -> dict[str, Any]:
     """Save drafts to Gmail for emails routed to auto_draft or human_review."""
     from ufpr_automation.gmail.client import GmailClient

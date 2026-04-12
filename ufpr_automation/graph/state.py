@@ -65,6 +65,9 @@ class EmailState(TypedDict, total=False):
     # Procedure learning
     procedures_logged: int
 
+    # Agir Estágios output (SEI operations performed in dry-run/live mode)
+    sei_operations: list[dict]  # list of {stable_id, op, success, ...} per SEI action
+
     # Agir output
     drafts_saved: list[str]     # stable_ids of successfully saved drafts
 

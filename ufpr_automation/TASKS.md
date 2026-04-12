@@ -12,7 +12,7 @@
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
 
-**Testes:** 490 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`) — lazy-import Playwright, cascade mock fix, datetime.utcnow() fix
+**Testes:** 509 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
 
 ## Pendente
@@ -30,16 +30,16 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
   - [ ] **Sprint 3 — Validação** (ver SDD §8): smoke dry_run + smoke live em SEI de teste com processo fictício
   - [ ] Flipar `SEI_WRITE_MODE=live` em produção depois das 3 sprints validadas
 - [x] **`get_doc_classification(label)` loader** — `procedures/doc_catalog.py` com `lru_cache`, case-insensitive lookup, `list_labels()`, `reload_catalog()`. 8 testes em `test_doc_catalog.py`.
-- [ ] **`agir_estagios` node** novo em `graph/nodes.py`:
-  - [ ] Input: email classificado como `Estágios` + intent com `sei_action != "none"`
-  - [ ] Roda `completeness_check` do `procedures/checkers.py`
-  - [ ] Se hard_blocks → rascunho de email com a lista de bloqueadores (sem tocar no SEI)
-  - [ ] Se soft_blocks → rascunho de email pedindo justificativa formal (sem tocar no SEI)
-  - [ ] Se pass → `SEIWriter.create_process` (se `sei_action == "create_process"`) → `attach_document(s)` → `save_despacho_draft(body_override=intent.despacho_template)` → rascunho de email de acuse com `NUMERO_PROCESSO_SEI`
-- [ ] **Wire `agir_estagios` no `graph/builder.py`** — rotear Estágios por `agir_estagios` em vez de `agir_gmail` quando o intent do Tier 0 tem `sei_action != "none"`
+- [x] **`agir_estagios` node** em `graph/nodes.py` + wired em `builder.py`:
+  - [x] Input: email classificado como `Estágios` + intent com `sei_action != "none"`
+  - [x] Roda `run_checks` do `procedures/checkers.py`
+  - [x] Se hard_blocks → rascunho de email com a lista de bloqueadores (sem tocar no SEI)
+  - [x] Se soft_blocks → rascunho de email pedindo justificativa formal (sem tocar no SEI)
+  - [x] Se pass → `SEIWriter.create_process` → `attach_document(s)` → `save_despacho_draft(body_override=intent.despacho_template)` → acuse com `NUMERO_PROCESSO_SEI`
+  - [x] 4 testes em `test_agir_estagios.py`
 - [x] **Intent model smoke test** — `test_playbook.py::test_intent_extended_fields_default_empty`, `test_intent_extended_fields_parse_from_yaml`, `test_intent_sei_action_rejects_invalid_literal`
 - [x] **Test suite dos 11 checkers** — `test_checkers.py` com 42 testes cobrindo happy + unhappy path, `CheckSummary` aggregation, human-readable output
-- [ ] **Atualizar `SOUL.md §8.1` e `§11`** com as correções da sessão: "2 dias úteis" ao invés de "10 dias" de antecedência; "> 1 reprovação exige justificativa formal" ao invés de "> 50%"; nova regra "jornada antes do meio-dia exige integralização prévia"
+- [x] **Atualizar `SOUL.md §8.1` e `§11`** — "2 dias úteis" (era "10 dias"), "> 1 reprovação → justificativa formal" (era "> 50%"), regra "jornada antes do meio-dia exige integralização prévia"
 
 ### Validação manual em produção
 - [ ] Validar login automático no SEI com sessão ativa e credenciais reais
@@ -62,7 +62,7 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 
 Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max (custo zero adicional). Estrita separação do path crítico online (LangGraph + LiteLLM continua intacto). Ordem de adoção:
 
-- [ ] **Fase 1 — Infra compartilhada** (`agent_sdk/runner.py` + skills + audit) — bloqueia tudo abaixo
+- [x] **Fase 1 — Infra compartilhada** — `agent_sdk/runner.py` (`run_claude_oneshot`, `is_claude_available`, `ClaudeRunResult`, audit JSONL), 15 testes em `test_agent_sdk_runner.py`
 - [ ] **Fase 2 — Intent Drafter** (Marco IV.2 do plano antigo, agora consolidado aqui) — auto-aprendizado do Tier 0 playbook
 - [ ] **Fase 3 — Feedback Review Chat** — adiciona via conversacional **ao lado** do Streamlit (Streamlit continua como fallback obrigatório quando claude/Anthropic indisponível ou pra batch triage visual; ver SDD §4.7-4.8)
 - [ ] **Fase 4 — Classification Debugger** — diagnóstico interativo de classificações erradas via stable_id

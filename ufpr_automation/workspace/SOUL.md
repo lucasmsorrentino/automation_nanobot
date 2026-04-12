@@ -257,7 +257,7 @@ Reitoria
 10. COORDENAÇÃO → Mantém processo aberto até conclusão
 ```
 
-**Prazo**: Documentação deve ser entregue com **10 dias de antecedência** ao início.
+**Prazo**: Documentação deve ser entregue com **2 dias úteis de antecedência** ao início.
 **Regra**: Não é permitida homologação com data retroativa.
 
 ### 8.2. Termo Aditivo (Alterações no TCE)
@@ -325,12 +325,13 @@ Quando a UFPR é a **concedente** (e não apenas a IES):
 
 ### Condições de Bloqueio (Não autorizar estágio se):
 - Matrícula trancada ou registro cancelado
-- Mais de 50% de reprovações no semestre anterior (para não obrigatório)
+- Mais de 1 reprovação no semestre anterior exige justificativa formal do aluno (soft block)
 - Currículo já integralizado (para não obrigatório)
 - Reprovação por falta no semestre anterior (regra específica do Design Gráfico)
 - Soma de cargas horárias de estágios simultâneos > 30h/semana
 - Dois estágios simultâneos na mesma concedente
 - Pedido de aditivo APÓS data de término do TCE
+- Jornada de estágio começando antes do meio-dia conflita com aulas (exceto aluno que já integralizou todas as disciplinas da grade)
 
 ### Encerramento Automático:
 - Estágio encerra-se automaticamente na data final do TCE se não houver aditivo ou rescisão
