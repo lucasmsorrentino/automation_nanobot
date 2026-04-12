@@ -56,8 +56,19 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 - [ ] **Ollama/Qwen3-8B**: cascade pronto em `llm/router.py`, falta deploy operacional do modelo local.
 - [ ] **3 testes flaky LiteLLM** (`test_classify_email_*`, `test_partial_failure`) — pré-existentes, dependem de network ao MiniMax. Mockar com `responses` ou `litellm.testing` ao invés de chamar a API real.
 
-### Marco IV — Playbook self-learning (backlog, pós-Estágios)
-Loop de promoção Tier 1 → Tier 0 auto-gerado (discussão da sessão 2026-04-10). Requisitos e plano em 4 fases (IV.1 hotpath analyzer, IV.2 intent drafter com RAG, IV.3 gate de revisão humana, IV.4 métrica de regressão pós-promoção) documentados na thread. Depende de volume mínimo de `procedures_data/` acumulado em produção.
+### Marco V — Automações via Claude Code CLI (plano Max, sem API)
+
+▶ **SDD detalhado:** [`SDD_CLAUDE_CODE_AUTOMATIONS.md`](SDD_CLAUDE_CODE_AUTOMATIONS.md) — 6 specs + roadmap em 7 fases + padrão arquitetural reutilizável + anti-patterns
+
+Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max (custo zero adicional). Estrita separação do path crítico online (LangGraph + LiteLLM continua intacto). Ordem de adoção:
+
+- [ ] **Fase 1 — Infra compartilhada** (`agent_sdk/runner.py` + skills + audit) — bloqueia tudo abaixo
+- [ ] **Fase 2 — Intent Drafter** (Marco IV.2 do plano antigo, agora consolidado aqui) — auto-aprendizado do Tier 0 playbook
+- [ ] **Fase 3 — Feedback Review Chat** — substitui o Streamlit feedback UI por sessão conversacional
+- [ ] **Fase 4 — Classification Debugger** — diagnóstico interativo de classificações erradas via stable_id
+- [ ] **Fase 5 — RAG Quality Auditor** — monitora drift do RAG mensalmente contra ground truth curado
+- [ ] **Fase 6 — PROCEDURES Staleness Checker** — detecta intents desalinhados com SOUL.md/Neo4j
+- [ ] **Fase 7 — Maintainer Tool polish** — slash commands + skills curados pra DX
 
 ### Out of scope (decisão alinhada com a coordenação)
 - ❌ **SIGA write ops** — permanece read-only por design.
