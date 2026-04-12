@@ -1,0 +1,31 @@
+{
+  "_comment": "Project-level Claude Code settings. Checked into git. Contains only READ-ONLY, safe, pre-approved permissions used across the team. Personal/credential-bearing permissions live in .claude/settings.local.json (gitignored).",
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest ufpr_automation/tests/:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m ufpr_automation.feedback stats)",
+      "Bash(python -m ufpr_automation.feedback export)",
+      "Bash(python -m ufpr_automation.rag.retriever:*)",
+      "Bash(python -m ufpr_automation.rag.ingest --dry-run)",
+      "Bash(python -m ufpr_automation.agent_sdk.procedures_staleness:*)",
+      "Bash(python -m ufpr_automation.agent_sdk.intent_drafter --dry-run:*)",
+      "Bash(python -m ufpr_automation.agent_sdk.debug_classification:*)",
+      "Bash(python -m ufpr_automation.agent_sdk.rag_auditor --quick)",
+      "Bash(python -m ufpr_automation.aflow.cli:*)",
+      "Bash(python -c \"from ufpr_automation.procedures.checkers import registered_checkers:*)",
+      "Bash(python -c \"from ufpr_automation.procedures.playbook import get_playbook:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format --check:*)",
+      "Bash(git status)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)"
+    ],
+    "deny": [
+      "Bash(python -m ufpr_automation --channel:*)",
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)"
+    ]
+  }
+}

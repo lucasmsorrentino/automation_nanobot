@@ -38,7 +38,12 @@ ufpr_automation/dspy_modules/optimized/
 ufpr_automation/aflow/reports/
 
 # Local artifacts (scratch files, backups, IDE)
-.claude/
+# NOTE: .claude/ holds both shared team files (settings.json, commands/) and
+# per-user state (settings.local.json, scheduled_tasks.lock, worktrees/).
+# Ignore per-user state but keep the shared files tracked.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
 *.tar.gz
 Parecer_Tecnico_*.docx
 claudeProject.pdf

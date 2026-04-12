@@ -12,7 +12,7 @@
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
 
-**Testes:** 597 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
+**Testes:** 623 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
 
 ## Pendente
@@ -68,7 +68,7 @@ Conjunto de automações que rodam o `claude` CLI como subprocess sob plano Max 
 - [x] **Fase 4 — Classification Debugger** — `agent_sdk/debug_classification.py` (Tier 0 replay, procedure log trace, feedback lookup, fix proposals), CLI `--stable-id` + `--last N`, Markdown reports, 14 testes em `test_debug_classification.py`
 - [x] **Fase 5 — RAG Quality Auditor** — `agent_sdk/rag_auditor.py` (ground truth YAML loader, per-query recall/latency, per-subset aggregation, baseline diff + hard thresholds), seed `eval_sets/rag_ground_truth.yaml` (8 queries, expand to 20-30), atomic baseline update só em sucesso, 17 testes em `test_rag_auditor.py`
 - [x] **Fase 6 — PROCEDURES Staleness Checker** — `agent_sdk/procedures_staleness.py` (checks blocking_checks registration, SOUL.md §X references, last_update age, SEI action consistency), Markdown report output, 19 testes em `test_procedures_staleness.py`
-- [ ] **Fase 7 — Maintainer Tool polish** — slash commands + skills curados pra DX
+- [x] **Fase 7 — Maintainer Tool polish** — `agent_sdk/skills/maintainer.md` (comandos comuns + anti-padrões), 5 slash commands em `.claude/commands/` (`/run-pipeline-once`, `/feedback-stats`, `/check-tier0`, `/test-suite`, `/rag-query`), `.claude/settings.json` com allow/deny pre-aprovado (read-only seguro), 26 testes regressivos em `test_maintainer_polish.py`
 
 ### Out of scope (decisão alinhada com a coordenação)
 - ❌ **SIGA write ops** — permanece read-only por design.
