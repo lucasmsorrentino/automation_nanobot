@@ -8,7 +8,10 @@ responder.py can immediately place the reply without a second click.
 
 from __future__ import annotations
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.core.models import EmailData
 from ufpr_automation.utils.logging import logger

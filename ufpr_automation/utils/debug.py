@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from playwright.async_api import Page
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.config.settings import DEBUG_OUTPUT_DIR
 
 
 async def capture_debug_info(
-    page: Page, output_dir: str | Path | None = None
+    page: "Page", output_dir: str | Path | None = None
 ) -> None:
     """Capture a screenshot and the full DOM for debugging selector issues.
 

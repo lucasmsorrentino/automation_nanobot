@@ -10,8 +10,10 @@ Handles:
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, BrowserContext, Page
 
 from ufpr_automation.config.settings import (
     BROWSER_TIMEOUT_MS,
@@ -300,6 +302,8 @@ async def launch_browser(headless: bool = False):
     Returns:
         Tuple of (playwright instance, browser instance).
     """
+    from playwright.async_api import async_playwright
+
     pw = await async_playwright().start()
 
     browser = await pw.chromium.launch(

@@ -10,7 +10,10 @@ orchestrator) and passed in, so the agent does not open or close the browser.
 
 from __future__ import annotations
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.core.models import EmailData
 from ufpr_automation.outlook.body_extractor import extract_email_body
@@ -25,7 +28,7 @@ class PerceberAgent:
         page: An authenticated Playwright page already on the OWA inbox.
     """
 
-    def __init__(self, page: Page) -> None:
+    def __init__(self, page: "Page") -> None:
         self._page = page
 
     async def run(self) -> list[EmailData]:

@@ -16,7 +16,10 @@ Safety guarantee: this module NEVER clicks "Send".  It only saves drafts.
 
 from __future__ import annotations
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.utils.logging import logger
 

@@ -10,7 +10,10 @@ draft that requires explicit human review and manual sending.
 
 from __future__ import annotations
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.outlook.body_extractor import _click_email_at_index, verify_opened_email
@@ -25,7 +28,7 @@ class AgirAgent:
         page: An authenticated Playwright page on the OWA inbox.
     """
 
-    def __init__(self, page: Page) -> None:
+    def __init__(self, page: "Page") -> None:
         self._page = page
 
     async def run(

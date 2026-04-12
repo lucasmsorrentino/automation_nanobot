@@ -28,7 +28,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -181,7 +181,7 @@ class SEIWriter:
     def _audit(self, op: str, processo_id: str, **fields: Any) -> None:
         """Append an audit record to the JSONL log."""
         record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "run_id": self._run_id,
             "op": op,
             "processo_id": processo_id,

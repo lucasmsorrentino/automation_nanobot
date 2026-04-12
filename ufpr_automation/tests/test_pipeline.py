@@ -1,4 +1,4 @@
-"""Integration test for the Pensar pipeline with mocked LiteLLM responses."""
+"""Integration test for the Pensar pipeline with mocked cascade calls."""
 
 from __future__ import annotations
 
@@ -39,7 +39,11 @@ class TestRunPensarConcurrently:
 
         with (
             patch("ufpr_automation.llm.client.settings") as mock_settings,
-            patch("ufpr_automation.llm.client.litellm") as mock_litellm,
+            patch(
+                "ufpr_automation.llm.client.cascaded_completion",
+                new_callable=AsyncMock,
+                return_value=_mock_completion_response(_make_classification_json()),
+            ),
         ):
             mock_settings.MINIMAX_API_KEY = "fake"
             mock_settings.GEMINI_API_KEY = ""
@@ -47,10 +51,6 @@ class TestRunPensarConcurrently:
             mock_settings.LLM_MODEL = "minimax/MiniMax-Text-01"
             mock_settings.PACKAGE_ROOT = MagicMock()
             mock_settings.ASSINATURA_EMAIL = None
-
-            mock_litellm.acompletion = AsyncMock(
-                return_value=_mock_completion_response(_make_classification_json())
-            )
 
             from ufpr_automation.agents.pensar import run_pensar_concurrently
 
@@ -64,9 +64,8 @@ class TestRunPensarConcurrently:
     async def test_partial_failure(self):
         emails = [_make_email("a@ufpr.br", "OK"), _make_email("b@ufpr.br", "FAIL")]
 
-        async def side_effect(*args, **kwargs):
-            # Fail all LLM calls related to the "FAIL" email (classify + self-refine)
-            messages = kwargs.get("messages", [])
+        async def side_effect(task, *, messages, **kwargs):
+            # Fail all LLM calls related to the "FAIL" email
             for msg in messages:
                 if "FAIL" in msg.get("content", ""):
                     raise RuntimeError("API quota exceeded")
@@ -74,7 +73,11 @@ class TestRunPensarConcurrently:
 
         with (
             patch("ufpr_automation.llm.client.settings") as mock_settings,
-            patch("ufpr_automation.llm.client.litellm") as mock_litellm,
+            patch(
+                "ufpr_automation.llm.client.cascaded_completion",
+                new_callable=AsyncMock,
+                side_effect=side_effect,
+            ),
         ):
             mock_settings.MINIMAX_API_KEY = "fake"
             mock_settings.GEMINI_API_KEY = ""
@@ -82,8 +85,6 @@ class TestRunPensarConcurrently:
             mock_settings.LLM_MODEL = "minimax/MiniMax-Text-01"
             mock_settings.PACKAGE_ROOT = MagicMock()
             mock_settings.ASSINATURA_EMAIL = None
-
-            mock_litellm.acompletion = AsyncMock(side_effect=side_effect)
 
             from ufpr_automation.agents.pensar import run_pensar_concurrently
 

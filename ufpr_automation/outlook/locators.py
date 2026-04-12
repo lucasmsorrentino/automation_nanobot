@@ -21,9 +21,10 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from playwright.async_api import Page
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.utils.logging import logger
 

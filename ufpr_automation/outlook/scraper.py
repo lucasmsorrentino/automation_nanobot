@@ -14,7 +14,10 @@ Employs three fallback strategies to handle different OWA versions:
 
 from __future__ import annotations
 
-from playwright.async_api import Page
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from ufpr_automation.config.settings import BROWSER_TIMEOUT_MS
 from ufpr_automation.core.models import EmailData
