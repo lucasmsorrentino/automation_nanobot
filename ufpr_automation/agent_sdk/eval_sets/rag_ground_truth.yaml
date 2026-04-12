@@ -1,0 +1,61 @@
+# RAG Ground Truth — curated queries with expected results
+# Consumed by agent_sdk/rag_auditor.py for monthly RAG quality audits.
+#
+# Format: each query has an id, the query text, the substring that
+# should appear in the doc filename/path/text, the expected top-K
+# where it should land, and the RAG subset (conselho filter).
+#
+# Seed set (minimal). Expand to 20-30 queries covering each subset
+# (cepe, coun, coplad, concur, estagio) for robust drift detection.
+
+queries:
+  - id: estagio_lei_11788
+    query: "Lei 11.788 estágio não obrigatório"
+    expected_doc_substring: "11.788"
+    expected_in_top_k: 5
+    subset: estagio
+    notes: "Lei nacional de estágios — deveria aparecer para qualquer query sobre TCE"
+
+  - id: estagio_regulamento_ufpr
+    query: "regulamento de estágios da UFPR"
+    expected_doc_substring: "regulamento"
+    expected_in_top_k: 5
+    subset: estagio
+
+  - id: cepe_resolucao_colacao
+    query: "colação de grau resolução CEPE"
+    expected_doc_substring: "cola"
+    expected_in_top_k: 5
+    subset: cepe
+    notes: "Norma sobre colação de grau"
+
+  - id: cepe_aproveitamento_disciplinas
+    query: "aproveitamento de disciplinas graduação"
+    expected_doc_substring: "aproveitamento"
+    expected_in_top_k: 5
+    subset: cepe
+
+  - id: coun_atas_recentes
+    query: "ata do Conselho Universitário UFPR"
+    expected_doc_substring: "ata"
+    expected_in_top_k: 5
+    subset: coun
+
+  - id: manual_sei_abertura_processo
+    query: "como abrir processo no SEI"
+    expected_doc_substring: "SEI"
+    expected_in_top_k: 5
+    subset: ""
+    notes: "Sem filtro de conselho — busca global"
+
+  - id: formativas_afc
+    query: "atividades formativas complementares horas"
+    expected_doc_substring: "formativa"
+    expected_in_top_k: 5
+    subset: cepe
+
+  - id: diplomacao_colacao_prazo
+    query: "prazo para colação de grau diplomação"
+    expected_doc_substring: "cola"
+    expected_in_top_k: 5
+    subset: cepe
