@@ -128,6 +128,96 @@ class TestOptimizer:
         assert all(r.accuracy == 1.0 for r in results)
 
 
+class TestAblationBehavior:
+    """Verify that ablation topologies actually alter behavior."""
+
+    def test_no_self_refine_skips_refine(self, monkeypatch):
+        """When AFLOW_TOPOLOGY=no_self_refine, _classify_with_litellm skips self_refine_async."""
+        import os
+        monkeypatch.setenv("AFLOW_TOPOLOGY", "no_self_refine")
+
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from ufpr_automation.core.models import EmailClassification, EmailData
+
+        email = EmailData(sender="test@test.com", subject="Test", body="body")
+        email.compute_stable_id()
+
+        mock_cls = EmailClassification(
+            categoria="Outros", resumo="test", acao_necessaria="none", sugestao_resposta="x"
+        )
+
+        mock_client = MagicMock()
+        mock_client.classify_email_async = AsyncMock(return_value=mock_cls)
+        mock_client.self_refine_async = AsyncMock(return_value=mock_cls)
+
+        with patch("ufpr_automation.llm.client.LLMClient", return_value=mock_client):
+            from ufpr_automation.graph.nodes import _classify_with_litellm
+            result = _classify_with_litellm([email], {email.stable_id: "context"})
+
+        # classify was called but self_refine was NOT
+        mock_client.classify_email_async.assert_called_once()
+        mock_client.self_refine_async.assert_not_called()
+        assert email.stable_id in result
+
+    def test_fleet_topology_calls_self_refine(self, monkeypatch):
+        """When AFLOW_TOPOLOGY=fleet (default), self_refine IS called."""
+        monkeypatch.setenv("AFLOW_TOPOLOGY", "fleet")
+
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from ufpr_automation.core.models import EmailClassification, EmailData
+
+        email = EmailData(sender="test@test.com", subject="Test", body="body")
+        email.compute_stable_id()
+
+        mock_cls = EmailClassification(
+            categoria="Outros", resumo="test", acao_necessaria="none", sugestao_resposta="x"
+        )
+
+        mock_client = MagicMock()
+        mock_client.classify_email_async = AsyncMock(return_value=mock_cls)
+        mock_client.self_refine_async = AsyncMock(return_value=mock_cls)
+
+        with patch("ufpr_automation.llm.client.LLMClient", return_value=mock_client):
+            from ufpr_automation.graph.nodes import _classify_with_litellm
+            result = _classify_with_litellm([email], {email.stable_id: "context"})
+
+        mock_client.classify_email_async.assert_called_once()
+        mock_client.self_refine_async.assert_called_once()
+
+    def test_fleet_no_siga_skips_siga_in_process_one_email(self, monkeypatch):
+        """When AFLOW_TOPOLOGY=fleet_no_siga, process_one_email skips SIGA."""
+        monkeypatch.setenv("AFLOW_TOPOLOGY", "fleet_no_siga")
+
+        from unittest.mock import MagicMock, patch
+
+        from ufpr_automation.core.models import EmailClassification, EmailData
+
+        email = EmailData(sender="test@test.com", subject="Estágio TCE", body="TCE aluno")
+        email.compute_stable_id()
+
+        mock_cls = EmailClassification(
+            categoria="Estágios", resumo="TCE", acao_necessaria="Abrir Processo SEI",
+            sugestao_resposta="...",
+        )
+
+        with patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False), \
+             patch("ufpr_automation.graph.nodes._classify_with_litellm",
+                   return_value={email.stable_id: mock_cls}), \
+             patch("ufpr_automation.graph.nodes._get_retriever", side_effect=Exception("no rag")), \
+             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""), \
+             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""), \
+             patch("ufpr_automation.graph.nodes._consult_sei_for_email", return_value=None) as mock_sei, \
+             patch("ufpr_automation.graph.nodes._consult_siga_for_email", return_value=None) as mock_siga:
+
+            from ufpr_automation.graph.fleet import process_one_email
+            result = process_one_email({"email": email, "stable_id": email.stable_id})
+
+        mock_sei.assert_called_once()
+        mock_siga.assert_not_called()  # SIGA was skipped
+
+
 class TestBuilderTopologyDispatch:
     def test_default_topology_is_fleet(self, monkeypatch):
         # AFLOW_TOPOLOGY=fleet should produce the standard Fleet-based graph

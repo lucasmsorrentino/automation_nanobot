@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any
 
 from ufpr_automation.graph.state import EmailState
@@ -493,10 +494,14 @@ def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
             try:
                 rag_ctx = rag_contexts.get(email.stable_id)
                 cls = await client.classify_email_async(email, rag_context=rag_ctx)
-                try:
-                    cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
-                except Exception as e:
-                    logger.warning("Self-Refine falhou para '%s': %s", email.subject[:40], e)
+                # AFlow ablation: no_self_refine skips the refine step
+                if os.environ.get("AFLOW_TOPOLOGY") == "no_self_refine":
+                    logger.info("Self-Refine skipped (AFLOW_TOPOLOGY=no_self_refine)")
+                else:
+                    try:
+                        cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
+                    except Exception as e:
+                        logger.warning("Self-Refine falhou para '%s': %s", email.subject[:40], e)
                 results[email.stable_id] = cls
             except Exception as e:
                 logger.warning("Classificacao falhou para '%s': %s", email.subject[:40], e)

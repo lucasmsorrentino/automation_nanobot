@@ -168,12 +168,18 @@ def process_one_email(sub: SubState) -> dict[str, Any]:
             except Exception as e:
                 logger.warning("Fleet[%s] SEI consult failed: %s", stable_id[:8], e)
 
-            try:
-                siga_data = _consult_siga_for_email(email, cls)
-                if siga_data is not None:
-                    result["siga_contexts"][stable_id] = siga_data
-            except Exception as e:
-                logger.warning("Fleet[%s] SIGA consult failed: %s", stable_id[:8], e)
+            # AFlow ablation: fleet_no_siga skips SIGA consultation
+            import os
+
+            if os.environ.get("AFLOW_TOPOLOGY") == "fleet_no_siga":
+                logger.info("Fleet[%s] SIGA skipped (AFLOW_TOPOLOGY=fleet_no_siga)", stable_id[:8])
+            else:
+                try:
+                    siga_data = _consult_siga_for_email(email, cls)
+                    if siga_data is not None:
+                        result["siga_contexts"][stable_id] = siga_data
+                except Exception as e:
+                    logger.warning("Fleet[%s] SIGA consult failed: %s", stable_id[:8], e)
 
     except Exception as e:
         logger.error("Fleet[%s] sub-agent failed entirely: %s", stable_id[:8], e)

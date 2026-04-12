@@ -126,25 +126,32 @@ def topology_skip_rag_high_tier0(channel: str = "gmail", checkpointer=None):
     """Baseline variant that skips rag_retrieve when Tier 0 semantic score > 0.85.
 
     Ablation: tests how much RAG matters for high-confidence Tier 0 fall-through.
+
+    Note: tier0_lookup already short-circuits emails above its threshold, so
+    emails that reach Tier 1 have scores *below* threshold. This topology
+    therefore behaves identically to baseline for now — a proper implementation
+    would require tier0_lookup to emit near-miss scores into state so
+    rag_retrieve can consult them. Kept as a placeholder for future work.
     """
-    # For the MVP we wire this as a no-op alias of baseline. The conditional
-    # is enforced by tier0_lookup which already short-circuits when the score
-    # is high; the ablation is therefore implicit. This factory exists so AFlow
-    # can list it as a candidate for future refinement.
     return topology_baseline(channel=channel, checkpointer=checkpointer)
 
 
 def topology_no_self_refine(channel: str = "gmail", checkpointer=None):
-    """Fleet variant that disables Self-Refine in classify (faster, less accurate)."""
-    # For the MVP we delegate to fleet. Disabling Self-Refine requires a flag
-    # threaded through process_one_email; this factory exists so AFlow can
-    # measure that ablation in a follow-up. Returning fleet here is a
-    # placeholder so the registry stays complete.
+    """Fleet variant that disables Self-Refine in classify (faster, less accurate).
+
+    The ``AFLOW_TOPOLOGY=no_self_refine`` env var is checked by
+    ``_classify_with_litellm`` in ``nodes.py`` which skips the
+    ``self_refine_async`` call, producing a single-pass classification.
+    """
     return topology_fleet(channel=channel, checkpointer=checkpointer)
 
 
 def topology_fleet_no_siga(channel: str = "gmail", checkpointer=None):
-    """Fleet variant that skips SIGA consultation. Measures SIGA latency cost."""
+    """Fleet variant that skips SIGA consultation. Measures SIGA latency cost.
+
+    The ``AFLOW_TOPOLOGY=fleet_no_siga`` env var is checked by
+    ``process_one_email`` in ``fleet.py`` which skips the SIGA consult step.
+    """
     return topology_fleet(channel=channel, checkpointer=checkpointer)
 
 
