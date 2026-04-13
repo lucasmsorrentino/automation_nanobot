@@ -10,7 +10,7 @@
 | **Marco II** — Roteamento Agêntico | ✅ | LangGraph StateGraph, RAG (LanceDB + RAPTOR), Self-Refine, DSPy (gate `USE_DSPY` tri-state), Reflexion, Locator chain, Model cascading |
 | **Marco II.5** — SEI/SIGA + Scheduler | ✅ | Módulos SEI/SIGA (read-only, Playwright), pipeline expandido, ProcedureStore, scheduler (3x/dia), Streamlit feedback UI |
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
-| **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter.create_process` skeleton + dry-run em todas as 3 ops, extração de vars do TCE anexado. **Bloqueado em:** captura de seletores Playwright para flipar `SEI_WRITE_MODE=live`. |
+| **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`), `SEI_DOC_CATALOG.yaml`, 11 checkers registrados, `SEIWriter` com **live mode wired up** (`create_process`/`attach_document`/`save_despacho_draft` via `sei/writer_selectors.py` + `sei_selectors.yaml`), scripts de captura (`scripts/sei_drive.py`) e smokes live (`scripts/smoke_create_process_live.py`, `scripts/smoke_writer_live_e2e.py`). **Restante:** rodar smoke live em SEI de teste para validar (Sprint 3) antes de flipar `SEI_WRITE_MODE=live` em produção. |
 
 **Testes:** 625 passando, 0 falhas (`pytest ufpr_automation/tests/ -v`)
 **RAG:** 34.285 chunks (3.288/3.316 PDFs, 99,2% via PyMuPDF + OCR Tesseract)
@@ -24,11 +24,11 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 **▶ SDD detalhado:** [`SDD_SEI_SELECTOR_CAPTURE.md`](SDD_SEI_SELECTOR_CAPTURE.md) — especificação completa pra rodar a sprint de captura via Claude Code (plano Max, sem API key).
 
 - [x] **Smoke test `SEIWriter` dry-run end-to-end** — `test_sei_writer.py::TestSEIWriterDryRunEndToEnd` exercita `create_process` → `attach_document` → `save_despacho_draft` em dry-run, valida JSONL de audit (3 records em ordem, mode=dry_run).
-- [ ] **Captura de seletores Playwright em sessão SEI ao vivo** (BLOQUEANTE para live mode):
-  - [ ] **Sprint 1 — Captura** (ver SDD §6): rodar Claude Code dirigindo Playwright headed contra SEI de teste, gerar `procedures_data/sei_capture/<ts>/sei_selectors.yaml` no schema da SDD §5
-  - [ ] **Sprint 2 — Wire-up** (ver SDD §7): criar `sei/writer_selectors.py`, substituir os 3 `NotImplementedError` em `sei/writer.py` usando o YAML capturado
-  - [ ] **Sprint 3 — Validação** (ver SDD §8): smoke dry_run + smoke live em SEI de teste com processo fictício
-  - [ ] Flipar `SEI_WRITE_MODE=live` em produção depois das 3 sprints validadas
+- [x] **Captura de seletores Playwright em sessão SEI ao vivo** (Sprints 1+2 concluídas):
+  - [x] **Sprint 1 — Captura** (ver SDD §6): `scripts/sei_drive.py` (driver não-interativo) + manifesto gerado em `procedures_data/sei_capture/20260413_192020/sei_selectors.yaml` (schema SDD §5)
+  - [x] **Sprint 2 — Wire-up** (ver SDD §7): `sei/writer_selectors.py` carrega + valida o YAML (fails fast se selector colide com `_FORBIDDEN_SELECTORS`); os 3 `NotImplementedError` em `sei/writer.py` substituídos por fluxos Playwright completos (`create_process`, `attach_document`, `save_despacho_draft`)
+  - [ ] **Sprint 3 — Validação** (ver SDD §8): rodar `scripts/smoke_writer_live_e2e.py` em SEI de teste com processo fictício (dummy_tce.pdf) para validar o fluxo end-to-end
+  - [ ] Flipar `SEI_WRITE_MODE=live` em produção depois do Sprint 3 validado
 - [x] **`get_doc_classification(label)` loader** — `procedures/doc_catalog.py` com `lru_cache`, case-insensitive lookup, `list_labels()`, `reload_catalog()`. 8 testes em `test_doc_catalog.py`.
 - [x] **`agir_estagios` node** em `graph/nodes.py` + wired em `builder.py`:
   - [x] Input: email classificado como `Estágios` + intent com `sei_action != "none"`

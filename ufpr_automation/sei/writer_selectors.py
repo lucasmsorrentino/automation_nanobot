@@ -1,0 +1,139 @@
+"""Loader for sei_selectors.yaml — the canonical manifest of Playwright
+selectors captured from live SEI sessions. See SDD_SEI_SELECTOR_CAPTURE.md §5.
+
+The manifest is loaded lazily, cached, and exposed as a plain dict so
+``sei/writer.py`` can reference selectors by form name + field path without
+a heavy DSL layer.
+
+Usage:
+    from ufpr_automation.sei.writer_selectors import get_selectors
+
+    sels = get_selectors()
+    form = sels["forms"]["iniciar_processo"]
+    save_sel = form["submit"]["selector"]     # "#btnSalvar"
+    desc_sel = form["fields"]["especificacao"]["selector"]  # "#txtDescricao"
+"""
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from ufpr_automation.sei.writer import _is_forbidden
+
+
+class SelectorsError(RuntimeError):
+    """Raised when the manifest is missing, malformed, or collides with
+    the _FORBIDDEN_SELECTORS guard."""
+
+
+# Default location — latest capture session's sei_selectors.yaml. Can be
+# overridden via the SEI_SELECTORS_PATH env var (handy for tests against a
+# fixture manifest) or settings.
+_DEFAULT_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "procedures_data"
+    / "sei_capture"
+    / "20260413_192020"
+    / "sei_selectors.yaml"
+)
+
+
+def _manifest_path() -> Path:
+    import os
+
+    override = os.environ.get("SEI_SELECTORS_PATH")
+    if override:
+        return Path(override)
+    return _DEFAULT_PATH
+
+
+@lru_cache(maxsize=1)
+def get_selectors() -> dict[str, Any]:
+    """Load and cache the selector manifest.
+
+    Raises:
+        SelectorsError: if the YAML file is missing, malformed, or
+            contains a selector that collides with _FORBIDDEN_SELECTORS.
+    """
+    path = _manifest_path()
+    if not path.exists():
+        raise SelectorsError(
+            f"sei_selectors.yaml not found at {path}. "
+            f"Run the selector capture sprint (SDD §6) or set "
+            f"SEI_SELECTORS_PATH to point at a valid manifest."
+        )
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise SelectorsError(f"malformed sei_selectors.yaml: {e}") from e
+
+    _validate_no_forbidden_selectors(data)
+    return data
+
+
+def clear_cache() -> None:
+    """Clear the lru_cache — only needed in tests that swap manifests."""
+    get_selectors.cache_clear()
+
+
+def _validate_no_forbidden_selectors(data: dict[str, Any]) -> None:
+    """Walk the manifest and raise if any leaf string would match
+    _FORBIDDEN_SELECTORS (assinar, enviar processo, etc).
+
+    This is belt-and-suspenders: _safe_click also checks at click time,
+    but validating at load time fails fast with a clear message.
+    """
+    violations: list[str] = []
+
+    def _walk(node: Any, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                _walk(v, f"{path}.{k}" if path else str(k))
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                _walk(v, f"{path}[{i}]")
+        elif isinstance(node, str):
+            # Only check keys that are *selectors* — filtering by key name
+            # avoids false positives on documentation strings like notes
+            # that legitimately mention "assinar".
+            # EXCLUDE the forbidden_buttons section: that section
+            # intentionally documents buttons the writer MUST NEVER click;
+            # listing them is not a violation, using them would be.
+            if ".forbidden_buttons" in path:
+                return
+            if path.endswith(("selector", "label", "hidden_store", "hidden_id", "dropdown")):
+                if _is_forbidden(node):
+                    violations.append(f"{path} = {node!r}")
+
+    _walk(data, "")
+    if violations:
+        raise SelectorsError(
+            "sei_selectors.yaml contains selectors that match _FORBIDDEN_SELECTORS:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
+# Convenience accessors -----------------------------------------------------
+
+def get_form(form_name: str) -> dict[str, Any]:
+    """Return the selector block for a form. Raises if unknown."""
+    forms = get_selectors().get("forms", {})
+    if form_name not in forms:
+        raise SelectorsError(
+            f"unknown form '{form_name}' — available: {sorted(forms)}"
+        )
+    return forms[form_name]
+
+
+def get_field(form_name: str, field_name: str) -> dict[str, Any]:
+    """Return a single field's selector block."""
+    fields = get_form(form_name).get("fields", {})
+    if field_name not in fields:
+        raise SelectorsError(
+            f"unknown field '{field_name}' on form '{form_name}' — "
+            f"available: {sorted(fields)}"
+        )
+    return fields[field_name]

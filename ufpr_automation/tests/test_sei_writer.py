@@ -262,22 +262,32 @@ class TestCreateProcess:
         assert "dry_run" in content
 
     @pytest.mark.asyncio
-    async def test_create_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
-        """Live mode must remain blocked until Playwright selectors are captured."""
+    async def test_create_live_mode_no_longer_raises_not_implemented(
+        self, mock_page, tmp_path, monkeypatch
+    ):
+        """Live mode is wired up — must not raise NotImplementedError.
+
+        With a mocked Page the Playwright flow will fail differently (e.g.,
+        AttributeError / TypeError from AsyncMock internals) — the only
+        contract we guard here is that the old placeholder is gone.
+        """
         from ufpr_automation.config import settings
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
-        with pytest.raises(NotImplementedError, match="selector capture"):
+        with pytest.raises(Exception) as exc_info:
             await live_writer.create_process(
                 tipo_processo="Estágios não Obrigatórios",
                 especificacao="Design Gráfico",
                 interessado="ALANIS ROCHA - GRR20230091",
             )
+        assert not isinstance(exc_info.value, NotImplementedError), (
+            "live mode should be wired up, not blocked by NotImplementedError"
+        )
 
 
 class TestAttachDocumentLiveMode:
     @pytest.mark.asyncio
-    async def test_attach_live_mode_raises_not_implemented(
+    async def test_attach_live_mode_no_longer_raises_not_implemented(
         self, mock_page, tce_classification, tmp_path, monkeypatch
     ):
         from ufpr_automation.config import settings
@@ -285,26 +295,35 @@ class TestAttachDocumentLiveMode:
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         fake_pdf = tmp_path / "doc.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4 fake")
-        with pytest.raises(NotImplementedError, match="selector capture"):
+        with pytest.raises(Exception) as exc_info:
             await live_writer.attach_document(
                 "12345.000123/2026-01", fake_pdf, tce_classification
             )
+        assert not isinstance(exc_info.value, NotImplementedError)
 
 
 class TestSaveDespachoDraftLiveMode:
     @pytest.mark.asyncio
-    async def test_draft_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
+    async def test_draft_live_mode_no_longer_raises_not_implemented(
+        self, mock_page, tmp_path, monkeypatch
+    ):
+        """save_despacho_draft wraps live-mode errors in a failed DraftResult
+        (see the broad except at the bottom of the method). We only guarantee
+        here that the old NotImplementedError gate is gone — with a mocked
+        page, the live flow will fail and surface error != None."""
         from ufpr_automation.config import settings
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         with patch("ufpr_automation.graphrag.templates.get_registry") as gr:
             gr.return_value.get.return_value = "Despacho body: [NOME]"
-            with pytest.raises(NotImplementedError, match="selector capture"):
-                await live_writer.save_despacho_draft(
-                    "12345.000123/2026-01",
-                    tipo="tce_inicial",
-                    variables={"NOME": "Aluno"},
-                )
+            result = await live_writer.save_despacho_draft(
+                "12345.000123/2026-01",
+                tipo="tce_inicial",
+                variables={"NOME": "Aluno"},
+            )
+        assert result.success is False
+        assert result.error is not None
+        assert "selector capture" not in (result.error or "")
 
 
 # ============================================================================
