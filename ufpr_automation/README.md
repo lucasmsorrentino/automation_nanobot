@@ -272,6 +272,6 @@ TELEGRAM_CHAT_ID=...
 - **Cache de embeddings:** `multilingual-e5-large` em `~/.cache/huggingface/hub/`. Em uso intenso, set `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1` para evitar 429.
 - **Windows + UTF-8:** `utils/logging.py` reconfigura `sys.stdout`/`stderr` para UTF-8 no bootstrap do logger — todos os CLIs herdam.
 - **Segurança:** o `.env` está no `.gitignore` — nunca comite credenciais.
-- **Testes:** `pytest ufpr_automation/tests/ -v` (626 testes).
+- **Testes:** `pytest ufpr_automation/tests/ -v` (685 testes).
 - **SEI safety arquitetural:** `SEIWriter` não expõe `sign()`, `send()`, `protocol()` ou `finalize()`. Adicionar qualquer um quebra o teste regressivo `test_writer_public_api_is_only_attach_and_draft`. O `_FORBIDDEN_SELECTORS` runtime guard ainda impede clicks em "Assinar/Enviar Processo/Protocolar/btnAssinar" mesmo se um selector escapar. Belt + suspenders.
 - **Fleet reducers:** os campos paralelos em `graph/state.py` (`rag_contexts`, `classifications`, `sei_contexts`, `siga_contexts`, `errors`) usam `Annotated[..., reducer]` para que sub-agents do Fleet façam merge de dicts ao invés de last-write-wins. Sem isso, dispatches paralelos via `Send` API perderiam dados.

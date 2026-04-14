@@ -1,0 +1,83 @@
+# Minimal example manifest — reference for the schema documented in
+# ufpr_automation/siga/SELECTORS_SCHEMA.md. Used by the test suite via
+# SIGA_SELECTORS_PATH. The values are plausible but NOT captured from
+# the real SIGA; do NOT use this in production.
+
+meta:
+  schema_version: 1
+  captured_at: "2026-04-14T00:00:00Z"
+  source_tutorial: "tests/fixture"
+  siga_url: "https://siga.ufpr.br"
+  notes: "Example fixture. Real manifests come from the grounder."
+
+login:
+  url: "/sistemasweb/login"
+  fields:
+    username:
+      selector: "#login"
+      kind: "input"
+    password:
+      selector: "#senha"
+      kind: "password"
+  submit:
+    selector: "#btnEntrar"
+  logged_in_indicator:
+    selector: "a:has-text('Sair')"
+
+navigation:
+  home:
+    url: "/sistemasweb/home"
+  student_search:
+    menu_path:
+      - "text=Consulta"
+      - "text=Alunos"
+    url_hint: "/consulta/aluno"
+
+screens:
+  student_search:
+    description: "Form to look up student by GRR"
+    fields:
+      grr_input:
+        selector: "input[name='matricula']"
+        kind: "input"
+    submit_selector: "button:has-text('Consultar')"
+    result_indicator: "#dadosAluno"
+
+  student_detail:
+    description: "Page showing student's academic info"
+    fields:
+      nome:
+        selector: "#dados_aluno_nome"
+        extract: "text"
+      curso:
+        selector: "#dados_aluno_curso"
+        extract: "text"
+      situacao:
+        selector: "#dados_aluno_situacao"
+        extract: "text"
+      carga_horaria_matriculada:
+        selector: "#dados_carga_matric"
+        extract: "integer"
+
+  enrollment_history:
+    description: "Tab listing semester enrollments and grade history"
+    tab_selector: "a:has-text('Histórico')"
+    fields:
+      disciplinas_reprovadas_falta:
+        selector: "tr.reprovacao-falta td.codigo"
+        extract: "text_list"
+
+  current_internships:
+    description: "Tab listing active internships"
+    tab_selector: "a:has-text('Estágios')"
+    fields:
+      concedentes_ativos:
+        selector: "tr.estagio-ativo td.concedente"
+        extract: "text_list"
+
+forbidden_selectors:
+  - "text=Matricular"
+  - "text=Alterar"
+  - "text=Excluir"
+  - "#btnSalvar"
+  - "#btnAlterar"
