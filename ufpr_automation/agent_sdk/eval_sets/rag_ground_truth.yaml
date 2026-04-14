@@ -59,3 +59,82 @@ queries:
     expected_doc_substring: "cola"
     expected_in_top_k: 5
     subset: cepe
+
+  # -- Expansion round 1 (2026-04-14): cobertura cross-subset -----------------
+
+  - id: estagio_obrigatorio_regulamento
+    query: "estágio obrigatório regulamento curso graduação"
+    expected_doc_substring: "estag"
+    expected_in_top_k: 5
+    subset: estagio
+    notes: "Distingue obrigatório do não-obrigatório — doc separado"
+
+  - id: estagio_rescisao_contrato
+    query: "rescisão de estágio cancelamento TCE"
+    expected_doc_substring: "rescis"
+    expected_in_top_k: 5
+    subset: estagio
+
+  - id: estagio_tce_termo_compromisso
+    query: "Termo de Compromisso de Estágio modelo"
+    expected_doc_substring: "compromisso"
+    expected_in_top_k: 5
+    subset: estagio
+
+  - id: cepe_equivalencia_disciplinas
+    query: "equivalência de disciplinas análise coordenação"
+    expected_doc_substring: "equival"
+    expected_in_top_k: 5
+    subset: cepe
+    notes: "Distinto de aproveitamento — envolve análise de ementa"
+
+  - id: cepe_ajuste_matricula_periodo
+    query: "ajuste de matrícula período semestre"
+    expected_doc_substring: "ajuste"
+    expected_in_top_k: 5
+    subset: cepe
+
+  - id: cepe_trancamento_disciplina
+    query: "trancamento de disciplina prazo regulamento"
+    expected_doc_substring: "tranca"
+    expected_in_top_k: 5
+    subset: cepe
+
+  - id: cepe_reformulacao_curso
+    query: "reformulação curricular curso graduação"
+    expected_doc_substring: "reform"
+    expected_in_top_k: 5
+    subset: cepe
+
+  - id: coun_portaria_reitor
+    query: "portaria reitor UFPR nomeação"
+    expected_doc_substring: "portaria"
+    expected_in_top_k: 5
+    subset: coun
+
+  - id: coplad_planejamento
+    query: "COPLAD planejamento administração orçamento"
+    expected_doc_substring: "coplad"
+    expected_in_top_k: 5
+    subset: coplad
+    notes: "Conselho de Planejamento e Administração — cobertura do subset COPLAD"
+
+  - id: manual_siga_historico_escolar
+    query: "como consultar histórico escolar no SIGA"
+    expected_doc_substring: "siga"
+    expected_in_top_k: 5
+    subset: ""
+    notes: "Manual SIGA — busca global (sem filtro de conselho)"
+
+  - id: manual_sei_tramitacao_processo
+    query: "tramitação de processo SEI envio externo"
+    expected_doc_substring: "SEI"
+    expected_in_top_k: 5
+    subset: ""
+
+  - id: extensao_ace_atividade
+    query: "Atividade Curricular de Extensão ACE graduação"
+    expected_doc_substring: "extens"
+    expected_in_top_k: 5
+    subset: cepe
+    notes: "Distingue extensão curricular (ACE) de atividades formativas (AFC)"
