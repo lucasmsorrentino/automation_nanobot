@@ -94,7 +94,27 @@ class TestDiscoverSources:
         out = sg.discover_sources(tutorial_dir)
         assert len(out) == 1
 
-    def test_falls_back_to_all_md_when_no_bloco3(self, tutorial_dir):
+    def test_picks_up_siga_named_files(self, tutorial_dir):
+        """Real-world: tutorial files may be named semantically
+        (e.g. bloco_siga_secretarias.md) instead of bloco_3*."""
+        (tutorial_dir / "bloco_alunos.md").write_text("off-topic", encoding="utf-8")
+        (tutorial_dir / "bloco_siga_secretarias.md").write_text(
+            "SIGA content", encoding="utf-8"
+        )
+        (tutorial_dir / "FLUXO_GERAL.md").write_text("flow", encoding="utf-8")
+        out = sg.discover_sources(tutorial_dir)
+        names = [p.name for p in out]
+        assert names == ["bloco_siga_secretarias.md"]
+
+    def test_combines_bloco3_and_siga_named(self, tutorial_dir):
+        (tutorial_dir / "bloco_3_intro.md").write_text("x", encoding="utf-8")
+        (tutorial_dir / "bloco_siga_flow.md").write_text("y", encoding="utf-8")
+        (tutorial_dir / "bloco_outros.md").write_text("z", encoding="utf-8")
+        out = sg.discover_sources(tutorial_dir)
+        assert len(out) == 2
+        assert {p.name for p in out} == {"bloco_3_intro.md", "bloco_siga_flow.md"}
+
+    def test_falls_back_to_all_md_when_nothing_relevant(self, tutorial_dir):
         (tutorial_dir / "BLOCO_1.md").write_text("one", encoding="utf-8")
         (tutorial_dir / "BLOCO_2.md").write_text("two", encoding="utf-8")
         out = sg.discover_sources(tutorial_dir)

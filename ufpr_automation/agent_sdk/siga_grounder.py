@@ -113,9 +113,9 @@ def discover_sources(tutorial_dir: Path | None = None) -> list[Path]:
 
     Priority order (first non-empty wins):
 
-    1. Explicit BLOCO 3 files — ``BLOCO_3*.md`` or ``bloco_3*.md``
-       (case-insensitive match, deduplicated — NTFS glob is already
-       case-insensitive, so we collapse the two globs).
+    1. Markdown whose filename mentions SIGA (``*siga*``) or follows the
+       ``bloco_3*`` naming — these are the tutorial sections that
+       describe SIGA navigation. Case-insensitive.
     2. Any ``*.md`` under ``tutorial_dir`` (merges everything).
 
     Returns an empty list if nothing relevant is present yet.
@@ -124,12 +124,13 @@ def discover_sources(tutorial_dir: Path | None = None) -> list[Path]:
     if not td.exists():
         return []
 
-    def _is_bloco3(p: Path) -> bool:
-        return p.name.lower().startswith("bloco_3")
+    def _is_siga_relevant(p: Path) -> bool:
+        low = p.name.lower()
+        return low.startswith("bloco_3") or "siga" in low
 
-    bloco3 = sorted({p for p in td.glob("*.md") if _is_bloco3(p)})
-    if bloco3:
-        return bloco3
+    relevant = sorted({p for p in td.glob("*.md") if _is_siga_relevant(p)})
+    if relevant:
+        return relevant
 
     return sorted(td.glob("*.md"))
 
