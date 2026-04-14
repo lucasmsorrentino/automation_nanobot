@@ -280,8 +280,6 @@ class TestRunIntentDrafterDryRun:
 
 class TestRunIntentDrafterWithClaude:
     def test_successful_candidate_generation(self, tmp_path):
-        from ufpr_automation.agent_sdk.runner import ClaudeRunResult
-
         proc_path = tmp_path / "procedures.jsonl"
         fb_path = tmp_path / "feedback.jsonl"
         fb_path.write_text("", encoding="utf-8")
@@ -307,12 +305,6 @@ class TestRunIntentDrafterWithClaude:
             'sources:\n  - "pendente_revisao_humana"\n'
             'template: "Prezado(a) [NOME_ALUNO], segue declaração."\n'
             '```'
-        )
-
-        mock_result = ClaudeRunResult(
-            success=True, task="intent_drafter", run_id="test123",
-            started_at=now, duration_s=5.0, prompt_chars=1000,
-            output_text=mock_yaml,
         )
 
         with patch("ufpr_automation.agent_sdk.runner.is_claude_available", return_value=True), \

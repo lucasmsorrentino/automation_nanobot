@@ -128,7 +128,7 @@ class TestCascadedCompletion:
                     _mock_response("ok"),  # fallback succeeds
                 ],
             ) as mock_ac:
-                result = await cascaded_completion(
+                await cascaded_completion(
                     TaskType.CLASSIFY, messages=MESSAGES,
                 )
 

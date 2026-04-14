@@ -180,7 +180,7 @@ class TestAblationBehavior:
 
         with patch("ufpr_automation.llm.client.LLMClient", return_value=mock_client):
             from ufpr_automation.graph.nodes import _classify_with_litellm
-            result = _classify_with_litellm([email], {email.stable_id: "context"})
+            _classify_with_litellm([email], {email.stable_id: "context"})
 
         mock_client.classify_email_async.assert_called_once()
         mock_client.self_refine_async.assert_called_once()
@@ -224,7 +224,7 @@ class TestAblationBehavior:
         with patch("ufpr_automation.graph.nodes._get_retriever", return_value=fake_retriever), \
              patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""), \
              patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""):
-            result = rag_retrieve(state)
+            rag_retrieve(state)
 
         # The high-near-miss email should NOT have been queried
         high_subject_queried = any("High near-miss" in s for s in searched_subjects)
@@ -258,7 +258,7 @@ class TestAblationBehavior:
              patch("ufpr_automation.graph.nodes._consult_siga_for_email", return_value=None) as mock_siga:
 
             from ufpr_automation.graph.fleet import process_one_email
-            result = process_one_email({"email": email, "stable_id": email.stable_id})
+            process_one_email({"email": email, "stable_id": email.stable_id})
 
         mock_sei.assert_called_once()
         mock_siga.assert_not_called()  # SIGA was skipped

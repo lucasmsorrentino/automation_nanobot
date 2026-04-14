@@ -14,7 +14,6 @@ import yaml
 
 from ufpr_automation.siga import selectors as sel
 
-
 FIXTURE = (
     Path(__file__).resolve().parent
     / "fixtures"

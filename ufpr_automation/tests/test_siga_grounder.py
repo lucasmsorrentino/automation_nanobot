@@ -16,7 +16,6 @@ import yaml
 from ufpr_automation.agent_sdk import siga_grounder as sg
 from ufpr_automation.agent_sdk.runner import ClaudeRunResult
 
-
 FIXTURE_EXAMPLE = (
     Path(__file__).resolve().parent
     / "fixtures"

@@ -71,7 +71,7 @@ def main():
             st.subheader(f"{len(results)} resultado(s)")
 
             for i, res in enumerate(results, 1):
-                # Score color indicator
+                # Score color indicator (green=close match, red=weak)
                 if res.score < 0.25:
                     score_badge = f":green[{res.score:.4f}]"
                 elif res.score < 0.4:
@@ -80,7 +80,7 @@ def main():
                     score_badge = f":red[{res.score:.4f}]"
 
                 with st.expander(
-                    f"**[{i}]** {res.caminho}  —  score: {res.score:.4f}",
+                    f"**[{i}]** {res.caminho}  —  score: {score_badge}",
                     expanded=i <= 3,
                 ):
                     cols = st.columns([1, 1, 1])

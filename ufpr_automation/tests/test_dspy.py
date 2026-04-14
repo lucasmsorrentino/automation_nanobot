@@ -14,11 +14,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Skip entire module if dspy is not installed
+# Skip entire module if dspy is not installed. Subsequent imports must run
+# AFTER importorskip (otherwise pytest collects them and fails on missing
+# dspy), so the E402 "module level import not at top of file" warnings
+# below are intentional — noqa'd per-line.
 dspy = pytest.importorskip("dspy")
 
-from ufpr_automation.core.models import EmailClassification, EmailData
-from ufpr_automation.dspy_modules.metrics import (
+from ufpr_automation.core.models import EmailClassification, EmailData  # noqa: E402
+from ufpr_automation.dspy_modules.metrics import (  # noqa: E402
     VALID_CATEGORIES,
     category_match,
     category_valid,
@@ -27,12 +30,12 @@ from ufpr_automation.dspy_modules.metrics import (
     formal_tone,
     response_not_empty,
 )
-from ufpr_automation.dspy_modules.modules import (
+from ufpr_automation.dspy_modules.modules import (  # noqa: E402
     EmailClassifierModule,
     SelfRefineModule,
     prediction_to_classification,
 )
-from ufpr_automation.dspy_modules.signatures import (
+from ufpr_automation.dspy_modules.signatures import (  # noqa: E402
     DraftCritic,
     DraftRefiner,
     EmailClassifier,
@@ -67,14 +70,20 @@ def _default_pred(**overrides) -> dspy.Prediction:
 class TestSignatures:
     def test_email_classifier_has_expected_fields(self):
         fields = EmailClassifier.model_fields
-        input_names = {k for k, v in fields.items() if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "input"}
-        output_names = {k for k, v in fields.items() if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "output"}
+        input_names = {
+            k for k, v in fields.items()
+            if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "input"
+        }
+        output_names = {
+            k for k, v in fields.items()
+            if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "output"
+        }
 
-        # At minimum these should exist as fields
+        # Required fields must exist AND be classified correctly as input/output.
         for name in ("email_subject", "email_body", "email_sender", "rag_context"):
-            assert name in fields, f"Missing input field: {name}"
+            assert name in input_names, f"Missing input field: {name}"
         for name in ("categoria", "resumo", "acao_necessaria", "sugestao_resposta", "confianca"):
-            assert name in fields, f"Missing output field: {name}"
+            assert name in output_names, f"Missing output field: {name}"
 
     def test_draft_critic_has_expected_fields(self):
         fields = DraftCritic.model_fields

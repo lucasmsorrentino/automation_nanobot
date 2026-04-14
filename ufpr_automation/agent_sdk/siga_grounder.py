@@ -47,7 +47,6 @@ import hashlib
 import json
 import logging
 import re
-import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -64,7 +63,6 @@ from ufpr_automation.agent_sdk.runner import (
 from ufpr_automation.config import settings
 from ufpr_automation.siga.selectors import (
     SIGASelectorsError,
-    _is_forbidden,
     _validate_no_forbidden_selectors,
     _validate_schema,
     clear_cache,

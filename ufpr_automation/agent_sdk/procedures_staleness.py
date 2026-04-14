@@ -234,10 +234,10 @@ def _format_report(results: list[IntentCheck], max_age_days: int) -> str:
     lines.append(f"| stale | {stale} |")
     lines.append("")
 
-    STATUS_ICON = {"ok": "ok", "warning": "warning", "stale": "STALE"}
+    status_icon = {"ok": "ok", "warning": "warning", "stale": "STALE"}
 
     for r in results:
-        icon = STATUS_ICON.get(r.status, r.status)
+        icon = status_icon.get(r.status, r.status)
         lines.append(f"## [{icon}] {r.intent_name}")
         if r.issues:
             for issue in r.issues:
