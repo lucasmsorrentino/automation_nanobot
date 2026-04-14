@@ -56,6 +56,42 @@
 
 ---
 
+## Fluxo Tier 0 (diagrama)
+
+```mermaid
+flowchart TD
+    A[Email chega] --> B[perceber<br/>Gmail/OWA + anexos]
+    B --> C{tier0_lookup}
+    C -->|keyword regex<br/>score 1.0| H[Hit: intent resolvido]
+    C -->|miss| D[e5-large cosine<br/>vs passage embeddings]
+    D -->|sim &gt;= 0.90| H
+    D -->|sim &lt; 0.90| M1[Miss - fallback Tier 1]
+    H --> E{required_fields<br/>completos?}
+    E -->|sim| F{intent.last_update<br/>&gt;= RAG mtime?}
+    E -->|não| M2[Campos faltando - Tier 1]
+    F -->|sim| G[extract_variables<br/>+ fill_template]
+    F -->|não - stale| M3[Stale - Tier 1]
+    G --> R[EmailClassification<br/>pronto<br/>ZERO custo LLM]
+    M1 --> T1[Tier 1: RAG + Classifier LLM]
+    M2 --> T1
+    M3 --> T1
+    T1 --> R
+    R --> S[rotear / agir / SEI write]
+
+    classDef hit fill:#d4edda,stroke:#28a745
+    classDef miss fill:#fff3cd,stroke:#ffc107
+    classDef action fill:#cce5ff,stroke:#007bff
+    class H,G,R hit
+    class M1,M2,M3,T1 miss
+    class B,S action
+```
+
+> Diagrama do que `graph/builder.py:build_graph()` faz em runtime.
+> Hits verdes = caminho Tier 0 (sem RAG, sem LLM classificador).
+> Caminhos amarelos = fallback pra Tier 1 (custa RAG + LLM).
+
+---
+
 ## §1. Estágio Não Obrigatório (238 processos — categoria mais comum)
 
 ```intent

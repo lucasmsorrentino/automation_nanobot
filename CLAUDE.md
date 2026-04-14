@@ -128,6 +128,12 @@ python -m ufpr_automation.graphrag.enrich --conselho cepe       # filter by cons
 
 # Run UFPR automation tests
 pytest ufpr_automation/tests/ -v
+
+# UFPR Aberta (Moodle) — scraper do curso "Conheça o SIGA!"
+# 1ª vez: --headed para validar login; depois sessão persistida em session_data/ufpr_aberta_state.json
+python -m ufpr_automation.ufpr_aberta --headed            # 1ª execução
+python -m ufpr_automation.ufpr_aberta                     # headless (sessão salva)
+python -m ufpr_automation.ufpr_aberta --course-id 42      # outro curso no Moodle
 ```
 
 ## Architecture
@@ -186,7 +192,8 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 - **`aflow/`** — AFlow topology evaluator (Marco III). NOT a neural search — a hand-authored variant registry + offline evaluator. `topologies.py` registers 5 variants (`baseline`, `fleet`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`). `evaluator.py:evaluate()` runs each topology against an eval set with pluggable `metric_fn` and `invoke_fn` (default stub returns expected categoria for unit tests). `optimizer.py:pick_best_topology()` picks by `(accuracy, -latency_mean_ms, -errors)` and writes a JSON report. `cli.py` is the CLI entrypoint. `graph/builder.py:build_graph` dispatches to `aflow.topologies.get_topology(name)` when `AFLOW_TOPOLOGY != "fleet"`, preserving default Fleet behavior. Cold start: if `feedback_data/` is empty, the optimizer falls back to synthetic examples from `dspy_modules/optimize.py`.
 - **`scheduler.py`** — APScheduler-based pipeline scheduler. Runs LangGraph pipeline 3x/day (configurable via `SCHEDULE_HOURS`, `SCHEDULE_TZ`). CLI: `--schedule` (daemon) or `--schedule --once`.
 - **`workspace/`** — Nanobot integration files: `SOUL.md` (full agent persona + normative detail), **`SOUL_ESSENTIALS.md`** (slim system-prompt slice — identity, tone, categories, signature — injected per LLM call), **`PROCEDURES.md`** (Tier 0 playbook of intents organized by SEI process type), `AGENTS.md`, `SKILL.md`, `config.json`.
-- **`base_conhecimento/`** — Operational reference files used to author the playbook and train prompts: `manual_sei.txt`, `manual_siga.txt`, `FichaDoCurso.txt`, `procedimentos.md`. These are plain-text, not embedded into RAG (they drive human-readable authoring of `PROCEDURES.md`).
+- **`ufpr_aberta/`** — Moodle (UFPR Aberta) scraper — login independente (não-SSO), captura o curso "Conheça o SIGA!" (id=9) para authoring de `PROCEDURES.md`, guia de navegação do `siga/browser.py` e ingestão RAG opcional. `browser.py` faz login no Moodle (form nativo) e persiste sessão em `session_data/ufpr_aberta_state.json`. `scraper.py` lida com tema `format_tiles` (visita cada seção via `?section=N`, filtra atividades por `#region-main a.cm-link` — **não** usar `courseindex` sidebar pois lista o curso inteiro). CLI: `python -m ufpr_automation.ufpr_aberta [--headed] [--course-id 9]`. Credenciais em `.env` com nomes literais `LOGING_UFPR_ABERTA`/`SENHA_UFPR_ABERTA` (o "G" a mais é intencional — casa com o arquivo do usuário). Dumps crus vão para `G:\Meu Drive\ufpr_rag\docs\ainda_n_ingeridos\ufpr_aberta\` (HTML + PDFs + `_structure.json`). Markdown estruturado de **BLOCO 1** (alunos, 16 atividades) e **BLOCO 3** (secretarias/coord, 21 atividades) em `base_conhecimento/ufpr_aberta/`: `bloco_alunos.md`, `bloco_siga_secretarias.md`, `FLUXO_GERAL.md` (Mermaid cross-bloco).
+- **`base_conhecimento/`** — Operational reference files used to author the playbook and train prompts: `manual_sei.txt`, `manual_siga.txt`, `FichaDoCurso.txt`, `procedimentos.md`, `ufpr_aberta/*.md` (ver acima). These are plain-text, not embedded into RAG by default (they drive human-readable authoring of `PROCEDURES.md`).
 - **`ClaudeCowork/`** — Base de conhecimento from Claude Cowork: SEI manual, SIGA manual, course data, internship guides, email templates, scheduled skills (morning/afternoon email checks).
 
 The automation saves responses as drafts — never auto-sends (human-in-the-loop). See `ufpr_automation/ARCHITECTURE.md` for the planned 3-phase maturation roadmap (Marco I -> LangGraph -> GraphRAG/multi-agent).

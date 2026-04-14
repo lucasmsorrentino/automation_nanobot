@@ -167,6 +167,16 @@ SEI_PASSWORD = os.getenv("SEI_PASSWORD", "")
 
 
 # ============================================================================
+# UFPR Aberta (Moodle — cursos institucionais, login independente)
+# ============================================================================
+
+UFPR_ABERTA_URL = os.getenv("UFPR_ABERTA_URL", "https://ufpraberta.ufpr.br")
+# Note: the .env key is LOGING_UFPR_ABERTA (intentional — matches user's file).
+UFPR_ABERTA_USERNAME = os.getenv("LOGING_UFPR_ABERTA", "").strip()
+UFPR_ABERTA_PASSWORD = os.getenv("SENHA_UFPR_ABERTA", "").strip()
+
+
+# ============================================================================
 # Neo4j (GraphRAG — Marco III)
 # ============================================================================
 
