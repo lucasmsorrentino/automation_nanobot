@@ -1,12 +1,16 @@
 """Shared Playwright page pool for Fleet sub-agents.
 
-Each Fleet sub-agent that needs to consult SEI or SIGA acquires a Page from
-the corresponding pool. The pool wraps a single :class:`BrowserContext` so
-all pages share cookies / storage state, and an :class:`asyncio.Semaphore`
-caps concurrency to avoid overwhelming the upstream system with too many
-parallel Playwright tabs.
+Status: **parked pending Fleet async refactor** (see TASKS.md).
+`process_one_email` is sync and LangGraph dispatches sub-agents in a
+thread pool, so each sub-agent has its own event loop. A Playwright
+`BrowserContext` is bound to the loop that created it and cannot be
+shared across threads — making this pool unusable until the Fleet
+path is converted to async. Current production flow relies on
+`storage_state` reuse in `sei/browser.py`/`siga/browser.py` instead
+(0 logins in steady state; one login per sub-agent only on first
+run / expired session).
 
-Usage::
+Usage (target shape, once Fleet is async)::
 
     pool = BrowserPagePool(context, size=3)
     async with pool.acquire() as page:

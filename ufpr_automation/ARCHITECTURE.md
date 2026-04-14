@@ -175,7 +175,7 @@ Sub-agents paralelos via `langgraph.types.Send`. `dispatch_tier1` é a condition
 
 ### BrowserPagePool (`graph/browser_pool.py`)
 
-Pool assíncrono de pages Playwright derivadas de um único `BrowserContext` compartilhado. `acquire()` é um `asynccontextmanager` com `asyncio.Semaphore` (default size 3, configurável via `FLEET_BROWSER_POOL_SIZE`). Pronto para reuso pelos helpers `_consult_sei_for_email` / `_consult_siga_for_email` (wire-up final pendente — atualmente cada call ainda spawna browser próprio).
+Pool assíncrono de pages Playwright derivadas de um único `BrowserContext` compartilhado. `acquire()` é um `asynccontextmanager` com `asyncio.Semaphore` (default size 3, configurável via `FLEET_BROWSER_POOL_SIZE`). **Status: parked** — `process_one_email` do Fleet é sync e LangGraph dispara sub-agents em thread pool, cada um com event loop próprio; `BrowserContext` do Playwright é bound ao loop criador, então o pool não é usável até o Fleet virar async. Produção hoje depende do reuso de `storage_state` em `sei/browser.py` / `siga/browser.py` (0 logins em steady state). Ver TASKS.md para o caminho de refactor.
 
 ### SEIWriter (`sei/writer.py`)
 
