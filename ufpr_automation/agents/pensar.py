@@ -12,7 +12,6 @@ than N sequential ones.  This is the "multi-agent" parallelism in Marco I.
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.llm.client import LLMClient

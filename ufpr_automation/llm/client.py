@@ -13,7 +13,6 @@ import json
 import re
 from typing import Optional
 
-import litellm
 from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings

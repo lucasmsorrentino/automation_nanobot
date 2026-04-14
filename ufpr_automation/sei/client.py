@@ -7,7 +7,6 @@ templates from SOUL.md section 14 but NEVER submitted to SEI automatically.
 from __future__ import annotations
 
 import re
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

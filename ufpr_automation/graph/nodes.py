@@ -1039,7 +1039,6 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
     import asyncio
 
     from ufpr_automation.procedures.checkers import CheckContext, run_checks
-    from ufpr_automation.procedures.doc_catalog import get_doc_classification
     from ufpr_automation.procedures.playbook import (
         extract_variables,
         fill_template,

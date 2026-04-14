@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
-
-import pytest
 
 from ufpr_automation.agent_sdk.rag_auditor import (
     AuditReport,
@@ -18,7 +15,6 @@ from ufpr_automation.agent_sdk.rag_auditor import (
     run_audit,
     run_query,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

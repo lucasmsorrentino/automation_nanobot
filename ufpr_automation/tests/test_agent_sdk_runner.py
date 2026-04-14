@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from ufpr_automation.agent_sdk.runner import (
-    AGENT_SDK_DIR,
     ClaudeRunResult,
     is_claude_available,
     run_claude_oneshot,

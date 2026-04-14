@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from ufpr_automation.agent_sdk.feedback_chat import (
     ChatSession,
     _load_last_run,

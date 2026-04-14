@@ -23,7 +23,6 @@ import hashlib
 import logging
 import re
 import sys
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path

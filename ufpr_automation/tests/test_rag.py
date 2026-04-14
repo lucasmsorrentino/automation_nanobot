@@ -14,13 +14,12 @@ import pytest
 
 from ufpr_automation.rag.ingest import (
     DOCS_DIR,
+    _collect_pdfs,
     chunk_text,
     extract_text,
     metadata_from_path,
-    _collect_pdfs,
 )
 from ufpr_automation.rag.retriever import Retriever, SearchResult
-
 
 # ============================================================================
 # Unit Tests — extract_text
@@ -510,8 +509,9 @@ class TestIngestIntegration:
             patch("ufpr_automation.rag.ingest.STORE_DIR", store_dir),
             patch("ufpr_automation.rag.ingest.embed_texts", side_effect=mock_embed),
         ):
-            from ufpr_automation.rag.ingest import ingest_docs
             import lancedb
+
+            from ufpr_automation.rag.ingest import ingest_docs
 
             # Ingest all
             stats = ingest_docs(subset=None)

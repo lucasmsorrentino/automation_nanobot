@@ -2,19 +2,15 @@
 import inspect
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from ufpr_automation.sei import writer as writer_module
-from ufpr_automation.sei.writer import SEIWriter, _FORBIDDEN_SELECTORS, _is_forbidden
+from ufpr_automation.sei.writer import SEIWriter, _is_forbidden
 from ufpr_automation.sei.writer_models import (
-    AttachResult,
-    CreateProcessResult,
-    DraftResult,
     SEIDocClassification,
 )
-
 
 # ============================================================================
 # CRITICAL SAFETY REGRESSION TESTS — these must NEVER be skipped or removed
@@ -127,7 +123,9 @@ def mock_page():
 def writer(mock_page, tmp_path, monkeypatch):
     from ufpr_automation.config import settings
     monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
-    return SEIWriter(mock_page, run_id="test-run-1234")
+    # Force dry_run so tests are isolated from ambient SEI_WRITE_MODE in .env
+    # (tests that want live mode override via monkeypatch locally).
+    return SEIWriter(mock_page, run_id="test-run-1234", dry_run=True)
 
 
 @pytest.fixture
@@ -310,11 +308,22 @@ class TestSaveDespachoDraftLiveMode:
         """save_despacho_draft wraps live-mode errors in a failed DraftResult
         (see the broad except at the bottom of the method). We only guarantee
         here that the old NotImplementedError gate is gone — with a mocked
-        page, the live flow will fail and surface error != None."""
+        page, the live flow will fail and surface error != None.
+
+        We patch ``get_form`` so the test is independent of whether a real
+        ``sei_selectors.yaml`` capture manifest is present on disk. With a
+        stub form the flow gets past selector loading and fails on the
+        mocked Playwright page as originally intended.
+        """
         from ufpr_automation.config import settings
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
-        with patch("ufpr_automation.graphrag.templates.get_registry") as gr:
+        stub_form = {"fields": {}}
+        with patch("ufpr_automation.graphrag.templates.get_registry") as gr, \
+             patch(
+                 "ufpr_automation.sei.writer_selectors.get_form",
+                 return_value=stub_form,
+             ):
             gr.return_value.get.return_value = "Despacho body: [NOME]"
             result = await live_writer.save_despacho_draft(
                 "12345.000123/2026-01",
@@ -323,6 +332,7 @@ class TestSaveDespachoDraftLiveMode:
             )
         assert result.success is False
         assert result.error is not None
+        assert "NotImplementedError" not in (result.error or "")
         assert "selector capture" not in (result.error or "")
 
 

@@ -471,7 +471,7 @@ def main() -> None:
     print(f"  Por tipo:     {stats.get('by_tipo', {})}")
 
     if not args.dry_run:
-        print(f"\n  --- Vigência ---")
+        print("\n  --- Vigência ---")
         print(f"  Vigentes:              {stats.get('vigentes', '?')}")
         print(f"  Alteradas:             {stats.get('alteradas', '?')}")
         print(f"  Revogadas:             {stats.get('revogadas', '?')}")

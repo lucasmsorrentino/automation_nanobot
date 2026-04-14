@@ -64,9 +64,8 @@ async def run_pipeline_gmail(limit: int | None = None) -> dict:
     Returns:
         Summary dict matching run_pipeline() format.
     """
-    from ufpr_automation.gmail.client import GmailClient
-
     from ufpr_automation.attachments import extract_text_from_attachment
+    from ufpr_automation.gmail.client import GmailClient
 
     gmail = GmailClient()
     emails = gmail.list_unread(limit=limit) if limit is not None else gmail.list_unread()

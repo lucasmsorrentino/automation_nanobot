@@ -16,8 +16,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 
 # Force UTF-8 stdout on Windows so documents containing characters outside
 # cp1252 (e.g. ligatures like "fi" = \ufb01) don't crash the CLI mid-print.

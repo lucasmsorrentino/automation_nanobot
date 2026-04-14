@@ -232,7 +232,6 @@ def ingest_docs(
         Dict with stats: {pdfs, chunks, indexed, skipped, errors, ocr_recovered}.
     """
     import lancedb
-    import pyarrow as pa
 
     # Collect PDF paths
     pdf_paths = _collect_pdfs(subset)

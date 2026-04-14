@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.graph.nodes import (
     CONFIDENCE_HIGH,
-    CONFIDENCE_MEDIUM,
     rotear,
 )
 

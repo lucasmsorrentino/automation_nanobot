@@ -375,17 +375,17 @@ class SEIWriter:
                         e,
                     )
                     await target.evaluate(
-                        f"""(subtipo) => {{
+                        """(subtipo) => {
                           const sel = document.querySelector('#selSerie');
                           if (!sel) return;
-                          for (const o of sel.options) {{
-                            if ((o.textContent || '').toLowerCase().includes(subtipo.toLowerCase())) {{
+                          for (const o of sel.options) {
+                            if ((o.textContent || '').toLowerCase().includes(subtipo.toLowerCase())) {
                               sel.value = o.value;
-                              sel.dispatchEvent(new Event('change', {{bubbles: true}}));
+                              sel.dispatchEvent(new Event('change', {bubbles: true}));
                               return;
-                            }}
-                          }}
-                        }}""",
+                            }
+                          }
+                        }""",
                         classification.sei_subtipo,
                     )
                 # Wait for any SEI-side refresh to settle.

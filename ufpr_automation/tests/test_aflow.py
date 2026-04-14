@@ -133,7 +133,6 @@ class TestAblationBehavior:
 
     def test_no_self_refine_skips_refine(self, monkeypatch):
         """When AFLOW_TOPOLOGY=no_self_refine, _classify_with_litellm skips self_refine_async."""
-        import os
         monkeypatch.setenv("AFLOW_TOPOLOGY", "no_self_refine")
 
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -237,7 +236,7 @@ class TestAblationBehavior:
         """When AFLOW_TOPOLOGY=fleet_no_siga, process_one_email skips SIGA."""
         monkeypatch.setenv("AFLOW_TOPOLOGY", "fleet_no_siga")
 
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from ufpr_automation.core.models import EmailClassification, EmailData
 

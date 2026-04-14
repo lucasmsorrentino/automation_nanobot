@@ -21,7 +21,6 @@ from ufpr_automation.graphrag.client import Neo4jClient
 from ufpr_automation.graphrag.schema import apply_constraints
 from ufpr_automation.utils.logging import logger
 
-
 # ============================================================================
 # Despacho templates (SOUL.md section 14) — seeded into Template nodes so that
 # sei/client.py can fetch them at runtime via graphrag.templates.TemplateRegistry.

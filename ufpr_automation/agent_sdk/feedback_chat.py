@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import subprocess
 import sys
 import uuid
@@ -160,7 +159,7 @@ def build_bootstrap_prompt(entries: list[dict], summary: dict[str, Any]) -> str:
         )
 
     if len(entries) > 20:
-        lines.append(f"")
+        lines.append("")
         lines.append(f"... e mais {len(entries) - 20} emails")
 
     lines.append("")

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from ufpr_automation.llm.router import (
     TaskType,
     _build_model_chain,
     _is_retriable_error,
-    get_fallback_model,
     get_model,
     is_cascading_enabled,
 )

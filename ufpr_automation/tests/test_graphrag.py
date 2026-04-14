@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
 # ============================================================================
 # Schema tests
 # ============================================================================
@@ -433,7 +430,6 @@ class TestGraphNodeIntegration:
 
     def test_rag_retrieve_works_without_graphrag(self):
         """GraphRAG should gracefully degrade when Neo4j is not available."""
-        from ufpr_automation.core.models import EmailData
         from ufpr_automation.graph.nodes import _get_graph_context
 
         email = MagicMock()

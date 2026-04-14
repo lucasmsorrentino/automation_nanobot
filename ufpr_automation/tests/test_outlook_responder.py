@@ -18,7 +18,6 @@ import pytest
 
 from ufpr_automation.outlook import responder
 
-
 # Words that, if clicked, would cause the draft to actually be SENT.
 FORBIDDEN_CLICK_TEXTS = [
     "enviar",

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from ufpr_automation.agent_sdk.intent_drafter import (
     EmailCluster,
@@ -18,7 +15,6 @@ from ufpr_automation.agent_sdk.intent_drafter import (
     run_intent_drafter,
 )
 from ufpr_automation.procedures.store import ProcedureRecord
-
 
 # ---------------------------------------------------------------------------
 # _normalize_subject

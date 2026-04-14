@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -105,6 +105,7 @@ class TestDebugCapture:
         self, mock_page, tmp_path
     ):
         import json
+
         from ufpr_automation.utils.debug import capture_debug_info
 
         mock_page.content = AsyncMock(return_value="<html></html>")

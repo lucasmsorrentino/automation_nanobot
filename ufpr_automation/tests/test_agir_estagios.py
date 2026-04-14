@@ -10,7 +10,6 @@ import pytest
 from ufpr_automation.core.models import EmailClassification, EmailData
 from ufpr_automation.graph.nodes import agir_estagios
 
-
 SAMPLE_PROCEDURES_MD = """\
 ```intent
 intent_name: tce_inicial_estagios
@@ -95,7 +94,13 @@ class TestAgirEstagiosHardBlock:
 
 
 class TestAgirEstagiosAllPass:
-    def test_all_pass_runs_sei_chain(self, procedures_path):
+    def test_all_pass_runs_sei_chain(self, procedures_path, monkeypatch):
+        # Force dry_run so the test is isolated from ambient SEI_WRITE_MODE
+        # in .env (a live env would cause the inner SEIWriter to attempt
+        # loading sei_selectors.yaml, which isn't available on every machine).
+        from ufpr_automation.config import settings
+        monkeypatch.setattr(settings, "SEI_WRITE_MODE", "dry_run")
+
         email = _make_email(body="Segue TCE inicial do aluno João Silva, data início 01/06/2027")
         cls = _make_classification()
 

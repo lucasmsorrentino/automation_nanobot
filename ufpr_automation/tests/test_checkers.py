@@ -9,22 +9,19 @@ is being wired up.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-
-import pytest
+from datetime import date, timedelta
 
 from ufpr_automation.core.models import EmailData
 from ufpr_automation.procedures.checkers import (
+    _CHECKERS,
     CheckContext,
     CheckResult,
     CheckSummary,
-    _CHECKERS,
     register,
     registered_checkers,
     run_checks,
 )
 from ufpr_automation.procedures.playbook import Intent
-
 
 # ---------------------------------------------------------------------------
 # Registry baseline

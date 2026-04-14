@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
-
-import pytest
 
 from ufpr_automation.agent_sdk.procedures_staleness import (
-    IntentCheck,
     _load_soul_sections,
     check_intent,
     run_staleness_check,

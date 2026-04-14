@@ -25,7 +25,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from ufpr_automation.config import settings
 from ufpr_automation.procedures.playbook import Intent, parse_procedures_md
@@ -228,8 +227,8 @@ def _format_report(results: list[IntentCheck], max_age_days: int) -> str:
     ok = sum(1 for r in results if r.status == "ok")
     warn = sum(1 for r in results if r.status == "warning")
     stale = sum(1 for r in results if r.status == "stale")
-    lines.append(f"| Status | Count |")
-    lines.append(f"|--------|-------|")
+    lines.append("| Status | Count |")
+    lines.append("|--------|-------|")
     lines.append(f"| ok | {ok} |")
     lines.append(f"| warning | {warn} |")
     lines.append(f"| stale | {stale} |")

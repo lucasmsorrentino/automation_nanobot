@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from ufpr_automation.agent_sdk.debug_classification import (
     DebugTrace,
     _generate_proposals,
