@@ -32,13 +32,18 @@ class SelectorsError(RuntimeError):
 # Default location — latest capture session's sei_selectors.yaml. Can be
 # overridden via the SEI_SELECTORS_PATH env var (handy for tests against a
 # fixture manifest) or settings.
-_DEFAULT_PATH = (
+# Canonical manifest location: Google Drive (shared across work/home machines).
+# Fallback: local procedures_data/sei_capture/ (legacy path, pre-2026-04-14).
+# Override in both cases via SEI_SELECTORS_PATH env var.
+_DRIVE_PATH = Path(r"G:/Meu Drive/ufpr_automation_files/sei_selectors.yaml")
+_LEGACY_LOCAL_PATH = (
     Path(__file__).resolve().parent.parent
     / "procedures_data"
     / "sei_capture"
     / "20260413_192020"
     / "sei_selectors.yaml"
 )
+_DEFAULT_PATH = _DRIVE_PATH if _DRIVE_PATH.exists() else _LEGACY_LOCAL_PATH
 
 
 def _manifest_path() -> Path:

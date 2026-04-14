@@ -759,6 +759,19 @@ class SEIWriter:
             except Exception:
                 pass
 
+    @staticmethod
+    async def _clear_editor_body(popup) -> None:
+        """Clear pre-existing content in the CKEditor body.
+
+        Defense-in-depth against 'Texto Inicial = Nenhum' not being honored
+        by the Despacho form (Sprint 3 regression: default template loaded
+        into editor despite the Nenhum radio click). Ctrl+A + Delete is safe
+        — the body locator has already been clicked for focus.
+        """
+        await popup.keyboard.press("Control+A")
+        await popup.keyboard.press("Delete")
+        await popup.wait_for_timeout(150)
+
     async def save_despacho_draft(
         self,
         processo_id: str,
@@ -920,11 +933,34 @@ class SEIWriter:
                 )
                 target = vf or page.main_frame
 
-                # Texto Inicial = Nenhum.
+                # Texto Inicial = Nenhum. Explicitly click the radio input
+                # (not just the label) and verify it is checked — in Sprint 3
+                # we observed the label-click silently not registering, which
+                # caused the default template to load into the editor.
+                texto_inicial_cfg = form["fields"]["texto_inicial_nenhum"]
+                nenhum_radio_sel = texto_inicial_cfg.get(
+                    "selector", texto_inicial_cfg.get("label")
+                )
                 try:
-                    await target.locator(
-                        form["fields"]["texto_inicial_nenhum"]["label"]
-                    ).click()
+                    await target.locator(nenhum_radio_sel).first.check()
+                except Exception:
+                    try:
+                        await target.locator(
+                            texto_inicial_cfg["label"]
+                        ).click()
+                    except Exception:
+                        pass
+                try:
+                    is_checked = await target.locator(
+                        nenhum_radio_sel
+                    ).first.is_checked()
+                    if not is_checked:
+                        logger.warning(
+                            "save_despacho_draft: 'Texto Inicial = Nenhum' "
+                            "NOT checked after click — editor will load "
+                            "default template. Editor body will be cleared "
+                            "before typing as a safety net."
+                        )
                 except Exception:
                     pass
 
@@ -987,6 +1023,10 @@ class SEIWriter:
                 body = popup.locator(body_sel).first
                 await body.wait_for(state="visible", timeout=15000)
                 await body.click()
+                # Clear any pre-existing content in the editor (default
+                # template may have loaded if 'Texto Inicial = Nenhum'
+                # was not honored by the form — Sprint 3 fix).
+                await self._clear_editor_body(popup)
                 # Type line by line so \n becomes Enter.
                 for i, line in enumerate(filled.split("\n")):
                     if i > 0:

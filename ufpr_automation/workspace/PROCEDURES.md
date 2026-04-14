@@ -109,6 +109,7 @@ categoria: "Estágios"
 action: "Redigir Resposta"
 sei_action: "create_process"
 sei_process_type: "Graduação/Ensino Técnico: Estágios não Obrigatórios"
+acompanhamento_especial_grupo: "Estágio não obrigatório"  # POP-38: após create_process, incluir o processo neste grupo de Acompanhamento Especial para organização/rastreio pós-conclusão
 required_fields:
   - nome_aluno
   - grr
@@ -201,8 +202,22 @@ keywords:
   - "nova vigência"
 categoria: "Estágios"
 action: "Redigir Resposta"
+# Processo SEI já existe (aberto no TCE original) — fluxo é append: anexar
+# o Termo Aditivo + redigir despacho favorável. Não criar processo novo.
+sei_action: "attach_document"
 required_fields:
   - nome_aluno
+  - numero_tce                  # p/ localizar o processo SEI existente
+  - numero_aditivo
+  - data_termino_novo
+  - nome_concedente
+required_attachments:
+  - "Termo Aditivo"             # PDF do aditivo assinado
+blocking_checks:
+  # TODO: implementar checkers abaixo em procedures/checkers.py
+  - "aditivo_antes_vencimento_tce"    # HARD: aditivo deve chegar antes da data de término do TCE vigente
+  - "duracao_total_ate_24_meses"      # HARD: duração total (TCE + aditivos) ≤ 24 meses (Lei 11.788/08 Art. 11)
+  - "sei_processo_tce_existente"      # HARD: deve existir processo SEI vigente do TCE original do aluno
 sources:
   - "Resolução 46/10-CEPE"
   - "Lei 11.788/2008 Art. 11"
@@ -231,6 +246,20 @@ template: |
     Relatório Final na conclusão das atividades.
 
   {{ assinatura_email }}
+
+# Despacho SEI (manifestação favorável ao aditivo, anexado ao processo
+# existente do TCE original).
+despacho_template: |
+  Prezados,
+
+          A Coordenação do Curso de Design Gráfico manifesta-se favorável ao Termo
+  Aditivo nº [NUMERO_ADITIVO] ao Termo de Compromisso de Estágio nº [NUMERO_TCE]
+  do(a) estudante [NOME_ALUNO_MAIUSCULAS], [GRR], junto à [NOME_CONCEDENTE_MAIUSCULAS],
+  com nova data de término em [DATA_TERMINO_NOVO], preservadas as demais condições
+  do TCE original.
+
+          Por este despacho, ratifica-se integralmente o referido Termo Aditivo, anexo
+  a este processo, para todos os fins legais.
 ```
 
 ```intent
@@ -244,8 +273,21 @@ keywords:
   - "finalizar estágio"
 categoria: "Estágios"
 action: "Redigir Resposta"
+# Processo SEI já existe — append: anexar Termo de Rescisão + Relatório Final
+# + redigir despacho de homologação. Não criar processo novo.
+sei_action: "attach_document"
 required_fields:
   - nome_aluno
+  - numero_tce                  # p/ localizar o processo SEI existente
+  - nome_concedente
+  - data_termino
+required_attachments:
+  - "Termo de Rescisão"         # ou "Termo de Conclusão" (conforme caso)
+  - "Relatório Final"           # exigência Lei 11.788/08 Art. 9º §1º
+blocking_checks:
+  # TODO: implementar checkers abaixo em procedures/checkers.py
+  - "sei_processo_tce_existente"      # HARD: deve existir processo SEI vigente do TCE do aluno
+  - "relatorio_final_assinado_orientador"   # HARD: Relatório Final assinado pelo professor orientador
 sources:
   - "Resolução 46/10-CEPE"
   - "SOUL.md §8.3"
@@ -272,6 +314,19 @@ template: |
   e-mail estagio@ufpr.br ou telefone (41) 3310-2706.
 
   {{ assinatura_email }}
+
+# Despacho SEI (homologação da conclusão/rescisão).
+despacho_template: |
+  Prezados,
+
+          A Coordenação do Curso de Design Gráfico encaminha para homologação o
+  Termo de Rescisão e o Relatório Final referentes ao estágio do(a) estudante
+  [NOME_ALUNO_MAIUSCULAS], [GRR], junto à [NOME_CONCEDENTE_MAIUSCULAS], com data
+  de término em [DATA_TERMINO], em conformidade com a Lei 11.788/2008 e a
+  Resolução 46/10-CEPE.
+
+          Solicita-se o encaminhamento à Unidade de Estágios da COAPPE para
+  homologação e providências cabíveis.
 ```
 
 ```intent
@@ -285,8 +340,12 @@ keywords:
   - "documento incompleto"
 categoria: "Estágios"
 action: "Redigir Resposta"
+# Sem sei_action: pendência é só email ao aluno pedindo correção/reenvio.
+# Nenhuma ação no SEI — o processo só avança depois que o aluno reenviar
+# documentação válida (cai em estagio_nao_obrig_acuse_inicial ou _aditivo).
 required_fields:
   - nome_aluno
+  - lista_pendencias              # extraída do email/attachments pelo classificador
 sources:
   - "Resolução 46/10-CEPE"
   - "SOUL.md §15.5"

@@ -29,6 +29,7 @@ from ufpr_automation.procedures.playbook import Intent
 
 
 EXPECTED_CHECKERS = {
+    # Inicial TCE (estagio_nao_obrig_acuse_inicial)
     "siga_matricula_ativa",
     "siga_reprovacoes_ultimo_semestre",
     "siga_reprovacao_por_falta",
@@ -40,10 +41,15 @@ EXPECTED_CHECKERS = {
     "tce_jornada_sem_horario",
     "tce_jornada_antes_meio_dia",
     "sei_processo_vigente_duplicado",
+    # Aditivo / Conclusão (Marco IV — 2026-04-14)
+    "sei_processo_tce_existente",
+    "aditivo_antes_vencimento_tce",
+    "duracao_total_ate_24_meses",
+    "relatorio_final_assinado_orientador",
 }
 
 
-def test_all_11_checkers_registered():
+def test_all_checkers_registered():
     registered = set(registered_checkers())
     assert registered == EXPECTED_CHECKERS, (
         f"Unexpected checker registry. "
@@ -522,3 +528,124 @@ class TestRunChecks:
     def test_human_readable_all_pass(self):
         summary = CheckSummary(results=[CheckResult("a", "pass")])
         assert "Todas as condições satisfeitas" in summary.human_readable()
+
+
+# ---------------------------------------------------------------------------
+# Aditivo / Conclusão checkers (Marco IV)
+# ---------------------------------------------------------------------------
+
+
+class TestSeiProcessoTceExistente:
+    def test_soft_block_when_sei_not_consulted(self):
+        r = _invoke("sei_processo_tce_existente", _make_ctx(sei=None))
+        assert r.status == "soft_block"
+
+    def test_pass_when_vigente_tce_process_exists(self):
+        r = _invoke(
+            "sei_processo_tce_existente",
+            _make_ctx(sei={"processos_vigentes": [
+                {"numero": "23075.000001/2026-00",
+                 "tipo": "Graduação/Ensino Técnico: Estágios não Obrigatórios"},
+            ]}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_no_matching_tce_process(self):
+        r = _invoke(
+            "sei_processo_tce_existente",
+            _make_ctx(sei={"processos_vigentes": [
+                {"numero": "23075.000002/2026-00",
+                 "tipo": "Graduação: Aproveitamento de Disciplinas"},
+            ]}),
+        )
+        assert r.status == "hard_block"
+        assert "TCE original" in r.reason
+
+
+class TestAditivoAntesVencimentoTce:
+    def test_soft_block_when_data_fim_missing(self):
+        r = _invoke("aditivo_antes_vencimento_tce", _make_ctx(sei={}))
+        assert r.status == "soft_block"
+
+    def test_pass_when_today_before_data_fim(self):
+        future = date.today() + timedelta(days=30)
+        r = _invoke(
+            "aditivo_antes_vencimento_tce",
+            _make_ctx(sei={"tce_data_fim": _br(future)}),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_tce_already_expired(self):
+        past = date.today() - timedelta(days=5)
+        r = _invoke(
+            "aditivo_antes_vencimento_tce",
+            _make_ctx(sei={"tce_data_fim": _br(past)}),
+        )
+        assert r.status == "hard_block"
+        assert "venceu" in r.reason.lower()
+
+
+class TestDuracaoTotalAte24Meses:
+    def test_soft_block_when_dates_missing(self):
+        r = _invoke("duracao_total_ate_24_meses", _make_ctx())
+        assert r.status == "soft_block"
+
+    def test_pass_when_total_under_24_months(self):
+        inicio = date(2025, 6, 1)
+        termino = date(2026, 12, 1)  # 18 meses
+        r = _invoke(
+            "duracao_total_ate_24_meses",
+            _make_ctx(
+                sei={"tce_data_inicio": _br(inicio)},
+                vars={"data_termino_novo": _br(termino)},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_when_total_exceeds_24_months(self):
+        inicio = date(2024, 1, 15)
+        termino = date(2026, 3, 15)  # 26 meses
+        r = _invoke(
+            "duracao_total_ate_24_meses",
+            _make_ctx(
+                sei={"tce_data_inicio": _br(inicio)},
+                vars={"data_termino_novo": _br(termino)},
+            ),
+        )
+        assert r.status == "hard_block"
+        assert "24 meses" in r.reason
+
+
+class TestRelatorioFinalAssinadoOrientador:
+    def _email_with_attachment(self, filename: str, text: str) -> CheckContext:
+        from ufpr_automation.core.models import AttachmentData
+        att = AttachmentData(filename=filename, extracted_text=text)
+        email = EmailData(sender="a@ufpr.br", subject="fim", body="",
+                          attachments=[att])
+        return CheckContext(
+            email=email,
+            intent=Intent(intent_name="t", categoria="Estágios", keywords=["t"]),
+            vars={},
+        )
+
+    def test_soft_block_when_relatorio_missing(self):
+        ctx = self._email_with_attachment("outro.pdf", "conteúdo")
+        r = _invoke("relatorio_final_assinado_orientador", ctx)
+        assert r.status == "soft_block"
+
+    def test_pass_when_signature_marker_near_orientador(self):
+        ctx = self._email_with_attachment(
+            "relatorio_final.pdf",
+            "... conclusões ... Prof. Silva, orientador. "
+            "Assinado eletronicamente em 10/04/2026.",
+        )
+        r = _invoke("relatorio_final_assinado_orientador", ctx)
+        assert r.status == "pass"
+
+    def test_hard_block_when_no_signature_near_orientador(self):
+        ctx = self._email_with_attachment(
+            "relatorio_final.pdf",
+            "... orientador: Prof. Silva. Sem assinatura nenhuma por aqui.",
+        )
+        r = _invoke("relatorio_final_assinado_orientador", ctx)
+        assert r.status == "hard_block"

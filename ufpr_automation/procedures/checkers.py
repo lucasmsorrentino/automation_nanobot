@@ -523,6 +523,186 @@ def sei_processo_vigente_duplicado(ctx: CheckContext) -> CheckResult:
     return CheckResult(check_id="sei_processo_vigente_duplicado", status="pass")
 
 
+@register("sei_processo_tce_existente")
+def sei_processo_tce_existente(ctx: CheckContext) -> CheckResult:
+    """HARD block if NO vigente SEI process of the TCE type exists for this
+    student. Inverse of ``sei_processo_vigente_duplicado``: aditivo /
+    conclusão / rescisão must append to the existing TCE process — if no
+    such process exists, the email is likely misclassified (should be a
+    new TCE, not an aditivo) or the student is in another unit.
+    """
+    if not ctx.sei_context:
+        return CheckResult(
+            check_id="sei_processo_tce_existente",
+            status="soft_block",
+            reason="SEI não consultado — requer verificação manual",
+        )
+    processos_vigentes = ctx.sei_context.get("processos_vigentes", []) or []
+    tipo_alvo = "estágios não obrigatórios"  # aditivo/conclusão só aplicam a este tipo
+    for proc in processos_vigentes:
+        proc_tipo = str(proc.get("tipo", "")).strip().lower()
+        if tipo_alvo in proc_tipo:
+            return CheckResult(check_id="sei_processo_tce_existente", status="pass")
+    return CheckResult(
+        check_id="sei_processo_tce_existente",
+        status="hard_block",
+        reason=(
+            "Não foi encontrado processo SEI vigente do tipo 'Estágios não "
+            "Obrigatórios' para este aluno. Aditivo/conclusão/rescisão devem "
+            "ser anexados ao processo do TCE original — verifique se o email "
+            "não é, na verdade, um pedido de novo estágio."
+        ),
+    )
+
+
+@register("aditivo_antes_vencimento_tce")
+def aditivo_antes_vencimento_tce(ctx: CheckContext) -> CheckResult:
+    """HARD block if the aditivo request arrives after the TCE vigente's
+    data_fim. Lei 11.788/08 + Resolução 46/10-CEPE: expired stages cannot
+    be prorrogated retroactively — only rescisão applies.
+
+    Reads TCE data_fim from SEI context (``tce_data_fim`` key populated by
+    sei.client when it locates the TCE original in the processo vigente).
+    """
+    tce_data_fim_raw = (ctx.sei_context or {}).get("tce_data_fim")
+    if not tce_data_fim_raw:
+        return CheckResult(
+            check_id="aditivo_antes_vencimento_tce",
+            status="soft_block",
+            reason=(
+                "Data de término do TCE vigente não disponível no contexto "
+                "SEI — requer verificação manual."
+            ),
+        )
+    data_fim = _parse_br_date(str(tce_data_fim_raw))
+    if data_fim is None:
+        return CheckResult(
+            check_id="aditivo_antes_vencimento_tce",
+            status="soft_block",
+            reason=f"Data de término do TCE ilegível: {tce_data_fim_raw!r}",
+        )
+    today = date.today()
+    if today > data_fim:
+        return CheckResult(
+            check_id="aditivo_antes_vencimento_tce",
+            status="hard_block",
+            reason=(
+                f"TCE venceu em {data_fim.strftime('%d/%m/%Y')} — aditivo "
+                f"deve chegar ANTES do vencimento. Após o vencimento o "
+                f"estágio encerra-se automaticamente (Lei 11.788/08); "
+                f"solicite nova abertura de processo em vez de aditivo."
+            ),
+        )
+    return CheckResult(check_id="aditivo_antes_vencimento_tce", status="pass")
+
+
+@register("duracao_total_ate_24_meses")
+def duracao_total_ate_24_meses(ctx: CheckContext) -> CheckResult:
+    """HARD block if TCE + aditivos somam mais de 24 meses na mesma
+    concedente (Lei 11.788/08 Art. 11).
+
+    Reads ``tce_data_inicio`` (original, da SEI) e ``data_termino_novo``
+    (proposed end date do aditivo, das vars extraídas).
+    """
+    tce_inicio_raw = (ctx.sei_context or {}).get("tce_data_inicio")
+    termino_novo_raw = ctx.vars.get("data_termino_novo") or ctx.vars.get(
+        "data_fim"
+    )
+    if not tce_inicio_raw or not termino_novo_raw:
+        return CheckResult(
+            check_id="duracao_total_ate_24_meses",
+            status="soft_block",
+            reason=(
+                "Data de início do TCE original ou novo término não "
+                "disponíveis — requer verificação manual da duração total."
+            ),
+        )
+    inicio = _parse_br_date(str(tce_inicio_raw))
+    termino = _parse_br_date(str(termino_novo_raw))
+    if inicio is None or termino is None:
+        return CheckResult(
+            check_id="duracao_total_ate_24_meses",
+            status="soft_block",
+            reason=(
+                f"Datas ilegíveis: inicio={tce_inicio_raw!r} "
+                f"termino={termino_novo_raw!r}"
+            ),
+        )
+    # 24 months ≈ 730 days; use calendar month arithmetic for precision.
+    max_termino = date(inicio.year + 2, inicio.month, min(inicio.day, 28))
+    if termino > max_termino:
+        return CheckResult(
+            check_id="duracao_total_ate_24_meses",
+            status="hard_block",
+            reason=(
+                f"Duração total ({inicio.strftime('%d/%m/%Y')} a "
+                f"{termino.strftime('%d/%m/%Y')}) ultrapassa 24 meses "
+                f"na mesma concedente (Lei 11.788/08 Art. 11). Limite: "
+                f"{max_termino.strftime('%d/%m/%Y')}."
+            ),
+        )
+    return CheckResult(check_id="duracao_total_ate_24_meses", status="pass")
+
+
+@register("relatorio_final_assinado_orientador")
+def relatorio_final_assinado_orientador(ctx: CheckContext) -> CheckResult:
+    """HARD block if the Relatório Final attachment does not show evidence
+    of the orientador's signature. Best-effort text-based check — looks
+    for signature markers near the "orientador" token in the extracted
+    attachment text. Returns soft_block when no attachment text is
+    available (OCR missing / extraction failed).
+
+    Signature markers considered valid:
+        - "assinado eletronicamente"
+        - "assinado digitalmente"
+        - "[assinatura]"
+        - "carimbo e assinatura"
+    """
+    attachments = getattr(ctx.email, "attachments", None) or []
+    relatorio_text = ""
+    for att in attachments:
+        name = (getattr(att, "filename", "") or "").lower()
+        text = getattr(att, "extracted_text", "") or ""
+        if "relat" in name and "final" in name and text:
+            relatorio_text = text.lower()
+            break
+    if not relatorio_text:
+        return CheckResult(
+            check_id="relatorio_final_assinado_orientador",
+            status="soft_block",
+            reason=(
+                "Relatório Final não encontrado entre os anexos ou texto "
+                "não extraído (OCR?) — requer verificação manual da "
+                "assinatura do orientador."
+            ),
+        )
+    signature_markers = (
+        "assinado eletronicamente",
+        "assinado digitalmente",
+        "[assinatura]",
+        "carimbo e assinatura",
+    )
+    # Search for any signature marker within 400 chars of the token "orientador"
+    import re
+
+    for m in re.finditer(r"orientador", relatorio_text):
+        window = relatorio_text[max(0, m.start() - 400) : m.end() + 400]
+        if any(mk in window for mk in signature_markers):
+            return CheckResult(
+                check_id="relatorio_final_assinado_orientador", status="pass"
+            )
+    return CheckResult(
+        check_id="relatorio_final_assinado_orientador",
+        status="hard_block",
+        reason=(
+            "Relatório Final não apresenta evidência de assinatura do "
+            "professor orientador (esperado: 'assinado eletronicamente', "
+            "'assinado digitalmente', ou carimbo/assinatura próximo do "
+            "nome do orientador). Exigência Lei 11.788/08 Art. 9º §1º."
+        ),
+    )
+
+
 def registered_checkers() -> list[str]:
     """Return the list of currently-registered check IDs (for debugging)."""
     return sorted(_CHECKERS.keys())

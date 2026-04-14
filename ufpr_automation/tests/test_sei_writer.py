@@ -415,3 +415,47 @@ class TestSEIWriterDryRunEndToEnd:
         # 6. No clicks happened — the forbidden-selector guard was never
         # triggered, and the mock page's click was never awaited.
         writer._page.click.assert_not_called()
+
+
+# ============================================================================
+# Live-mode unit tests for extracted helpers
+# ----------------------------------------------------------------------------
+# Full end-to-end live-mode coverage requires a real SEI instance; these tests
+# cover the surgical helpers added by the Sprint 3 fix (template despacho
+# default loading) so regressions are caught without a live SEI.
+# ============================================================================
+
+class TestClearEditorBodyHelper:
+    """Sprint 3 fix — save_despacho_draft clears the CKEditor body before
+    typing, in case 'Texto Inicial = Nenhum' was not honored and the default
+    template loaded. Regression: writer used to call .type() directly, which
+    appended to the default template instead of replacing it."""
+
+    @pytest.mark.asyncio
+    async def test_clear_editor_body_presses_ctrl_a_then_delete(self):
+        popup = AsyncMock()
+        await SEIWriter._clear_editor_body(popup)
+        press_calls = [c.args[0] for c in popup.keyboard.press.call_args_list]
+        assert press_calls == ["Control+A", "Delete"], (
+            f"expected Ctrl+A then Delete, got {press_calls}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clear_editor_body_waits_briefly_after_delete(self):
+        popup = AsyncMock()
+        await SEIWriter._clear_editor_body(popup)
+        popup.wait_for_timeout.assert_awaited_once()
+        (timeout_ms,) = popup.wait_for_timeout.call_args.args
+        assert 100 <= timeout_ms <= 500, (
+            f"wait_for_timeout should be short (100–500ms), got {timeout_ms}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clear_editor_body_does_not_type_or_click(self):
+        """Guard: the helper must only press keys, never type text nor click
+        buttons — typing here would corrupt the subsequent fill, and clicking
+        could hit a forbidden selector in the editor toolbar."""
+        popup = AsyncMock()
+        await SEIWriter._clear_editor_body(popup)
+        popup.keyboard.type.assert_not_called()
+        popup.click.assert_not_called()
