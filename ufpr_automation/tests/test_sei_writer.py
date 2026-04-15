@@ -49,6 +49,7 @@ class TestWriterArchitecturalSafety:
             "attach_document",
             "save_despacho_draft",
             "create_process",
+            "add_to_acompanhamento_especial",
         }, (
             f"SEIWriter exposes unexpected methods: {public_methods}. "
             f"Adding new write operations requires explicit safety review."
@@ -459,3 +460,50 @@ class TestClearEditorBodyHelper:
         await SEIWriter._clear_editor_body(popup)
         popup.keyboard.type.assert_not_called()
         popup.click.assert_not_called()
+
+
+class TestAddToAcompanhamentoEspecial:
+    """POP-38 skeleton — dry_run path only until new selector capture lands."""
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_success_without_click(self, writer):
+        result = await writer.add_to_acompanhamento_especial(
+            "23075.000123/2026-01",
+            grupo="Estágio não obrigatório",
+        )
+        assert result.success is True
+        assert result.dry_run is True
+        assert result.processo_id == "23075.000123/2026-01"
+        assert result.grupo == "Estágio não obrigatório"
+        # no click ever happens in dry_run
+        writer._page.click.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_writes_audit_log(self, writer, tmp_path):
+        await writer.add_to_acompanhamento_especial(
+            "23075.000123/2026-01",
+            grupo="Estágio não obrigatório",
+            observacao="TCE inicial — monitorar vigência",
+        )
+        audit_path = tmp_path / "audit.jsonl"
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").strip().splitlines()
+        last = json.loads(lines[-1])
+        assert last["op"] == "add_to_acompanhamento_especial"
+        assert last["processo_id"] == "23075.000123/2026-01"
+        assert last["grupo"] == "Estágio não obrigatório"
+        assert last["observacao"] == "TCE inicial — monitorar vigência"
+        assert last["mode"] == "dry_run"
+
+    @pytest.mark.asyncio
+    async def test_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
+        from ufpr_automation.config import settings
+        monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
+        live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
+        with pytest.raises(NotImplementedError, match="acompanhamento_especial"):
+            await live_writer.add_to_acompanhamento_especial(
+                "23075.000123/2026-01",
+                grupo="Estágio não obrigatório",
+            )
+        # no click ever happens — guard against accidental live wiring
+        mock_page.click.assert_not_called()

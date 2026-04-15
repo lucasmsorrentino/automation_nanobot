@@ -53,6 +53,24 @@ class DraftResult:
 
 
 @dataclass
+class AcompanhamentoEspecialResult:
+    """Result of adding a SEI process to an Acompanhamento Especial group.
+
+    POP-38. ``grupo`` is the free-text group name (e.g. ``"Estágio não
+    obrigatório"``). In Marco IV this is persisted as dry_run only —
+    live flow is blocked on a fresh selector capture (see
+    ``sei/SELECTOR_AUDIT.md §1``).
+    """
+    success: bool
+    processo_id: str
+    grupo: str
+    observacao: str = ""
+    artifacts: list[Path] = field(default_factory=list)
+    error: str | None = None
+    dry_run: bool = False
+
+
+@dataclass
 class CreateProcessResult:
     """Result of initiating a new SEI process.
 

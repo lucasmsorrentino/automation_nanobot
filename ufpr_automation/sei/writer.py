@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 from ufpr_automation.config import settings
 from ufpr_automation.sei.writer_models import (
+    AcompanhamentoEspecialResult,
     AttachResult,
     CreateProcessResult,
     DraftResult,
@@ -1119,3 +1120,62 @@ class SEIWriter:
                 error=str(e),
                 dry_run=self._dry_run,
             )
+
+    async def add_to_acompanhamento_especial(
+        self,
+        processo_id: str,
+        grupo: str,
+        observacao: str = "",
+    ) -> AcompanhamentoEspecialResult:
+        """Add a SEI process to an Acompanhamento Especial group (POP-38).
+
+        Used by the Estágios não-obrigatório flow to flag newly-created
+        TCE processes into the "Estágio não obrigatório" group so the
+        secretariat can monitor them as a cohort.
+
+        In ``dry_run`` mode: audits the intent, captures a screenshot,
+        and returns ``success=True, dry_run=True`` without clicking.
+
+        In ``live`` mode: currently raises :class:`NotImplementedError`.
+        The form ``acompanhamento_especial`` is absent from the current
+        ``sei_selectors.yaml`` capture (SEI 5.0.3, CCDG). Wiring the live
+        path is blocked on a fresh capture — see
+        ``sei/SELECTOR_AUDIT.md §1`` for the expected selector spec.
+        """
+        artifacts: list[Path] = []
+
+        if self._dry_run:
+            try:
+                artifacts.append(
+                    await self._screenshot(f"acompesp_dryrun_{processo_id}")
+                )
+            except Exception:
+                pass
+            self._audit(
+                "add_to_acompanhamento_especial",
+                processo_id,
+                mode="dry_run",
+                grupo=grupo,
+                observacao=observacao,
+                artifacts=[str(p) for p in artifacts],
+            )
+            logger.info(
+                "SEIWriter[dry_run]: would add %s to Acompanhamento Especial "
+                "grupo=%r",
+                processo_id,
+                grupo,
+            )
+            return AcompanhamentoEspecialResult(
+                success=True,
+                processo_id=processo_id,
+                grupo=grupo,
+                observacao=observacao,
+                artifacts=artifacts,
+                dry_run=True,
+            )
+
+        raise NotImplementedError(
+            "add_to_acompanhamento_especial live flow is not wired — "
+            "form 'acompanhamento_especial' absent from sei_selectors.yaml. "
+            "See sei/SELECTOR_AUDIT.md §1 for the capture spec."
+        )
