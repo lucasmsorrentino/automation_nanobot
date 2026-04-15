@@ -128,6 +128,112 @@ class TestOptimizer:
         assert all(r.accuracy == 1.0 for r in results)
 
 
+class TestOptimizerTieBreakLogic:
+    """Isolate pick_best_topology's ordering logic by mocking evaluate().
+
+    The default integration tests above cannot reliably discriminate tie-break
+    paths because the stub invoker always returns the expected categoria. These
+    tests inject synthetic EvalResults so we can assert each precedence rung:
+
+        1. higher accuracy wins (regardless of latency/errors)
+        2. on accuracy tie, lower latency_mean_ms wins
+        3. on accuracy+latency tie, fewer errors wins
+    """
+
+    def _patch_evaluate(self, monkeypatch, results_by_name):
+        from ufpr_automation.aflow import optimizer as opt
+
+        def fake_evaluate(name, examples, invoke_fn=None, **_kwargs):
+            return results_by_name[name]
+
+        monkeypatch.setattr(opt, "evaluate", fake_evaluate)
+
+    def test_higher_accuracy_wins_despite_higher_latency(self, monkeypatch, tmp_path):
+        self._patch_evaluate(
+            monkeypatch,
+            {
+                "baseline": EvalResult(
+                    topology="baseline", n_examples=10, accuracy=0.6,
+                    latency_mean_ms=100.0, errors=0,
+                ),
+                "fleet": EvalResult(
+                    topology="fleet", n_examples=10, accuracy=0.9,
+                    latency_mean_ms=1000.0, errors=5,
+                ),
+            },
+        )
+        best, _ = pick_best_topology(
+            topologies=["baseline", "fleet"],
+            examples=[{"email": {}, "expected_categoria": "x"}],
+            report_dir=tmp_path,
+        )
+        assert best == "fleet"
+
+    def test_accuracy_tie_prefers_lower_latency(self, monkeypatch, tmp_path):
+        self._patch_evaluate(
+            monkeypatch,
+            {
+                "a": EvalResult(
+                    topology="a", n_examples=10, accuracy=0.8,
+                    latency_mean_ms=500.0, errors=0,
+                ),
+                "b": EvalResult(
+                    topology="b", n_examples=10, accuracy=0.8,
+                    latency_mean_ms=200.0, errors=0,
+                ),
+                "c": EvalResult(
+                    topology="c", n_examples=10, accuracy=0.8,
+                    latency_mean_ms=800.0, errors=0,
+                ),
+            },
+        )
+        best, _ = pick_best_topology(
+            topologies=["a", "b", "c"],
+            examples=[{"email": {}, "expected_categoria": "x"}],
+            report_dir=tmp_path,
+        )
+        assert best == "b"
+
+    def test_accuracy_and_latency_tie_prefers_fewer_errors(self, monkeypatch, tmp_path):
+        self._patch_evaluate(
+            monkeypatch,
+            {
+                "noisy": EvalResult(
+                    topology="noisy", n_examples=10, accuracy=0.8,
+                    latency_mean_ms=500.0, errors=3,
+                ),
+                "clean": EvalResult(
+                    topology="clean", n_examples=10, accuracy=0.8,
+                    latency_mean_ms=500.0, errors=0,
+                ),
+            },
+        )
+        best, _ = pick_best_topology(
+            topologies=["noisy", "clean"],
+            examples=[{"email": {}, "expected_categoria": "x"}],
+            report_dir=tmp_path,
+        )
+        assert best == "clean"
+
+    def test_report_contains_every_evaluated_topology(self, monkeypatch, tmp_path):
+        self._patch_evaluate(
+            monkeypatch,
+            {
+                "a": EvalResult(topology="a", n_examples=1, accuracy=0.5),
+                "b": EvalResult(topology="b", n_examples=1, accuracy=0.9),
+            },
+        )
+        pick_best_topology(
+            topologies=["a", "b"],
+            examples=[{"email": {}, "expected_categoria": "x"}],
+            report_dir=tmp_path,
+        )
+        import json
+        report = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+        assert report["best"] == "b"
+        assert {r["topology"] for r in report["results"]} == {"a", "b"}
+
+
 class TestAblationBehavior:
     """Verify that ablation topologies actually alter behavior."""
 
