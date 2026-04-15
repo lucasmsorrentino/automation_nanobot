@@ -2,7 +2,7 @@
 import inspect
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -117,6 +117,11 @@ def mock_page():
     page.screenshot = AsyncMock()
     page.content = AsyncMock(return_value="<html>fake</html>")
     page.click = AsyncMock()
+    # page.on() and page.remove_listener() are SYNC in real Playwright; override
+    # the AsyncMock defaults so tests don't emit "coroutine never awaited"
+    # warnings when live-mode paths call them.
+    page.on = MagicMock()
+    page.remove_listener = MagicMock()
     return page
 
 
