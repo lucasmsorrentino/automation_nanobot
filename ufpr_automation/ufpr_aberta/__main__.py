@@ -23,7 +23,7 @@ from ufpr_automation.ufpr_aberta.browser import (
     launch_browser,
     save_session,
 )
-from ufpr_automation.ufpr_aberta.scraper import RAW_ROOT, DEFAULT_COURSE_ID, scrape_course
+from ufpr_automation.ufpr_aberta.scraper import DEFAULT_COURSE_ID, RAW_ROOT, scrape_course
 from ufpr_automation.utils.logging import logger
 
 
