@@ -1,25 +1,24 @@
 """Browser lifecycle management for SEI (Sistema Eletronico de Informacoes).
 
 Handles Playwright browser context, session persistence, and automated login.
-Follows the same pattern as outlook/browser.py.
+Low-level context/launch/save helpers live in
+``ufpr_automation._session_browser`` and are shared with SIGA; only the
+SEI-specific login form and logged-in detection are kept here.
 """
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserContext, Page
 
+from ufpr_automation import _session_browser
 from ufpr_automation.config.settings import (
-    BROWSER_TIMEOUT_MS,
     SEI_PASSWORD,
     SEI_URL,
     SEI_USERNAME,
     SESSION_DIR,
-    USER_AGENT,
-    VIEWPORT,
 )
 from ufpr_automation.utils.logging import logger
 
@@ -33,16 +32,12 @@ def has_credentials() -> bool:
 
 def has_saved_session() -> bool:
     """Check if a saved SEI browser session exists."""
-    return SEI_SESSION_FILE.exists() and SEI_SESSION_FILE.stat().st_size > 0
+    return _session_browser.has_saved_session(SEI_SESSION_FILE)
 
 
 async def launch_browser(headless: bool = True):
     """Launch Playwright browser for SEI access."""
-    from playwright.async_api import async_playwright
-
-    pw = await async_playwright().start()
-    browser = await pw.chromium.launch(headless=headless)
-    return pw, browser
+    return await _session_browser.launch_browser(headless=headless)
 
 
 async def create_browser_context(
@@ -50,29 +45,16 @@ async def create_browser_context(
     headless: bool = True,
 ) -> BrowserContext:
     """Create a browser context with optional saved session state."""
-    context_kwargs: dict = {
-        "user_agent": USER_AGENT,
-        "viewport": VIEWPORT,
-        "locale": "pt-BR",
-        "timezone_id": "America/Sao_Paulo",
-    }
-
-    if has_saved_session():
-        context_kwargs["storage_state"] = str(SEI_SESSION_FILE)
-        logger.info("SEI: sessao salva carregada")
-
-    context = await browser.new_context(**context_kwargs)
-    context.set_default_timeout(BROWSER_TIMEOUT_MS)
-    return context
+    return await _session_browser.create_browser_context(
+        browser, SEI_SESSION_FILE, log_label="SEI"
+    )
 
 
 async def save_session_state(context: BrowserContext) -> None:
     """Save browser session state (cookies + storage) to disk."""
-    SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    state = await context.storage_state()
-    with open(SEI_SESSION_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
-    logger.info("SEI: sessao salva em %s", SEI_SESSION_FILE)
+    await _session_browser.save_session_state(
+        context, SEI_SESSION_FILE, log_label="SEI"
+    )
 
 
 async def is_logged_in(page: Page) -> bool:
