@@ -94,19 +94,20 @@ class TestConsultarSIGA:
 
 
 class TestRegistrarProcedimento:
-    def test_empty_state(self):
+    def test_empty_state(self, tmp_path):
         from ufpr_automation.graph.nodes import registrar_procedimento
 
-        result = registrar_procedimento({
-            "emails": [],
-            "classifications": {},
-            "drafts_saved": [],
-            "sei_contexts": {},
-            "siga_contexts": {},
-            "auto_draft": [],
-            "manual_escalation": [],
-        })
-        assert result["procedures_logged"] == 0
+        with patch("ufpr_automation.procedures.store.PROCEDURES_FILE", tmp_path / "procs.jsonl"):
+            result = registrar_procedimento({
+                "emails": [],
+                "classifications": {},
+                "drafts_saved": [],
+                "sei_contexts": {},
+                "siga_contexts": {},
+                "auto_draft": [],
+                "manual_escalation": [],
+            })
+            assert result["procedures_logged"] == 0
 
     def test_logs_procedure(self, tmp_path):
         from ufpr_automation.graph.nodes import registrar_procedimento
