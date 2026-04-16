@@ -165,5 +165,5 @@ Carrega lazily, valida contra `_FORBIDDEN_SELECTORS` no load, consumido por `sei
 - **CKEditor**: o editor de despachos e um CKEditor dentro de um iframe. O `save_despacho_draft` limpa com Ctrl+A+Delete antes de colar.
 - **Sessao**: `_session_browser.py` persiste `storage_state` em `session_data/state.json`.
 - **Audit trail**: toda operacao do `SEIWriter` gera screenshot + DOM dump + JSONL em `SEI_WRITE_ARTIFACTS_DIR`.
-- **`SEI_WRITE_MODE`**: `dry_run` (default, seguro — loga intencao sem clicar) ou `live` (Playwright completo). Produção ainda em `dry_run` pending Sprint 3 validation.
+- **`SEI_WRITE_MODE`**: `dry_run` (default, seguro — loga intencao sem clicar) ou `live` (Playwright completo). Sprint 3 validado em 2026-04-16 (processo fictício `23075.022027/2026-22`); produção continua em `dry_run` até Fleet smoke em batch real.
 - **POPs**: 60 tutoriais oficiais em `base_conhecimento/SEI-tutotiais/`. Triagem A/B/C em `SEI-tutotiais/README.md`.
