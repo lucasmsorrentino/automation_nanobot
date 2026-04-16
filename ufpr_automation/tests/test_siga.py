@@ -305,18 +305,8 @@ class TestGetHistorico:
         client = _mk_client()
         client._navigate_to_student = AsyncMock(return_value=True)
         client._click_tab = AsyncMock()
-        # Mock the entire method to test only the routing logic
-        original = client.get_historico
-
-        async def _patched(grr=None):
-            if grr:
-                nav_called = True
-            else:
-                nav_called = False
-            return {"_nav_called": nav_called}
-
-        # Verify the contract: no grr → no navigation
-        assert True  # get_historico(grr=None) skips _navigate_to_student by design
+        # Verify the contract: no grr → no navigation by design
+        assert True
 
 
 class TestGetIntegralizacao:

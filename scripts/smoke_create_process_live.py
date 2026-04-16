@@ -26,6 +26,7 @@ os.environ["SEI_WRITE_MODE"] = "live"
 
 
 async def main() -> int:
+    from ufpr_automation.config.settings import SEI_URL
     from ufpr_automation.sei.browser import (
         auto_login,
         create_browser_context,
@@ -33,7 +34,6 @@ async def main() -> int:
         launch_browser,
         save_session_state,
     )
-    from ufpr_automation.config.settings import SEI_URL
     from ufpr_automation.sei.writer import SEIWriter
 
     pw, browser = await launch_browser(headless=False)

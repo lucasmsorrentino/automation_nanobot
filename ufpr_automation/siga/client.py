@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,7 +31,6 @@ async def _wait_tab_content(page: Page, pane_id: str, timeout: int = _SPINNER_TI
     """Wait for Vue.js async content inside a specific tab pane."""
     pane = page.locator(f"#{pane_id}")
     spinner = pane.locator("text=Carregando")
-    import time
     deadline = time.time() + timeout / 1000
     while time.time() < deadline:
         if await spinner.count() == 0:

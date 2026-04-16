@@ -81,7 +81,6 @@ if str(_REPO_ROOT) not in sys.path:
 from ufpr_automation.sei.writer import _is_forbidden  # noqa: E402
 from ufpr_automation.utils.logging import logger  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # DOM enumeration JS
 # ---------------------------------------------------------------------------
