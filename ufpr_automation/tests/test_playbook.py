@@ -258,9 +258,7 @@ class TestRequiredFields:
             keywords=["x"],
             required_fields=["nome_aluno", "numero_tce"],
         )
-        missing = missing_required_fields(
-            intent, {"nome_aluno": "João", "numero_tce": "12345"}
-        )
+        missing = missing_required_fields(intent, {"nome_aluno": "João", "numero_tce": "12345"})
         assert missing == []
 
     def test_some_missing(self):
@@ -327,9 +325,7 @@ class TestExtractVariables:
 
     def test_extracts_grr(self):
         intent = Intent(intent_name="x", categoria="Outros", keywords=["x"])
-        email = EmailData(
-            sender="x@y.z", subject="Aluno GRR20231234", body="GRR 20231234"
-        )
+        email = EmailData(sender="x@y.z", subject="Aluno GRR20231234", body="GRR 20231234")
         vars = extract_variables(email, intent)
         assert vars["grr"] == "20231234"
 
@@ -384,9 +380,7 @@ class TestStaleness:
         intent = playbook.get("faq_prorrogar_estagio")
         assert intent is not None
         # Pretend RAG store mtime is BEFORE intent.last_update — fresh
-        old_mtime = (
-            datetime(2025, 1, 1).timestamp()
-        )
+        old_mtime = datetime(2025, 1, 1).timestamp()
         assert playbook.is_stale(intent, rag_mtime=old_mtime) is False
 
     def test_intent_stale_when_rag_newer(self, playbook):

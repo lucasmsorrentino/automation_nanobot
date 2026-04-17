@@ -5,6 +5,7 @@ Claude invocation → YAML extraction → validation → write. All
 external dependencies (``run_claude_oneshot``, ``is_claude_available``,
 Claude itself) are patched in these tests so the suite stays offline.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,11 +17,7 @@ import yaml
 from ufpr_automation.agent_sdk import siga_grounder as sg
 from ufpr_automation.agent_sdk.runner import ClaudeRunResult
 
-FIXTURE_EXAMPLE = (
-    Path(__file__).resolve().parent
-    / "fixtures"
-    / "siga_selectors.example.yaml"
-)
+FIXTURE_EXAMPLE = Path(__file__).resolve().parent / "fixtures" / "siga_selectors.example.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +94,7 @@ class TestDiscoverSources:
         """Real-world: tutorial files may be named semantically
         (e.g. bloco_siga_secretarias.md) instead of bloco_3*."""
         (tutorial_dir / "bloco_alunos.md").write_text("off-topic", encoding="utf-8")
-        (tutorial_dir / "bloco_siga_secretarias.md").write_text(
-            "SIGA content", encoding="utf-8"
-        )
+        (tutorial_dir / "bloco_siga_secretarias.md").write_text("SIGA content", encoding="utf-8")
         (tutorial_dir / "FLUXO_GERAL.md").write_text("flow", encoding="utf-8")
         out = sg.discover_sources(tutorial_dir)
         names = [p.name for p in out]
@@ -133,9 +128,7 @@ class TestHashing:
         assert h1 == h2
         assert len(h1) == 64  # sha256 hex
 
-    def test_hash_changes_when_source_changes(
-        self, populated_tutorial, briefing_path
-    ):
+    def test_hash_changes_when_source_changes(self, populated_tutorial, briefing_path):
         srcs = sg.discover_sources(populated_tutorial)
         h1 = sg.compute_source_hash(srcs, briefing_path=briefing_path)
         (populated_tutorial / "BLOCO_3_siga_navigation.md").write_text(
@@ -144,9 +137,7 @@ class TestHashing:
         h2 = sg.compute_source_hash(srcs, briefing_path=briefing_path)
         assert h1 != h2
 
-    def test_hash_changes_when_briefing_changes(
-        self, populated_tutorial, briefing_path
-    ):
+    def test_hash_changes_when_briefing_changes(self, populated_tutorial, briefing_path):
         srcs = sg.discover_sources(populated_tutorial)
         h1 = sg.compute_source_hash(srcs, briefing_path=briefing_path)
         briefing_path.write_text("NEW BRIEFING", encoding="utf-8")
@@ -170,9 +161,7 @@ class TestHashing:
 
 class TestYamlExtraction:
     def test_extracts_fenced_yaml_block(self):
-        response = (
-            "Some preamble.\n```yaml\nmeta:\n  schema_version: 1\n```\nPostscript."
-        )
+        response = "Some preamble.\n```yaml\nmeta:\n  schema_version: 1\n```\nPostscript."
         out = sg.extract_yaml_from_response(response)
         assert out is not None
         assert "schema_version: 1" in out
@@ -200,9 +189,7 @@ class TestValidateCandidate:
         assert data["meta"]["schema_version"] == 1
 
     def test_rejects_missing_screens(self):
-        yml = (
-            "meta:\n  schema_version: 1\nlogin:\n  url: /\n  fields: {}\n  submit: {}\nscreens: {}\n"
-        )
+        yml = "meta:\n  schema_version: 1\nlogin:\n  url: /\n  fields: {}\n  submit: {}\nscreens: {}\n"
         ok, reason, _data = sg.validate_candidate(yml)
         assert not ok
         assert "screens" in reason
@@ -237,9 +224,7 @@ class TestValidateCandidate:
 
 
 class TestWriteCandidate:
-    def test_writes_timestamped_file_and_updates_latest(
-        self, capture_dir, example_yaml_text
-    ):
+    def test_writes_timestamped_file_and_updates_latest(self, capture_dir, example_yaml_text):
         manifest = sg.write_candidate(example_yaml_text, "testrun", capture_dir=capture_dir)
         assert manifest.exists()
         assert manifest.name == "siga_selectors.yaml"
@@ -345,7 +330,11 @@ class TestRunOrchestrator:
         assert "claude cli not available" in result.reason.lower()
 
     def test_happy_path_writes_manifest(
-        self, populated_tutorial, capture_dir, hash_file, briefing_path,
+        self,
+        populated_tutorial,
+        capture_dir,
+        hash_file,
+        briefing_path,
         example_yaml_text,
     ):
         fake_result = ClaudeRunResult(
@@ -357,12 +346,15 @@ class TestRunOrchestrator:
             prompt_chars=100,
             output_text=f"```yaml\n{example_yaml_text}\n```",
         )
-        with patch(
-            "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
-            return_value=True,
-        ), patch(
-            "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
-            return_value=fake_result,
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
+                return_value=True,
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
+                return_value=fake_result,
+            ),
         ):
             result = sg.run(
                 tutorial_dir=populated_tutorial,
@@ -378,7 +370,11 @@ class TestRunOrchestrator:
         assert sg.last_run_hash(hash_file=hash_file) == result.content_hash
 
     def test_rejected_output_parked_on_validation_failure(
-        self, populated_tutorial, capture_dir, hash_file, briefing_path,
+        self,
+        populated_tutorial,
+        capture_dir,
+        hash_file,
+        briefing_path,
         example_yaml_text,
     ):
         bad_yaml = yaml.safe_load(example_yaml_text)
@@ -392,12 +388,15 @@ class TestRunOrchestrator:
             prompt_chars=100,
             output_text=f"```yaml\n{yaml.safe_dump(bad_yaml)}\n```",
         )
-        with patch(
-            "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
-            return_value=True,
-        ), patch(
-            "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
-            return_value=fake_result,
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
+                return_value=True,
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
+                return_value=fake_result,
+            ),
         ):
             result = sg.run(
                 tutorial_dir=populated_tutorial,
@@ -416,7 +415,11 @@ class TestRunOrchestrator:
         assert sg.last_run_hash(hash_file=hash_file) is None
 
     def test_no_yaml_block_parks_raw_output(
-        self, populated_tutorial, capture_dir, hash_file, briefing_path,
+        self,
+        populated_tutorial,
+        capture_dir,
+        hash_file,
+        briefing_path,
     ):
         fake_result = ClaudeRunResult(
             success=True,
@@ -427,12 +430,15 @@ class TestRunOrchestrator:
             prompt_chars=100,
             output_text="I'm sorry, I can't comply with that request.",
         )
-        with patch(
-            "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
-            return_value=True,
-        ), patch(
-            "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
-            return_value=fake_result,
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.is_claude_available",
+                return_value=True,
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.siga_grounder.run_claude_oneshot",
+                return_value=fake_result,
+            ),
         ):
             result = sg.run(
                 tutorial_dir=populated_tutorial,

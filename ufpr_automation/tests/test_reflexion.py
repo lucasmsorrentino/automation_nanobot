@@ -17,6 +17,7 @@ from ufpr_automation.core.models import EmailClassification
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def original_cls():
     return EmailClassification(
@@ -97,7 +98,10 @@ class TestGenerateReflection:
             with patch("litellm.completion", side_effect=RuntimeError("API down")):
                 mem = ReflexionMemory()
                 result = mem.generate_reflection(
-                    "Solicitacao de Estagio", "Corpo", original_cls, corrected_cls,
+                    "Solicitacao de Estagio",
+                    "Corpo",
+                    original_cls,
+                    corrected_cls,
                 )
 
         assert "Outros" in result
@@ -108,11 +112,15 @@ class TestGenerateReflection:
         from ufpr_automation.feedback.reflexion import ReflexionMemory
 
         orig = EmailClassification(
-            categoria="Estágios", resumo="r", acao_necessaria="Arquivar",
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="Arquivar",
             sugestao_resposta="",
         )
         corr = EmailClassification(
-            categoria="Estágios", resumo="r", acao_necessaria="Redigir Resposta",
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="Redigir Resposta",
             sugestao_resposta="Prezado...",
         )
 
@@ -131,11 +139,15 @@ class TestGenerateReflection:
         from ufpr_automation.feedback.reflexion import ReflexionMemory
 
         orig = EmailClassification(
-            categoria="Estágios", resumo="r", acao_necessaria="Redigir Resposta",
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="Redigir Resposta",
             sugestao_resposta="Resp original",
         )
         corr = EmailClassification(
-            categoria="Estágios", resumo="r", acao_necessaria="Redigir Resposta",
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="Redigir Resposta",
             sugestao_resposta="Resp corrigida",
         )
 
@@ -155,9 +167,7 @@ class TestGenerateReflection:
 
 
 class TestAddReflection:
-    def test_saves_to_jsonl_and_creates_table(
-        self, tmp_path, original_cls, corrected_cls
-    ):
+    def test_saves_to_jsonl_and_creates_table(self, tmp_path, original_cls, corrected_cls):
         mem = _make_memory(tmp_path, table_exists=False)
 
         with (
@@ -186,9 +196,7 @@ class TestAddReflection:
         # Should create table since none existed
         mem._db.create_table.assert_called_once()
 
-    def test_generates_reflection_when_not_provided(
-        self, tmp_path, original_cls, corrected_cls
-    ):
+    def test_generates_reflection_when_not_provided(self, tmp_path, original_cls, corrected_cls):
         from ufpr_automation.feedback.reflexion import ReflexionMemory
 
         mem = _make_memory(tmp_path, table_exists=False)
@@ -205,15 +213,11 @@ class TestAddReflection:
                 return_value="Auto-generated reflection",
             ),
         ):
-            text = mem.add_reflection(
-                "Estagio", "Corpo", original_cls, corrected_cls
-            )
+            text = mem.add_reflection("Estagio", "Corpo", original_cls, corrected_cls)
 
         assert text == "Auto-generated reflection"
 
-    def test_appends_to_existing_table(
-        self, tmp_path, original_cls, corrected_cls
-    ):
+    def test_appends_to_existing_table(self, tmp_path, original_cls, corrected_cls):
         mem = _make_memory(tmp_path, table_exists=True)
 
         with (
@@ -224,7 +228,10 @@ class TestAddReflection:
             ),
         ):
             mem.add_reflection(
-                "Estagio", "Corpo", original_cls, corrected_cls,
+                "Estagio",
+                "Corpo",
+                original_cls,
+                corrected_cls,
                 reflection_text="reflection",
             )
 
@@ -247,13 +254,15 @@ class TestRetrieve:
     def test_returns_results_from_vector_search(self, tmp_path):
         import pyarrow as pa
 
-        arrow_tbl = pa.table({
-            "text": ["Erro: classificou como Outros, era Estagios"],
-            "_distance": pa.array([0.12], type=pa.float32()),
-            "original_categoria": ["Outros"],
-            "corrected_categoria": ["Estágios"],
-            "email_subject": ["Solicitacao de Estagio"],
-        })
+        arrow_tbl = pa.table(
+            {
+                "text": ["Erro: classificou como Outros, era Estagios"],
+                "_distance": pa.array([0.12], type=pa.float32()),
+                "original_categoria": ["Outros"],
+                "corrected_categoria": ["Estágios"],
+                "email_subject": ["Solicitacao de Estagio"],
+            }
+        )
 
         mem = _make_memory(tmp_path, table_exists=True)
         mock_search = MagicMock()

@@ -49,7 +49,7 @@ class _RecordingPage:
 
     def __init__(self) -> None:
         self.inspected: list[str] = []  # selectors/keys the code touched
-        self.clicked: list[str] = []    # text that was actually click()ed
+        self.clicked: list[str] = []  # text that was actually click()ed
         self.keyboard = MagicMock()
         self.keyboard.press = AsyncMock(side_effect=self._record_key)
         self.keyboard.type = AsyncMock(return_value=None)
@@ -64,8 +64,12 @@ class _RecordingPage:
         # returns None so the code path stays minimal.
         if "Reply" in selector or "Responder" in selector:
             return self._make_reply_element(selector)
-        if "contenteditable" in selector or "Message body" in selector \
-                or "Corpo da mensagem" in selector or "textbox" in selector:
+        if (
+            "contenteditable" in selector
+            or "Message body" in selector
+            or "Corpo da mensagem" in selector
+            or "textbox" in selector
+        ):
             return self._make_compose_element(selector)
         return None
 

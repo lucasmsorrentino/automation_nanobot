@@ -21,8 +21,8 @@ from ufpr_automation.utils.logging import logger
 MAX_WEEKLY_HOURS = 30
 
 # Disciplines that indicate >= 1 year remaining in the curriculum
-_ANNUAL_ESTAGIO = "OD501"   # Estágio Supervisionado (annual, 360h)
-_TCC1 = "ODDA6"             # TCC1 (prerequisite for TCC2)
+_ANNUAL_ESTAGIO = "OD501"  # Estágio Supervisionado (annual, 360h)
+_TCC1 = "ODDA6"  # TCC1 (prerequisite for TCC2)
 
 _SPINNER_TIMEOUT = 60000
 
@@ -63,9 +63,7 @@ class SIGAClient:
         await consultar.click()
         await self._page.wait_for_load_state("networkidle", timeout=15000)
 
-        search_field = self._page.locator(
-            "input[placeholder*='Nome ou Documento']"
-        ).first
+        search_field = self._page.locator("input[placeholder*='Nome ou Documento']").first
         await search_field.fill(grr_clean)
         await asyncio.sleep(2)
 
@@ -93,7 +91,9 @@ class SIGAClient:
             ("Status", "status"),
             ("Data de Matrícula", "data_matricula"),
         ]:
-            el = pane.locator(f"xpath=.//*[contains(text(),'{label_text}')]/following-sibling::*[1]")
+            el = pane.locator(
+                f"xpath=.//*[contains(text(),'{label_text}')]/following-sibling::*[1]"
+            )
             if await el.count() > 0:
                 info[key] = (await el.first.text_content() or "").strip()
 
@@ -238,7 +238,9 @@ class SIGAClient:
         status_badge = pane.locator("span.label").first
         if await status_badge.count() > 0:
             status_text = (await status_badge.text_content() or "").strip()
-            result["integralizado"] = "integralizado" in status_text.lower() and "não" not in status_text.lower()
+            result["integralizado"] = (
+                "integralizado" in status_text.lower() and "não" not in status_text.lower()
+            )
 
         # Extract all disciplines from tables
         tables = pane.locator("table#tabela")
@@ -329,8 +331,7 @@ class SIGAClient:
         integ = await self.get_integralizacao()
         if integ.get("integralizado"):
             reasons.append(
-                "Curriculo ja integralizado — estagio nao obrigatorio vedado "
-                "(SOUL.md secao 11)"
+                "Curriculo ja integralizado — estagio nao obrigatorio vedado (SOUL.md secao 11)"
             )
 
         # Rule: check if student can graduate before internship ends

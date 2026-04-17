@@ -13,6 +13,7 @@ Usage:
     save_sel = form["submit"]["selector"]     # "#btnSalvar"
     desc_sel = form["fields"]["especificacao"]["selector"]  # "#txtDescricao"
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -123,13 +124,12 @@ def _validate_no_forbidden_selectors(data: dict[str, Any]) -> None:
 
 # Convenience accessors -----------------------------------------------------
 
+
 def get_form(form_name: str) -> dict[str, Any]:
     """Return the selector block for a form. Raises if unknown."""
     forms = get_selectors().get("forms", {})
     if form_name not in forms:
-        raise SelectorsError(
-            f"unknown form '{form_name}' — available: {sorted(forms)}"
-        )
+        raise SelectorsError(f"unknown form '{form_name}' — available: {sorted(forms)}")
     return forms[form_name]
 
 
@@ -138,7 +138,6 @@ def get_field(form_name: str, field_name: str) -> dict[str, Any]:
     fields = get_form(form_name).get("fields", {})
     if field_name not in fields:
         raise SelectorsError(
-            f"unknown field '{field_name}' on form '{form_name}' — "
-            f"available: {sorted(fields)}"
+            f"unknown field '{field_name}' on form '{form_name}' — available: {sorted(fields)}"
         )
     return fields[field_name]

@@ -76,9 +76,7 @@ class TestAgirEstagiosHardBlock:
             "sei_contexts": {},
         }
 
-        with patch(
-            "ufpr_automation.procedures.playbook.get_playbook"
-        ) as mock_pb:
+        with patch("ufpr_automation.procedures.playbook.get_playbook") as mock_pb:
             from ufpr_automation.procedures.playbook import Playbook
 
             pb = Playbook(path=procedures_path)
@@ -90,7 +88,10 @@ class TestAgirEstagiosHardBlock:
         assert len(ops) == 1
         assert ops[0]["reason"] == "hard_block"
         # Classification response should explain the block
-        assert "impedimentos" in cls.sugestao_resposta.lower() or "bloqueio" in cls.sugestao_resposta.lower()
+        assert (
+            "impedimentos" in cls.sugestao_resposta.lower()
+            or "bloqueio" in cls.sugestao_resposta.lower()
+        )
 
 
 class TestAgirEstagiosAllPass:
@@ -99,6 +100,7 @@ class TestAgirEstagiosAllPass:
         # in .env (a live env would cause the inner SEIWriter to attempt
         # loading sei_selectors.yaml, which isn't available on every machine).
         from ufpr_automation.config import settings
+
         monkeypatch.setattr(settings, "SEI_WRITE_MODE", "dry_run")
 
         email = _make_email(body="Segue TCE inicial do aluno João Silva, data início 01/06/2027")
@@ -112,9 +114,7 @@ class TestAgirEstagiosAllPass:
             "sei_contexts": {},
         }
 
-        with patch(
-            "ufpr_automation.procedures.playbook.get_playbook"
-        ) as mock_pb:
+        with patch("ufpr_automation.procedures.playbook.get_playbook") as mock_pb:
             from ufpr_automation.procedures.playbook import Playbook
 
             pb = Playbook(path=procedures_path)
@@ -151,9 +151,7 @@ class TestAgirEstagiosSkipsNonEstagios:
             "sei_contexts": {},
         }
 
-        with patch(
-            "ufpr_automation.procedures.playbook.get_playbook"
-        ) as mock_pb:
+        with patch("ufpr_automation.procedures.playbook.get_playbook") as mock_pb:
             from ufpr_automation.procedures.playbook import Playbook
 
             pb = Playbook(path=procedures_path)

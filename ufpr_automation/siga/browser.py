@@ -58,9 +58,7 @@ async def create_browser_context(
 
 async def save_session_state(context: BrowserContext) -> None:
     """Save browser session state (cookies + storage) to disk."""
-    await _session_browser.save_session_state(
-        context, SIGA_SESSION_FILE, log_label="SIGA"
-    )
+    await _session_browser.save_session_state(context, SIGA_SESSION_FILE, log_label="SIGA")
 
 
 async def is_logged_in(page: Page) -> bool:

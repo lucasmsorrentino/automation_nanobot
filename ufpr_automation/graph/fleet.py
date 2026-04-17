@@ -57,10 +57,7 @@ def dispatch_tier1(state: EmailState) -> list[Send] | str:
         return "rotear"
 
     logger.info("Fleet: dispatching %d Tier 1 sub-agents", len(tier1_emails))
-    return [
-        Send("process_one_email", {"email": e, "stable_id": e.stable_id})
-        for e in tier1_emails
-    ]
+    return [Send("process_one_email", {"email": e, "stable_id": e.stable_id}) for e in tier1_emails]
 
 
 def process_one_email(sub: SubState) -> dict[str, Any]:

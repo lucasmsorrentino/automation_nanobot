@@ -25,6 +25,7 @@ class TestSchedulerConfig:
     @patch.dict("os.environ", {"SCHEDULE_HOURS": "9,14,18"})
     def test_env_override(self):
         import os
+
         assert os.getenv("SCHEDULE_HOURS") == "9,14,18"
 
     def test_run_scheduled_pipeline_import(self):

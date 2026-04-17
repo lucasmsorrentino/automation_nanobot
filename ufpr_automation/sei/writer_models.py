@@ -1,4 +1,5 @@
 """Result models and input dataclasses for SEIWriter operations."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ class SEIDocClassification:
     Populated by looking up the semantic label in
     ``workspace/SEI_DOC_CATALOG.yaml`` (see ``get_doc_classification``).
     """
+
     sei_tipo: str  # "Externo" | "Despacho"
     sei_subtipo: str = ""
     sei_classificacao: str = ""
@@ -32,6 +34,7 @@ class SEIDocClassification:
 @dataclass
 class AttachResult:
     """Result of attaching a document to a SEI process."""
+
     success: bool
     processo_id: str
     file_path: Path
@@ -44,6 +47,7 @@ class AttachResult:
 @dataclass
 class DraftResult:
     """Result of saving a despacho draft to a SEI process."""
+
     success: bool
     processo_id: str
     tipo: str
@@ -61,6 +65,7 @@ class AcompanhamentoEspecialResult:
     live flow is blocked on a fresh selector capture (see
     ``sei/SELECTOR_AUDIT.md §1``).
     """
+
     success: bool
     processo_id: str
     grupo: str
@@ -78,6 +83,7 @@ class CreateProcessResult:
     number (format XXXXX.XXXXXX/YYYY-ZZ) so downstream attachments can be
     routed to the newly created process.
     """
+
     success: bool
     tipo_processo: str
     especificacao: str

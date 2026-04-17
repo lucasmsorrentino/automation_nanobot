@@ -205,8 +205,7 @@ async def auto_login(page: Page) -> bool:
             print(f"{'=' * 40}")
             print("   Aprove no Microsoft Authenticator com este número.\n")
             await _send_telegram_notification(
-                f"🔐 UFPR Login — Número MFA: {mfa_number}\n"
-                f"Aprove no Microsoft Authenticator."
+                f"🔐 UFPR Login — Número MFA: {mfa_number}\nAprove no Microsoft Authenticator."
             )
 
         # --- Step 4: Wait for redirect to inbox ---

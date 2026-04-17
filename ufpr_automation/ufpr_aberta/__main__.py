@@ -41,6 +41,7 @@ async def _run(headed: bool, course_id: int) -> int:
             await save_session(context)
         else:
             from ufpr_automation.config.settings import UFPR_ABERTA_URL
+
             await page.goto(UFPR_ABERTA_URL, wait_until="domcontentloaded")
             if not await is_logged_in(page):
                 logger.info("Sessão expirada; refazendo login.")
@@ -56,8 +57,13 @@ async def _run(headed: bool, course_id: int) -> int:
                 "index": b.index,
                 "title": b.title,
                 "activities": [
-                    {"name": a.name, "url": a.url, "mod_type": a.mod_type,
-                     "html_path": a.html_path, "resources": [asdict(r) for r in a.resources]}
+                    {
+                        "name": a.name,
+                        "url": a.url,
+                        "mod_type": a.mod_type,
+                        "html_path": a.html_path,
+                        "resources": [asdict(r) for r in a.resources],
+                    }
                     for a in b.activities
                 ],
             }
@@ -76,10 +82,15 @@ async def _run(headed: bool, course_id: int) -> int:
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="python -m ufpr_automation.ufpr_aberta")
-    p.add_argument("--headed", action="store_true",
-                   help="Abre navegador visível (recomendado na 1ª vez)")
-    p.add_argument("--course-id", type=int, default=DEFAULT_COURSE_ID,
-                   help=f"ID do curso Moodle (default: {DEFAULT_COURSE_ID} — 'Conheça o SIGA!')")
+    p.add_argument(
+        "--headed", action="store_true", help="Abre navegador visível (recomendado na 1ª vez)"
+    )
+    p.add_argument(
+        "--course-id",
+        type=int,
+        default=DEFAULT_COURSE_ID,
+        help=f"ID do curso Moodle (default: {DEFAULT_COURSE_ID} — 'Conheça o SIGA!')",
+    )
     args = p.parse_args()
     code = asyncio.run(_run(headed=args.headed, course_id=args.course_id))
     raise SystemExit(code)

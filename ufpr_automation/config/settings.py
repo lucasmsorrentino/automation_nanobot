@@ -60,12 +60,8 @@ RAG_DOCS_DIR = Path(os.getenv("RAG_DOCS_DIR", str(_PACKAGE_DIR / "docs")))
 # Default keeps everything local to the package.
 # ============================================================================
 
-FEEDBACK_DATA_DIR = Path(
-    os.getenv("FEEDBACK_DATA_DIR", str(_PACKAGE_DIR / "feedback_data"))
-)
-PROCEDURES_DATA_DIR = Path(
-    os.getenv("PROCEDURES_DATA_DIR", str(_PACKAGE_DIR / "procedures_data"))
-)
+FEEDBACK_DATA_DIR = Path(os.getenv("FEEDBACK_DATA_DIR", str(_PACKAGE_DIR / "feedback_data")))
+PROCEDURES_DATA_DIR = Path(os.getenv("PROCEDURES_DATA_DIR", str(_PACKAGE_DIR / "procedures_data")))
 
 
 # ============================================================================
@@ -136,7 +132,7 @@ EMAIL_CHANNEL = os.getenv("EMAIL_CHANNEL", "gmail")
 # ============================================================================
 
 GMAIL_EMAIL = os.getenv("GMAIL_EMAIL", "")
-GMAIL_API_KEY = os.getenv("GMAIL_API_KEY", "")        # Primary credential for IMAP/SMTP
+GMAIL_API_KEY = os.getenv("GMAIL_API_KEY", "")  # Primary credential for IMAP/SMTP
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # Fallback credential
 
 

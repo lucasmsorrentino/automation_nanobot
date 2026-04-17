@@ -40,6 +40,7 @@ CLI::
     python -m ufpr_automation.agent_sdk.siga_grounder --dry-run
     python -m ufpr_automation.agent_sdk.siga_grounder --force
 """
+
 from __future__ import annotations
 
 import argparse
@@ -417,7 +418,9 @@ def run(
     yaml_text = extract_yaml_from_response(cr.output_text)
     if not yaml_text:
         rej = write_rejected(
-            cr.output_text, "no YAML block found in response", cr.run_id,
+            cr.output_text,
+            "no YAML block found in response",
+            cr.run_id,
             capture_dir=capture_dir,
         )
         return GroundingResult(
@@ -508,8 +511,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"[FAIL] {result.reason}", file=sys.stderr)
         if result.rejected_path:
-            print(f"       rejected output: {result.rejected_path.as_posix()}",
-                  file=sys.stderr)
+            print(f"       rejected output: {result.rejected_path.as_posix()}", file=sys.stderr)
         return 1
 
 

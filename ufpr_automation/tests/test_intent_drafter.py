@@ -20,6 +20,7 @@ from ufpr_automation.procedures.store import ProcedureRecord
 # _normalize_subject
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeSubject:
     def test_strips_re_fwd(self):
         assert _normalize_subject("Re: TCE do aluno") == "tce aluno"
@@ -29,7 +30,10 @@ class TestNormalizeSubject:
         assert _normalize_subject("TCE João GRR20210001 12345") == "tce joão"
 
     def test_keeps_first_three_words(self):
-        assert _normalize_subject("Solicitação de declaração de horas formativas extra") == "solicitação declaração horas"
+        assert (
+            _normalize_subject("Solicitação de declaração de horas formativas extra")
+            == "solicitação declaração horas"
+        )
 
     def test_empty_returns_empty(self):
         assert _normalize_subject("") == ""
@@ -39,6 +43,7 @@ class TestNormalizeSubject:
 # ---------------------------------------------------------------------------
 # _existing_intent_names
 # ---------------------------------------------------------------------------
+
 
 class TestExistingIntentNames:
     def test_parses_procedures_md(self, tmp_path):
@@ -59,6 +64,7 @@ class TestExistingIntentNames:
 # _content_hash
 # ---------------------------------------------------------------------------
 
+
 class TestContentHash:
     def test_deterministic(self):
         assert _content_hash("abc") == _content_hash("abc")
@@ -73,6 +79,7 @@ class TestContentHash:
 # ---------------------------------------------------------------------------
 # cluster_tier1_emails
 # ---------------------------------------------------------------------------
+
 
 def _write_procedures_jsonl(path: Path, records: list[dict]) -> None:
     """Write procedure records as JSONL."""
@@ -98,18 +105,25 @@ class TestClusterTier1Emails:
         fb_path.write_text("", encoding="utf-8")
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"TCE aluno {i}",
-             "email_categoria": "Estágios", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"TCE aluno {i}",
+                "email_categoria": "Estágios",
+                "outcome": "draft_saved",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         clusters = cluster_tier1_emails(
-            last_days=30, min_frequency=5,
-            procedures_path=proc_path, feedback_path=fb_path,
+            last_days=30,
+            min_frequency=5,
+            procedures_path=proc_path,
+            feedback_path=fb_path,
         )
         assert len(clusters) == 1
         assert clusters[0].categoria == "Estágios"
@@ -121,19 +135,26 @@ class TestClusterTier1Emails:
         fb_path.write_text("", encoding="utf-8")
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         # 6 emails but all Tier 0 → should be excluded
         records = [
-            {"timestamp": now, "email_subject": f"TCE aluno {i}",
-             "email_categoria": "Estágios", "outcome": "tier0_hit"}
+            {
+                "timestamp": now,
+                "email_subject": f"TCE aluno {i}",
+                "email_categoria": "Estágios",
+                "outcome": "tier0_hit",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         clusters = cluster_tier1_emails(
-            last_days=30, min_frequency=5,
-            procedures_path=proc_path, feedback_path=fb_path,
+            last_days=30,
+            min_frequency=5,
+            procedures_path=proc_path,
+            feedback_path=fb_path,
         )
         assert clusters == []
 
@@ -143,19 +164,26 @@ class TestClusterTier1Emails:
         fb_path.write_text("", encoding="utf-8")
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         # Only 3 emails — below min_frequency=5
         records = [
-            {"timestamp": now, "email_subject": f"Declaração {i}",
-             "email_categoria": "Formativas", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"Declaração {i}",
+                "email_categoria": "Formativas",
+                "outcome": "draft_saved",
+            }
             for i in range(3)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         clusters = cluster_tier1_emails(
-            last_days=30, min_frequency=5,
-            procedures_path=proc_path, feedback_path=fb_path,
+            last_days=30,
+            min_frequency=5,
+            procedures_path=proc_path,
+            feedback_path=fb_path,
         )
         assert clusters == []
 
@@ -163,6 +191,7 @@ class TestClusterTier1Emails:
 # ---------------------------------------------------------------------------
 # build_cluster_prompt
 # ---------------------------------------------------------------------------
+
 
 class TestBuildClusterPrompt:
     def test_contains_cluster_info(self):
@@ -185,8 +214,12 @@ class TestBuildClusterPrompt:
             sample_subjects=["Trancamento total"],
             count=5,
             feedback_corrections=[
-                {"subject": "Trancamento", "original_cat": "Outros",
-                 "corrected_cat": "Acadêmico / Matrícula", "notes": "era matrícula"}
+                {
+                    "subject": "Trancamento",
+                    "original_cat": "Outros",
+                    "corrected_cat": "Acadêmico / Matrícula",
+                    "notes": "era matrícula",
+                }
             ],
         )
         prompt = build_cluster_prompt(cluster, set(), "")
@@ -197,6 +230,7 @@ class TestBuildClusterPrompt:
 # ---------------------------------------------------------------------------
 # run_intent_drafter (dry_run mode)
 # ---------------------------------------------------------------------------
+
 
 class TestRunIntentDrafterDryRun:
     def test_dry_run_no_clusters(self, tmp_path):
@@ -218,11 +252,16 @@ class TestRunIntentDrafterDryRun:
         cand_path = tmp_path / "CANDIDATES.md"
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"Declaração AFC {i}",
-             "email_categoria": "Formativas", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"Declaração AFC {i}",
+                "email_categoria": "Formativas",
+                "outcome": "draft_saved",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
@@ -249,26 +288,39 @@ class TestRunIntentDrafterDryRun:
         cand_path = tmp_path / "CANDIDATES.md"
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"Declaração AFC {i}",
-             "email_categoria": "Formativas", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"Declaração AFC {i}",
+                "email_categoria": "Formativas",
+                "outcome": "draft_saved",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         # Run once
         stats1 = run_intent_drafter(
-            last_days=30, min_frequency=5, dry_run=True,
-            procedures_path=proc_path, feedback_path=fb_path, candidates_path=cand_path,
+            last_days=30,
+            min_frequency=5,
+            dry_run=True,
+            procedures_path=proc_path,
+            feedback_path=fb_path,
+            candidates_path=cand_path,
         )
         assert stats1["candidates"] == 1
 
         # Run again — should skip because hash already present
         stats2 = run_intent_drafter(
-            last_days=30, min_frequency=5, dry_run=True,
-            procedures_path=proc_path, feedback_path=fb_path, candidates_path=cand_path,
+            last_days=30,
+            min_frequency=5,
+            dry_run=True,
+            procedures_path=proc_path,
+            feedback_path=fb_path,
+            candidates_path=cand_path,
         )
         assert stats2["skipped"] == 1
         assert stats2["candidates"] == 0
@@ -278,6 +330,7 @@ class TestRunIntentDrafterDryRun:
 # run_intent_drafter with mocked Claude
 # ---------------------------------------------------------------------------
 
+
 class TestRunIntentDrafterWithClaude:
     def test_successful_candidate_generation(self, tmp_path):
         proc_path = tmp_path / "procedures.jsonl"
@@ -286,36 +339,47 @@ class TestRunIntentDrafterWithClaude:
         cand_path = tmp_path / "CANDIDATES.md"
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"Declaração horas formativas {i}",
-             "email_categoria": "Formativas", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"Declaração horas formativas {i}",
+                "email_categoria": "Formativas",
+                "outcome": "draft_saved",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         mock_yaml = (
-            '# PROPOSTA:\n```intent\n'
-            'intent_name: formativas_declaracao_horas\n'
+            "# PROPOSTA:\n```intent\n"
+            "intent_name: formativas_declaracao_horas\n"
             'keywords:\n  - "declaração horas formativas"\n'
             'categoria: "Formativas"\n'
             'action: "Redigir Resposta"\n'
-            'confidence: 0.5\n'
+            "confidence: 0.5\n"
             'sources:\n  - "pendente_revisao_humana"\n'
             'template: "Prezado(a) [NOME_ALUNO], segue declaração."\n'
-            '```'
+            "```"
         )
 
-        with patch("ufpr_automation.agent_sdk.runner.is_claude_available", return_value=True), \
-             patch("ufpr_automation.agent_sdk.runner.subprocess.run") as mock_run:
+        with (
+            patch("ufpr_automation.agent_sdk.runner.is_claude_available", return_value=True),
+            patch("ufpr_automation.agent_sdk.runner.subprocess.run") as mock_run,
+        ):
             # Mock subprocess.run to avoid calling real claude
-            mock_run.return_value = type("Proc", (), {
-                "returncode": 0, "stdout": mock_yaml, "stderr": ""
-            })()
+            mock_run.return_value = type(
+                "Proc", (), {"returncode": 0, "stdout": mock_yaml, "stderr": ""}
+            )()
             stats = run_intent_drafter(
-                last_days=30, min_frequency=5, dry_run=False,
-                procedures_path=proc_path, feedback_path=fb_path, candidates_path=cand_path,
+                last_days=30,
+                min_frequency=5,
+                dry_run=False,
+                procedures_path=proc_path,
+                feedback_path=fb_path,
+                candidates_path=cand_path,
             )
 
         assert stats["candidates"] == 1
@@ -331,25 +395,36 @@ class TestRunIntentDrafterWithClaude:
         cand_path = tmp_path / "CANDIDATES.md"
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"Pedido {i}",
-             "email_categoria": "Outros", "outcome": "escalated"}
+            {
+                "timestamp": now,
+                "email_subject": f"Pedido {i}",
+                "email_categoria": "Outros",
+                "outcome": "escalated",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
         invalid_yaml_output = "```yaml\ninvalid: [broken yaml {{{\n```"
 
-        with patch("ufpr_automation.agent_sdk.runner.is_claude_available", return_value=True), \
-             patch("ufpr_automation.agent_sdk.runner.subprocess.run") as mock_run:
-            mock_run.return_value = type("Proc", (), {
-                "returncode": 0, "stdout": invalid_yaml_output, "stderr": ""
-            })()
+        with (
+            patch("ufpr_automation.agent_sdk.runner.is_claude_available", return_value=True),
+            patch("ufpr_automation.agent_sdk.runner.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = type(
+                "Proc", (), {"returncode": 0, "stdout": invalid_yaml_output, "stderr": ""}
+            )()
             stats = run_intent_drafter(
-                last_days=30, min_frequency=5, dry_run=False,
-                procedures_path=proc_path, feedback_path=fb_path, candidates_path=cand_path,
+                last_days=30,
+                min_frequency=5,
+                dry_run=False,
+                procedures_path=proc_path,
+                feedback_path=fb_path,
+                candidates_path=cand_path,
             )
 
         assert stats["candidates"] == 0
@@ -362,19 +437,29 @@ class TestRunIntentDrafterWithClaude:
         fb_path.write_text("", encoding="utf-8")
 
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc).isoformat()
 
         records = [
-            {"timestamp": now, "email_subject": f"TCE {i}",
-             "email_categoria": "Estágios", "outcome": "draft_saved"}
+            {
+                "timestamp": now,
+                "email_subject": f"TCE {i}",
+                "email_categoria": "Estágios",
+                "outcome": "draft_saved",
+            }
             for i in range(6)
         ]
         _write_procedures_jsonl(proc_path, records)
 
-        with patch("ufpr_automation.agent_sdk.runner.subprocess.run", side_effect=FileNotFoundError):
+        with patch(
+            "ufpr_automation.agent_sdk.runner.subprocess.run", side_effect=FileNotFoundError
+        ):
             stats = run_intent_drafter(
-                last_days=30, min_frequency=5, dry_run=False,
-                procedures_path=proc_path, feedback_path=fb_path,
+                last_days=30,
+                min_frequency=5,
+                dry_run=False,
+                procedures_path=proc_path,
+                feedback_path=fb_path,
             )
 
         assert stats["error"] == "claude_unavailable"

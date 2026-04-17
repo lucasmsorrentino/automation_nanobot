@@ -1,6 +1,5 @@
 """Tests for attachment extraction module."""
 
-
 import pytest
 
 from ufpr_automation.core.models import AttachmentData
@@ -182,9 +181,7 @@ class TestAttachmentDataModel:
         assert email.attachments == []
         assert email.has_attachments is False
 
-        email.attachments.append(
-            AttachmentData(filename="doc.pdf", mime_type="application/pdf")
-        )
+        email.attachments.append(AttachmentData(filename="doc.pdf", mime_type="application/pdf"))
         email.has_attachments = True
         assert len(email.attachments) == 1
         assert email.has_attachments is True

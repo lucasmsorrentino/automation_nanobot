@@ -92,7 +92,11 @@ async def _extract_blocks(page: Page, course_url: str) -> list[Block]:
         if await link_loc.count():
             href = await link_loc.get_attribute("href")
             if href:
-                section_url = href if href.startswith("http") else f"{UFPR_ABERTA_URL.rstrip('/')}/{href.lstrip('/')}"
+                section_url = (
+                    href
+                    if href.startswith("http")
+                    else f"{UFPR_ABERTA_URL.rstrip('/')}/{href.lstrip('/')}"
+                )
         # fallback: deriva pelo data-section
         if not section_url:
             sec_num = await t.get_attribute("data-section")
@@ -121,15 +125,15 @@ async def _extract_blocks(page: Page, course_url: str) -> list[Block]:
         (out / "_section_page.html").write_text(await page.content(), encoding="utf-8")
 
         # summary da seção
-        summary = page.locator(".section .summary, .section_availability, .course-section .summary").first
+        summary = page.locator(
+            ".section .summary, .section_availability, .course-section .summary"
+        ).first
         if await summary.count():
             block.summary_html = await summary.inner_html()
 
         # atividades — format_tiles renderiza em ul.format-tiles-cm-list.subtiles
         # dentro de #region-main. NÃO usar courseindex (sidebar lista o curso todo).
-        acts = page.locator(
-            "#region-main a.cm-link, #region-main li.activity a.aalink"
-        )
+        acts = page.locator("#region-main a.cm-link, #region-main li.activity a.aalink")
         an = await acts.count()
         for j in range(an):
             a = acts.nth(j)
@@ -206,7 +210,9 @@ async def _scrape_activity(page: Page, activity: Activity, out_dir: Path) -> Non
         pn = await pdf_links.count()
         for k in range(pn):
             href = await pdf_links.nth(k).get_attribute("href")
-            name = (await pdf_links.nth(k).inner_text()).strip() or Path(urlparse(href or "").path).name
+            name = (await pdf_links.nth(k).inner_text()).strip() or Path(
+                urlparse(href or "").path
+            ).name
             if not href:
                 continue
             path = await _download_link(page, href, out_dir)
@@ -229,8 +235,12 @@ async def scrape_course(page: Page, course_id: int = DEFAULT_COURSE_ID) -> list[
     for block in blocks:
         out = _raw_dir_for_block(block)
         (out / "_section_summary.html").write_text(block.summary_html, encoding="utf-8")
-        logger.info("UFPR Aberta: bloco %d '%s' — %d atividades",
-                    block.index, block.title, len(block.activities))
+        logger.info(
+            "UFPR Aberta: bloco %d '%s' — %d atividades",
+            block.index,
+            block.title,
+            len(block.activities),
+        )
         for act in block.activities:
             await _scrape_activity(page, act, out)
     return blocks

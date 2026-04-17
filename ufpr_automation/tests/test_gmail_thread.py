@@ -63,9 +63,7 @@ class TestSplitReplyAndQuoted:
 
     def test_rfc_quoted_only_no_attribution(self):
         body = (
-            "Perfeito, muito obrigado!\n\n"
-            "> Segue anexo o documento solicitado.\n"
-            "> Atenciosamente,"
+            "Perfeito, muito obrigado!\n\n> Segue anexo o documento solicitado.\n> Atenciosamente,"
         )
         s = split_reply_and_quoted(body)
         assert s.new_reply == "Perfeito, muito obrigado!"

@@ -55,8 +55,8 @@ class EmailState(TypedDict, total=False):
     classifications: Annotated[dict[str, EmailClassification], _merge_dict]
 
     # Routing decisions (still set by `rotear` after fan-in)
-    auto_draft: list[str]       # stable_ids for auto-draft (high confidence)
-    human_review: list[str]     # stable_ids for human review (medium confidence)
+    auto_draft: list[str]  # stable_ids for auto-draft (high confidence)
+    human_review: list[str]  # stable_ids for human review (medium confidence)
     manual_escalation: list[str]  # stable_ids for manual handling (low confidence)
 
     # SEI/SIGA context (email stable_id -> consultation data)
@@ -65,7 +65,7 @@ class EmailState(TypedDict, total=False):
     siga_contexts: Annotated[dict[str, Any], _merge_dict]
 
     # Feedback output
-    feedback_recorded: int      # number of classifications recorded in FeedbackStore
+    feedback_recorded: int  # number of classifications recorded in FeedbackStore
 
     # Procedure learning
     procedures_logged: int
@@ -74,7 +74,7 @@ class EmailState(TypedDict, total=False):
     sei_operations: list[dict]  # list of {stable_id, op, success, ...} per SEI action
 
     # Agir output
-    drafts_saved: list[str]     # stable_ids of successfully saved drafts
+    drafts_saved: list[str]  # stable_ids of successfully saved drafts
 
     # Error tracking — list concatenation reducer so sub-agents may append.
     errors: Annotated[list[dict], operator.add]

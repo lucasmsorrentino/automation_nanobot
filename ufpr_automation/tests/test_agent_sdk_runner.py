@@ -18,16 +18,18 @@ from ufpr_automation.agent_sdk.runner import (
 @pytest.fixture(autouse=True)
 def _redirect_audit(monkeypatch, tmp_path):
     """Route all audit writes to tmp_path so tests don't pollute the real dir."""
-    monkeypatch.setattr(
-        "ufpr_automation.agent_sdk.runner.AGENT_SDK_DIR", tmp_path / "agent_sdk"
-    )
+    monkeypatch.setattr("ufpr_automation.agent_sdk.runner.AGENT_SDK_DIR", tmp_path / "agent_sdk")
 
 
 class TestClaudeRunResult:
     def test_dataclass_defaults(self):
         r = ClaudeRunResult(
-            success=True, task="test", run_id="abc",
-            started_at="2026-01-01T00:00:00", duration_s=1.5, prompt_chars=100,
+            success=True,
+            task="test",
+            run_id="abc",
+            started_at="2026-01-01T00:00:00",
+            duration_s=1.5,
+            prompt_chars=100,
         )
         assert r.output_text == ""
         assert r.output_json is None
@@ -163,7 +165,9 @@ class TestRunClaudeOneshot:
     def test_extra_args_forwarded(self, tmp_path):
         mock_proc = MagicMock(returncode=0, stdout="ok", stderr="")
 
-        with patch("ufpr_automation.agent_sdk.runner.subprocess.run", return_value=mock_proc) as mock_run:
+        with patch(
+            "ufpr_automation.agent_sdk.runner.subprocess.run", return_value=mock_proc
+        ) as mock_run:
             run_claude_oneshot(
                 task="custom",
                 prompt="test",

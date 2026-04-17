@@ -51,15 +51,16 @@ class TestAgirAgentRun:
             _classification(sugestao="  "),  # also skipped (whitespace only)
         ]
 
-        with patch(
-            "ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()
-        ) as click_mock, patch(
-            "ufpr_automation.agents.agir.verify_opened_email",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "ufpr_automation.agents.agir.save_draft_reply", new=AsyncMock()
-        ) as save_mock, patch(
-            "ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()
+        with (
+            patch(
+                "ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()
+            ) as click_mock,
+            patch(
+                "ufpr_automation.agents.agir.verify_opened_email",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("ufpr_automation.agents.agir.save_draft_reply", new=AsyncMock()) as save_mock,
+            patch("ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()),
         ):
             agent = AgirAgent(mock_page)
             result = await agent.run(two_emails, classifications)
@@ -80,15 +81,14 @@ class TestAgirAgentRun:
         dismiss_mock = AsyncMock()
         click_mock = AsyncMock()
 
-        with patch(
-            "ufpr_automation.agents.agir._click_email_at_index", new=click_mock
-        ), patch(
-            "ufpr_automation.agents.agir.verify_opened_email",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "ufpr_automation.agents.agir.save_draft_reply", new=save_mock
-        ), patch(
-            "ufpr_automation.agents.agir.dismiss_owa_dialog", new=dismiss_mock
+        with (
+            patch("ufpr_automation.agents.agir._click_email_at_index", new=click_mock),
+            patch(
+                "ufpr_automation.agents.agir.verify_opened_email",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("ufpr_automation.agents.agir.save_draft_reply", new=save_mock),
+            patch("ufpr_automation.agents.agir.dismiss_owa_dialog", new=dismiss_mock),
         ):
             agent = AgirAgent(mock_page)
             result = await agent.run(two_emails, classifications)
@@ -116,15 +116,14 @@ class TestAgirAgentRun:
 
         save_mock = AsyncMock(return_value=True)
 
-        with patch(
-            "ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()
-        ), patch(
-            "ufpr_automation.agents.agir.verify_opened_email",
-            new=AsyncMock(side_effect=[False, True]),
-        ), patch(
-            "ufpr_automation.agents.agir.save_draft_reply", new=save_mock
-        ), patch(
-            "ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()
+        with (
+            patch("ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()),
+            patch(
+                "ufpr_automation.agents.agir.verify_opened_email",
+                new=AsyncMock(side_effect=[False, True]),
+            ),
+            patch("ufpr_automation.agents.agir.save_draft_reply", new=save_mock),
+            patch("ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()),
         ):
             agent = AgirAgent(mock_page)
             result = await agent.run(two_emails, classifications)
@@ -142,16 +141,17 @@ class TestAgirAgentRun:
             _classification(sugestao="Resposta 2"),
         ]
 
-        with patch(
-            "ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()
-        ), patch(
-            "ufpr_automation.agents.agir.verify_opened_email",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "ufpr_automation.agents.agir.save_draft_reply",
-            new=AsyncMock(side_effect=[True, False]),
-        ), patch(
-            "ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()
+        with (
+            patch("ufpr_automation.agents.agir._click_email_at_index", new=AsyncMock()),
+            patch(
+                "ufpr_automation.agents.agir.verify_opened_email",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "ufpr_automation.agents.agir.save_draft_reply",
+                new=AsyncMock(side_effect=[True, False]),
+            ),
+            patch("ufpr_automation.agents.agir.dismiss_owa_dialog", new=AsyncMock()),
         ):
             agent = AgirAgent(mock_page)
             result = await agent.run(two_emails, classifications)

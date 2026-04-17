@@ -108,8 +108,15 @@ class GraphRetriever:
 
         # Keyword-based fallback
         keyword_map = {
-            "TCE Não Obrigatório": ["tce", "termo de compromisso", "estágio", "estagio",
-                                     "novo estágio", "começar estágio", "iniciar estágio"],
+            "TCE Não Obrigatório": [
+                "tce",
+                "termo de compromisso",
+                "estágio",
+                "estagio",
+                "novo estágio",
+                "começar estágio",
+                "iniciar estágio",
+            ],
             "TCE Obrigatório": ["obrigatório", "od501", "odda5", "estágio supervisionado"],
             "Termo Aditivo": ["aditivo", "prorrogação", "prorrogar", "renovação", "renovar"],
             "Rescisão": ["rescisão", "encerramento", "cancelamento de estágio", "desligamento"],
@@ -229,8 +236,18 @@ class GraphRetriever:
         text = f"{subject} {body}".lower()
 
         # Check if this seems student-related
-        student_keywords = ["aluno", "discente", "matrícula", "grr", "trancamento",
-                           "formatura", "integraliz", "histórico", "ira", "estágio"]
+        student_keywords = [
+            "aluno",
+            "discente",
+            "matrícula",
+            "grr",
+            "trancamento",
+            "formatura",
+            "integraliz",
+            "histórico",
+            "ira",
+            "estágio",
+        ]
         if not any(kw in text for kw in student_keywords):
             return ""
 
@@ -255,7 +272,9 @@ class GraphRetriever:
 
         lines = ["🖥️ Consultar no SIGA:"]
         for row in relevant:
-            lines.append(f"  • Aba '{row['aba']}': {row['assunto']} → verificar: {row['verificar']}")
+            lines.append(
+                f"  • Aba '{row['aba']}': {row['assunto']} → verificar: {row['verificar']}"
+            )
         lines.append("  URL: https://siga.ufpr.br/siga/discente?operacao=listar&tipodiscente=I")
         return "\n".join(lines)
 
@@ -337,7 +356,8 @@ class GraphRetriever:
             MATCH path = (o:Orgao {sigla: $sigla})-[:SUBORDINADO_A*1..%d]->(parent:Orgao)
             UNWIND nodes(path) AS node
             RETURN DISTINCT node.sigla AS sigla, node.nome AS nome
-            """ % depth,
+            """
+            % depth,
             {"sigla": sigla},
         )
 

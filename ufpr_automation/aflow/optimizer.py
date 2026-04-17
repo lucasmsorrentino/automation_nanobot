@@ -1,4 +1,5 @@
 """Pick the best topology by running each one through the evaluator."""
+
 from __future__ import annotations
 
 import json
@@ -83,9 +84,7 @@ def pick_best_topology(
 
     results: list[EvalResult] = []
     for name in topologies:
-        logger.info(
-            "AFlow: evaluating topology %s on %d examples", name, len(examples)
-        )
+        logger.info("AFlow: evaluating topology %s on %d examples", name, len(examples))
         result = evaluate(name, examples, invoke_fn=invoke_fn)
         results.append(result)
 

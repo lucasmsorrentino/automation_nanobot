@@ -56,7 +56,7 @@ class SEIClient:
 
             # Try to extract status
             status_el = self._page.locator(
-                '#divInfraBarraComandosSuperior, .infraBarraLocalizacao, '
+                "#divInfraBarraComandosSuperior, .infraBarraLocalizacao, "
                 '[id*="situacao"], [class*="situacao"]'
             )
             if await status_el.count() > 0:
@@ -92,8 +92,7 @@ class SEIClient:
         try:
             # SEI shows documents in a tree structure
             doc_links = self._page.locator(
-                '#divArvore a[id^="anchor"], .infraArvore a, '
-                'a[href*="documento_consultar"]'
+                '#divArvore a[id^="anchor"], .infraArvore a, a[href*="documento_consultar"]'
             )
             count = await doc_links.count()
             for i in range(min(count, 50)):  # Cap at 50 docs

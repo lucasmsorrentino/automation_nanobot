@@ -41,6 +41,7 @@ SAMPLE_ENTRY = {
 # _load_last_run
 # ---------------------------------------------------------------------------
 
+
 class TestLoadLastRun:
     def test_loads_entries(self, tmp_path):
         p = tmp_path / "last_run.jsonl"
@@ -63,14 +64,23 @@ class TestLoadLastRun:
 # debug_email
 # ---------------------------------------------------------------------------
 
+
 class TestDebugEmail:
     def test_with_entry_in_last_run(self, tmp_path):
         p = tmp_path / "last_run.jsonl"
         _write_last_run(p, [SAMPLE_ENTRY])
 
-        with patch("ufpr_automation.agent_sdk.debug_classification.replay_tier0") as mock_t0, \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_procedure_records", return_value=[]), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_feedback_for", return_value=None):
+        with (
+            patch("ufpr_automation.agent_sdk.debug_classification.replay_tier0") as mock_t0,
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_procedure_records",
+                return_value=[],
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
+                return_value=None,
+            ),
+        ):
             mock_t0.return_value = {
                 "match": True,
                 "intent_name": "estagio_tce_inicial",
@@ -91,8 +101,16 @@ class TestDebugEmail:
         p = tmp_path / "last_run.jsonl"
         p.write_text("", encoding="utf-8")
 
-        with patch("ufpr_automation.agent_sdk.debug_classification._load_procedure_records", return_value=[]), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_feedback_for", return_value=None):
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_procedure_records",
+                return_value=[],
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
+                return_value=None,
+            ),
+        ):
             trace = debug_email("nonexistent", last_run_path=p)
 
         assert trace.stable_id == "nonexistent"
@@ -109,11 +127,20 @@ class TestDebugEmail:
             "notes": "Não era estágio, era matrícula",
         }
 
-        with patch("ufpr_automation.agent_sdk.debug_classification.replay_tier0",
-                    return_value={"match": False, "reason": "no match"}), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_procedure_records", return_value=[]), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
-                    return_value=correction):
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification.replay_tier0",
+                return_value={"match": False, "reason": "no match"},
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_procedure_records",
+                return_value=[],
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
+                return_value=correction,
+            ),
+        ):
             trace = debug_email("abc123def456", last_run_path=p)
 
         assert trace.has_correction is True
@@ -124,6 +151,7 @@ class TestDebugEmail:
 # ---------------------------------------------------------------------------
 # _generate_proposals
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateProposals:
     def test_mismatch_without_tier0_proposes_new_intent(self):
@@ -178,6 +206,7 @@ class TestGenerateProposals:
 # format_report
 # ---------------------------------------------------------------------------
 
+
 class TestFormatReport:
     def test_report_contains_key_sections(self):
         trace = DebugTrace(
@@ -211,15 +240,26 @@ class TestFormatReport:
 # run_debug
 # ---------------------------------------------------------------------------
 
+
 class TestRunDebug:
     def test_writes_report_files(self, tmp_path):
         last_run = tmp_path / "last_run.jsonl"
         _write_last_run(last_run, [SAMPLE_ENTRY])
 
-        with patch("ufpr_automation.agent_sdk.debug_classification.replay_tier0",
-                    return_value={"match": False}), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_procedure_records", return_value=[]), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_feedback_for", return_value=None):
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification.replay_tier0",
+                return_value={"match": False},
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_procedure_records",
+                return_value=[],
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
+                return_value=None,
+            ),
+        ):
             traces = run_debug(
                 ["abc123def456"],
                 last_run_path=last_run,
@@ -237,10 +277,20 @@ class TestRunDebug:
         last_run = tmp_path / "last_run.jsonl"
         _write_last_run(last_run, [SAMPLE_ENTRY, entry2])
 
-        with patch("ufpr_automation.agent_sdk.debug_classification.replay_tier0",
-                    return_value={"match": False}), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_procedure_records", return_value=[]), \
-             patch("ufpr_automation.agent_sdk.debug_classification._load_feedback_for", return_value=None):
+        with (
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification.replay_tier0",
+                return_value={"match": False},
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_procedure_records",
+                return_value=[],
+            ),
+            patch(
+                "ufpr_automation.agent_sdk.debug_classification._load_feedback_for",
+                return_value=None,
+            ),
+        ):
             traces = run_debug(
                 ["abc123def456", "second_id_123"],
                 last_run_path=last_run,

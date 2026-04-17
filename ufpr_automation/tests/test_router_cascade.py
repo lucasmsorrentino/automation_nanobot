@@ -21,6 +21,7 @@ from ufpr_automation.llm.router import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_response(text: str = "response") -> MagicMock:
     resp = MagicMock()
     resp.choices = [MagicMock()]
@@ -61,7 +62,8 @@ class TestCascadedCompletion:
         with patch("ufpr_automation.llm.router.settings", _settings()):
             with patch("litellm.acompletion", new_callable=AsyncMock, return_value=expected):
                 result = await cascaded_completion(
-                    TaskType.CLASSIFY, messages=MESSAGES,
+                    TaskType.CLASSIFY,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -81,7 +83,8 @@ class TestCascadedCompletion:
                 ],
             ) as mock_ac:
                 result = await cascaded_completion(
-                    TaskType.CLASSIFY, messages=MESSAGES,
+                    TaskType.CLASSIFY,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -104,7 +107,8 @@ class TestCascadedCompletion:
                 ],
             ) as mock_ac:
                 result = await cascaded_completion(
-                    TaskType.CLASSIFY, messages=MESSAGES,
+                    TaskType.CLASSIFY,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -129,7 +133,8 @@ class TestCascadedCompletion:
                 ],
             ) as mock_ac:
                 await cascaded_completion(
-                    TaskType.CLASSIFY, messages=MESSAGES,
+                    TaskType.CLASSIFY,
+                    messages=MESSAGES,
                 )
 
         # Should NOT have retried the primary model (only 1 attempt)
@@ -148,7 +153,8 @@ class TestCascadedCompletion:
             ):
                 with pytest.raises(Exception, match="Connection refused"):
                     await cascaded_completion(
-                        TaskType.CLASSIFY, messages=MESSAGES,
+                        TaskType.CLASSIFY,
+                        messages=MESSAGES,
                     )
 
     @pytest.mark.asyncio
@@ -174,7 +180,8 @@ class TestCascadedCompletion:
                 ],
             ) as mock_ac:
                 result = await cascaded_completion(
-                    TaskType.CLASSIFY, messages=MESSAGES,
+                    TaskType.CLASSIFY,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -196,7 +203,8 @@ class TestCascadedCompletionSync:
         with patch("ufpr_automation.llm.router.settings", _settings()):
             with patch("litellm.completion", return_value=expected):
                 result = cascaded_completion_sync(
-                    TaskType.DRAFT, messages=MESSAGES,
+                    TaskType.DRAFT,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -216,7 +224,8 @@ class TestCascadedCompletionSync:
                 ],
             ):
                 result = cascaded_completion_sync(
-                    TaskType.DRAFT, messages=MESSAGES,
+                    TaskType.DRAFT,
+                    messages=MESSAGES,
                 )
 
         assert result == expected
@@ -232,7 +241,8 @@ class TestCascadedCompletionSync:
             ):
                 with pytest.raises(Exception, match="total failure"):
                     cascaded_completion_sync(
-                        TaskType.DRAFT, messages=MESSAGES,
+                        TaskType.DRAFT,
+                        messages=MESSAGES,
                     )
 
     def test_non_retriable_skips_to_next_model(self):
@@ -250,7 +260,8 @@ class TestCascadedCompletionSync:
                 ],
             ) as mock_c:
                 result = cascaded_completion_sync(
-                    TaskType.DRAFT, messages=MESSAGES,
+                    TaskType.DRAFT,
+                    messages=MESSAGES,
                 )
 
         assert result == expected

@@ -151,7 +151,8 @@ async def verify_opened_email(page: Page, expected: EmailData) -> bool:
                     # Definite mismatch
                     logger.warning(
                         "MISMATCH: esperado '%s' mas encontrou '%s'",
-                        expected.subject[:50], visible_subject[:50],
+                        expected.subject[:50],
+                        visible_subject[:50],
                     )
                     return False
         except Exception:

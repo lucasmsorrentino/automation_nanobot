@@ -92,7 +92,13 @@ class TestRealCatalog:
 
     def test_real_catalog_has_expected_labels(self):
         labels = list_labels()
-        expected = ["TCE", "Termo Aditivo", "Termo de Rescisão", "Relatório Parcial",
-                    "Relatório Final", "Ficha de Avaliação"]
+        expected = [
+            "TCE",
+            "Termo Aditivo",
+            "Termo de Rescisão",
+            "Relatório Parcial",
+            "Relatório Final",
+            "Ficha de Avaliação",
+        ]
         for lbl in expected:
             assert lbl in labels, f"Missing label: {lbl}"

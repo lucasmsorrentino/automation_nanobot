@@ -187,8 +187,14 @@ def run_claude_oneshot(
             logger.warning("agent_sdk[%s] failed to parse JSON output: %s", task, e)
 
     _write_audit_row(
-        task, run_id, started, duration, len(prompt),
-        output_format, proc.returncode, proc.returncode == 0,
+        task,
+        run_id,
+        started,
+        duration,
+        len(prompt),
+        output_format,
+        proc.returncode,
+        proc.returncode == 0,
         stdout_chars=len(proc.stdout or ""),
     )
 

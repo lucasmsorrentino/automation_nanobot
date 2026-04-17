@@ -32,6 +32,7 @@ DOC_TYPES = ("atas", "resolucoes", "instrucoes-normativas")
 # PDF text extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_text(pdf_path: Path, use_ocr: bool = True) -> str:
     """Extract text from a PDF using PyMuPDF, with OCR fallback for scanned pages.
 
@@ -73,6 +74,7 @@ def _ocr_pdf(pdf_path: Path) -> str:
     # Auto-detect Tesseract on Windows
     if sys.platform == "win32":
         import shutil
+
         if not shutil.which("tesseract"):
             win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
             if Path(win_path).exists():
@@ -98,13 +100,16 @@ def _ocr_pdf(pdf_path: Path) -> str:
 
     full_text = "\n\n".join(pages_text)
     if full_text:
-        logger.info("OCR: %d chars from '%s' (%d pages)", len(full_text), pdf_path.name, len(pages_text))
+        logger.info(
+            "OCR: %d chars from '%s' (%d pages)", len(full_text), pdf_path.name, len(pages_text)
+        )
     return full_text
 
 
 # ---------------------------------------------------------------------------
 # Metadata extraction from path
 # ---------------------------------------------------------------------------
+
 
 def metadata_from_path(pdf_path: Path) -> dict:
     """Derive metadata from the file's position in the docs/ tree.
@@ -142,6 +147,7 @@ def metadata_from_path(pdf_path: Path) -> dict:
 # Chunking
 # ---------------------------------------------------------------------------
 
+
 def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> list[str]:
     """Split text into overlapping chunks using langchain's RecursiveCharacterTextSplitter.
 
@@ -153,13 +159,13 @@ def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> l
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         separators=[
-            "\n\n\n",      # page breaks / major sections
-            "\n\n",         # paragraphs
-            "\nArt.",       # artigos de resolução
+            "\n\n\n",  # page breaks / major sections
+            "\n\n",  # paragraphs
+            "\nArt.",  # artigos de resolução
             "\nParágrafo",  # parágrafos de resolução
-            "\n§",          # parágrafo symbol
-            "\n",           # line breaks
-            ". ",           # sentences
+            "\n§",  # parágrafo symbol
+            "\n",  # line breaks
+            ". ",  # sentences
             " ",
         ],
         keep_separator=True,
@@ -200,6 +206,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 # ---------------------------------------------------------------------------
 # LanceDB indexing
 # ---------------------------------------------------------------------------
+
 
 def get_or_create_table(db, table_name: str = "ufpr_docs"):
     """Get existing table or return None if it doesn't exist."""
@@ -260,8 +267,12 @@ def ingest_docs(
         print(f"OCR-only mode: {len(pdf_paths)} PDFs not yet indexed.")
 
     stats = {
-        "pdfs": len(pdf_paths), "chunks": 0, "indexed": 0,
-        "skipped": 0, "errors": 0, "ocr_recovered": 0,
+        "pdfs": len(pdf_paths),
+        "chunks": 0,
+        "indexed": 0,
+        "skipped": 0,
+        "errors": 0,
+        "ocr_recovered": 0,
     }
 
     all_records = []
@@ -357,18 +368,26 @@ def _collect_pdfs(subset: str | None) -> list[Path]:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest UFPR docs into vector store")
-    parser.add_argument("--subset", type=str, default=None,
-                        help="Subfolder to ingest (e.g. 'estagio', 'cepe/resolucoes')")
+    parser.add_argument(
+        "--subset",
+        type=str,
+        default=None,
+        help="Subfolder to ingest (e.g. 'estagio', 'cepe/resolucoes')",
+    )
     parser.add_argument("--chunk-size", type=int, default=1000)
     parser.add_argument("--chunk-overlap", type=int, default=200)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Extract and chunk without embedding/indexing")
-    parser.add_argument("--ocr-only", action="store_true",
-                        help="Only process PDFs not yet indexed (OCR recovery)")
-    parser.add_argument("--no-ocr", action="store_true",
-                        help="Disable OCR fallback for scanned PDFs")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Extract and chunk without embedding/indexing"
+    )
+    parser.add_argument(
+        "--ocr-only", action="store_true", help="Only process PDFs not yet indexed (OCR recovery)"
+    )
+    parser.add_argument(
+        "--no-ocr", action="store_true", help="Disable OCR fallback for scanned PDFs"
+    )
     args = parser.parse_args()
 
     t0 = time.time()

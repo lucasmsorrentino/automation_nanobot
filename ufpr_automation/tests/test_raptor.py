@@ -8,6 +8,7 @@ Covers:
 The heavy I/O path (build_raptor_tree → lancedb) is left to integration
 tests; here we focus on inputs/outputs of the deterministic helpers.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -27,9 +28,7 @@ def three_cluster_embeddings():
 
 
 class TestClusterEmbeddings:
-    def test_returns_at_least_one_cluster_for_nonempty_input(
-        self, three_cluster_embeddings
-    ):
+    def test_returns_at_least_one_cluster_for_nonempty_input(self, three_cluster_embeddings):
         from ufpr_automation.rag.raptor import cluster_embeddings
 
         clusters = cluster_embeddings(three_cluster_embeddings, max_clusters=5)

@@ -29,9 +29,7 @@ def response_not_empty(example, pred, trace=None) -> bool:
     """Check that a response was generated when one was expected."""
     # If action requires response, sugestao_resposta shouldn't be empty
     action = pred.acao_necessaria.lower()
-    needs_response = any(
-        kw in action for kw in ("redigir", "responder", "resposta", "enviar")
-    )
+    needs_response = any(kw in action for kw in ("redigir", "responder", "resposta", "enviar"))
     if needs_response:
         return bool(pred.sugestao_resposta.strip())
     return True

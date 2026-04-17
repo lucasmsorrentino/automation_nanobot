@@ -112,8 +112,7 @@ def page_dashboard():
             conf = cls.get("confianca", 0)
             icon = "🟢" if conf >= 0.95 else ("🟡" if conf >= 0.7 else "🔴")
             with st.expander(
-                f"{icon} [{cat}] {entry.get('subject', '?')[:60]}  "
-                f"(confianca: {conf:.0%})"
+                f"{icon} [{cat}] {entry.get('subject', '?')[:60]}  (confianca: {conf:.0%})"
             ):
                 st.text(f"De: {entry.get('sender', '?')}")
                 st.text(f"Resumo: {cls.get('resumo', '-')}")
@@ -397,8 +396,7 @@ def main():
 
     st.title("📋 UFPR Automation — Painel de Feedback")
     st.caption(
-        "Revise o trabalho do agente, corrija classificacoes e "
-        "acompanhe a evolucao do aprendizado."
+        "Revise o trabalho do agente, corrija classificacoes e acompanhe a evolucao do aprendizado."
     )
 
     page = st.sidebar.radio(

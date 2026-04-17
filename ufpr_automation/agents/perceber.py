@@ -55,8 +55,11 @@ class PerceberAgent:
             email.email_index = i  # positional index (fallback for clicking)
             email.compute_stable_id()  # hash-based identity for verification
             logger.info(
-                "  [%d/%d] %s  (id: %s)", i + 1, len(unread),
-                email.subject[:60], email.stable_id[:8],
+                "  [%d/%d] %s  (id: %s)",
+                i + 1,
+                len(unread),
+                email.subject[:60],
+                email.stable_id[:8],
             )
             email.body = await extract_email_body(self._page, i)
             body_preview = email.body[:80].replace("\n", " ") if email.body else "(vazio)"

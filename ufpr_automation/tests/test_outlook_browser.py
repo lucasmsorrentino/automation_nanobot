@@ -11,23 +11,31 @@ from ufpr_automation.outlook import browser as browser_mod
 
 class TestHasCredentials:
     def test_returns_true_when_both_set(self):
-        with patch.object(browser_mod, "OWA_EMAIL", "user@ufpr.br"), \
-             patch.object(browser_mod, "OWA_PASSWORD", "supersecret"):
+        with (
+            patch.object(browser_mod, "OWA_EMAIL", "user@ufpr.br"),
+            patch.object(browser_mod, "OWA_PASSWORD", "supersecret"),
+        ):
             assert browser_mod.has_credentials() is True
 
     def test_returns_false_when_email_missing(self):
-        with patch.object(browser_mod, "OWA_EMAIL", ""), \
-             patch.object(browser_mod, "OWA_PASSWORD", "supersecret"):
+        with (
+            patch.object(browser_mod, "OWA_EMAIL", ""),
+            patch.object(browser_mod, "OWA_PASSWORD", "supersecret"),
+        ):
             assert browser_mod.has_credentials() is False
 
     def test_returns_false_when_password_missing(self):
-        with patch.object(browser_mod, "OWA_EMAIL", "user@ufpr.br"), \
-             patch.object(browser_mod, "OWA_PASSWORD", ""):
+        with (
+            patch.object(browser_mod, "OWA_EMAIL", "user@ufpr.br"),
+            patch.object(browser_mod, "OWA_PASSWORD", ""),
+        ):
             assert browser_mod.has_credentials() is False
 
     def test_returns_false_when_both_empty(self):
-        with patch.object(browser_mod, "OWA_EMAIL", ""), \
-             patch.object(browser_mod, "OWA_PASSWORD", ""):
+        with (
+            patch.object(browser_mod, "OWA_EMAIL", ""),
+            patch.object(browser_mod, "OWA_PASSWORD", ""),
+        ):
             assert browser_mod.has_credentials() is False
 
 
@@ -77,8 +85,10 @@ class TestIsLoggedIn:
 class TestSendTelegramNotification:
     @pytest.mark.asyncio
     async def test_no_token_is_noop(self, capsys):
-        with patch.object(browser_mod, "TELEGRAM_BOT_TOKEN", ""), \
-             patch.object(browser_mod, "TELEGRAM_CHAT_ID", ""):
+        with (
+            patch.object(browser_mod, "TELEGRAM_BOT_TOKEN", ""),
+            patch.object(browser_mod, "TELEGRAM_CHAT_ID", ""),
+        ):
             # Should not raise and should print a warning instead.
             await browser_mod._send_telegram_notification("hello")
         out = capsys.readouterr().out

@@ -56,13 +56,17 @@ class AgirAgent:
             subject_short = email.subject[:55]
 
             if not cls.sugestao_resposta.strip():
-                logger.info("  [%s] Sem sugestão de resposta — pulando (ação: %s)",
-                            subject_short, cls.acao_necessaria)
+                logger.info(
+                    "  [%s] Sem sugestão de resposta — pulando (ação: %s)",
+                    subject_short,
+                    cls.acao_necessaria,
+                )
                 results.append(False)
                 continue
 
-            logger.info("  [%s] Abrindo e-mail %d para responder...",
-                        subject_short, email.email_index)
+            logger.info(
+                "  [%s] Abrindo e-mail %d para responder...", subject_short, email.email_index
+            )
 
             # Re-open the email (reading pane may have changed since Perceber)
             # _click_email_at_index already waits for the reading pane to render

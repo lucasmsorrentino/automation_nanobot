@@ -1,4 +1,5 @@
 """Tests for AFlow topology evaluator."""
+
 from __future__ import annotations
 
 import pytest
@@ -153,12 +154,18 @@ class TestOptimizerTieBreakLogic:
             monkeypatch,
             {
                 "baseline": EvalResult(
-                    topology="baseline", n_examples=10, accuracy=0.6,
-                    latency_mean_ms=100.0, errors=0,
+                    topology="baseline",
+                    n_examples=10,
+                    accuracy=0.6,
+                    latency_mean_ms=100.0,
+                    errors=0,
                 ),
                 "fleet": EvalResult(
-                    topology="fleet", n_examples=10, accuracy=0.9,
-                    latency_mean_ms=1000.0, errors=5,
+                    topology="fleet",
+                    n_examples=10,
+                    accuracy=0.9,
+                    latency_mean_ms=1000.0,
+                    errors=5,
                 ),
             },
         )
@@ -174,16 +181,25 @@ class TestOptimizerTieBreakLogic:
             monkeypatch,
             {
                 "a": EvalResult(
-                    topology="a", n_examples=10, accuracy=0.8,
-                    latency_mean_ms=500.0, errors=0,
+                    topology="a",
+                    n_examples=10,
+                    accuracy=0.8,
+                    latency_mean_ms=500.0,
+                    errors=0,
                 ),
                 "b": EvalResult(
-                    topology="b", n_examples=10, accuracy=0.8,
-                    latency_mean_ms=200.0, errors=0,
+                    topology="b",
+                    n_examples=10,
+                    accuracy=0.8,
+                    latency_mean_ms=200.0,
+                    errors=0,
                 ),
                 "c": EvalResult(
-                    topology="c", n_examples=10, accuracy=0.8,
-                    latency_mean_ms=800.0, errors=0,
+                    topology="c",
+                    n_examples=10,
+                    accuracy=0.8,
+                    latency_mean_ms=800.0,
+                    errors=0,
                 ),
             },
         )
@@ -199,12 +215,18 @@ class TestOptimizerTieBreakLogic:
             monkeypatch,
             {
                 "noisy": EvalResult(
-                    topology="noisy", n_examples=10, accuracy=0.8,
-                    latency_mean_ms=500.0, errors=3,
+                    topology="noisy",
+                    n_examples=10,
+                    accuracy=0.8,
+                    latency_mean_ms=500.0,
+                    errors=3,
                 ),
                 "clean": EvalResult(
-                    topology="clean", n_examples=10, accuracy=0.8,
-                    latency_mean_ms=500.0, errors=0,
+                    topology="clean",
+                    n_examples=10,
+                    accuracy=0.8,
+                    latency_mean_ms=500.0,
+                    errors=0,
                 ),
             },
         )
@@ -229,6 +251,7 @@ class TestOptimizerTieBreakLogic:
             report_dir=tmp_path,
         )
         import json
+
         report = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
         assert report["best"] == "b"
         assert {r["topology"] for r in report["results"]} == {"a", "b"}
@@ -258,6 +281,7 @@ class TestAblationBehavior:
 
         with patch("ufpr_automation.llm.client.LLMClient", return_value=mock_client):
             from ufpr_automation.graph.nodes import _classify_with_litellm
+
             result = _classify_with_litellm([email], {email.stable_id: "context"})
 
         # classify was called but self_refine was NOT
@@ -286,6 +310,7 @@ class TestAblationBehavior:
 
         with patch("ufpr_automation.llm.client.LLMClient", return_value=mock_client):
             from ufpr_automation.graph.nodes import _classify_with_litellm
+
             _classify_with_litellm([email], {email.stable_id: "context"})
 
         mock_client.classify_email_async.assert_called_once()
@@ -312,7 +337,7 @@ class TestAblationBehavior:
             "tier0_hits": [],
             "tier0_near_miss_scores": {
                 email_high.stable_id: 0.85,  # above 0.75 -> skip
-                email_low.stable_id: 0.60,   # below 0.75 -> keep
+                email_low.stable_id: 0.60,  # below 0.75 -> keep
             },
         }
 
@@ -325,11 +350,15 @@ class TestAblationBehavior:
             searched_subjects.append(query[:20])
             return []
 
-        fake_retriever.search_formatted.side_effect = lambda q, top_k=5: searched_subjects.append(q[:20]) or ""
+        fake_retriever.search_formatted.side_effect = lambda q, top_k=5: (
+            searched_subjects.append(q[:20]) or ""
+        )
 
-        with patch("ufpr_automation.graph.nodes._get_retriever", return_value=fake_retriever), \
-             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""), \
-             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""):
+        with (
+            patch("ufpr_automation.graph.nodes._get_retriever", return_value=fake_retriever),
+            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
+            patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
+        ):
             rag_retrieve(state)
 
         # The high-near-miss email should NOT have been queried
@@ -350,20 +379,30 @@ class TestAblationBehavior:
         email.compute_stable_id()
 
         mock_cls = EmailClassification(
-            categoria="Estágios", resumo="TCE", acao_necessaria="Abrir Processo SEI",
+            categoria="Estágios",
+            resumo="TCE",
+            acao_necessaria="Abrir Processo SEI",
             sugestao_resposta="...",
         )
 
-        with patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False), \
-             patch("ufpr_automation.graph.nodes._classify_with_litellm",
-                   return_value={email.stable_id: mock_cls}), \
-             patch("ufpr_automation.graph.nodes._get_retriever", side_effect=Exception("no rag")), \
-             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""), \
-             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""), \
-             patch("ufpr_automation.graph.nodes._consult_sei_for_email", return_value=None) as mock_sei, \
-             patch("ufpr_automation.graph.nodes._consult_siga_for_email", return_value=None) as mock_siga:
-
+        with (
+            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
+            patch(
+                "ufpr_automation.graph.nodes._classify_with_litellm",
+                return_value={email.stable_id: mock_cls},
+            ),
+            patch("ufpr_automation.graph.nodes._get_retriever", side_effect=Exception("no rag")),
+            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
+            patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
+            patch(
+                "ufpr_automation.graph.nodes._consult_sei_for_email", return_value=None
+            ) as mock_sei,
+            patch(
+                "ufpr_automation.graph.nodes._consult_siga_for_email", return_value=None
+            ) as mock_siga,
+        ):
             from ufpr_automation.graph.fleet import process_one_email
+
             process_one_email({"email": email, "stable_id": email.stable_id})
 
         mock_sei.assert_called_once()

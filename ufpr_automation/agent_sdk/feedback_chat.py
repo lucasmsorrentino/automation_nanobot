@@ -154,9 +154,7 @@ def build_bootstrap_prompt(entries: list[dict], summary: dict[str, Any]) -> str:
         sender = e.get("sender", "?")
         cat = cls.get("categoria", "?")
         conf = cls.get("confianca", 0.0)
-        lines.append(
-            f"{i}. [{sid}] {sender} | \"{subject}\" → **{cat}** (conf={conf})"
-        )
+        lines.append(f'{i}. [{sid}] {sender} | "{subject}" → **{cat}** (conf={conf})')
 
     if len(entries) > 20:
         lines.append("")
@@ -236,8 +234,7 @@ def launch_claude(session: ChatSession) -> int:
 
     bootstrap_path = session.session_dir / "bootstrap.md"
     print(
-        f"\n[feedback_chat] Iniciando sessão {session.run_id} — "
-        f"bootstrap em {bootstrap_path}\n",
+        f"\n[feedback_chat] Iniciando sessão {session.run_id} — bootstrap em {bootstrap_path}\n",
         file=sys.stderr,
     )
 
@@ -264,7 +261,8 @@ def main() -> None:
         description="Open a Claude interactive session pre-briefed with the latest pipeline run",
     )
     parser.add_argument(
-        "--bootstrap-only", action="store_true",
+        "--bootstrap-only",
+        action="store_true",
         help="Build the bootstrap prompt and print it to stdout (do NOT launch claude)",
     )
     args = parser.parse_args()

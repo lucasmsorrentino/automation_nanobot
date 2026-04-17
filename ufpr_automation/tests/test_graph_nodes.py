@@ -17,11 +17,13 @@ from ufpr_automation.graph.nodes import (
 @pytest.fixture
 def sample_emails():
     emails = []
-    for i, (sender, subject) in enumerate([
-        ("prof@ufpr.br", "Solicitação de Estágio"),
-        ("sec@ufpr.br", "Informe Reunião"),
-        ("spam@fake.com", "Promoção imperdível"),
-    ]):
+    for i, (sender, subject) in enumerate(
+        [
+            ("prof@ufpr.br", "Solicitação de Estágio"),
+            ("sec@ufpr.br", "Informe Reunião"),
+            ("spam@fake.com", "Promoção imperdível"),
+        ]
+    ):
         e = EmailData(sender=sender, subject=subject, body=f"Corpo do email {i}")
         e.compute_stable_id()
         emails.append(e)
@@ -91,8 +93,11 @@ class TestRotear:
     def test_threshold_boundary_high(self, sample_emails):
         """Exactly at CONFIDENCE_HIGH boundary should be auto_draft."""
         cls = EmailClassification(
-            categoria="Estágios", resumo="test", acao_necessaria="test",
-            sugestao_resposta="test", confianca=CONFIDENCE_HIGH,
+            categoria="Estágios",
+            resumo="test",
+            acao_necessaria="test",
+            sugestao_resposta="test",
+            confianca=CONFIDENCE_HIGH,
         )
         state = {"classifications": {sample_emails[0].stable_id: cls}}
         result = rotear(state)
@@ -101,8 +106,11 @@ class TestRotear:
     def test_threshold_boundary_medium(self, sample_emails):
         """Just below CONFIDENCE_HIGH should be human_review."""
         cls = EmailClassification(
-            categoria="Estágios", resumo="test", acao_necessaria="test",
-            sugestao_resposta="test", confianca=CONFIDENCE_HIGH - 0.01,
+            categoria="Estágios",
+            resumo="test",
+            acao_necessaria="test",
+            sugestao_resposta="test",
+            confianca=CONFIDENCE_HIGH - 0.01,
         )
         state = {"classifications": {sample_emails[0].stable_id: cls}}
         result = rotear(state)
@@ -130,5 +138,7 @@ class TestSaveRunResults:
         assert "subject" in first
         assert "classification" in first
         assert first["classification"]["categoria"] in [
-            "Estágios", "Outros", "Correio Lixo",
+            "Estágios",
+            "Outros",
+            "Correio Lixo",
         ]

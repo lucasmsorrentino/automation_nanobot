@@ -71,9 +71,7 @@ def _extract_text(msg: email.message.Message) -> str:
     return ""
 
 
-def _extract_attachments(
-    msg: email.message.Message, email_stable_id: str
-) -> list[AttachmentData]:
+def _extract_attachments(msg: email.message.Message, email_stable_id: str) -> list[AttachmentData]:
     """Extract and save attachments from a MIME message.
 
     Saves files to ATTACHMENTS_DIR/{email_stable_id}_{filename}.
@@ -109,7 +107,8 @@ def _extract_attachments(
         if size > max_bytes:
             logger.warning(
                 "Gmail: anexo '%s' excede limite (%d MB) — ignorado",
-                filename, settings.ATTACHMENT_MAX_SIZE_MB,
+                filename,
+                settings.ATTACHMENT_MAX_SIZE_MB,
             )
             continue
 
@@ -148,8 +147,7 @@ class GmailClient:
         self.app_password = app_password or settings.GMAIL_APP_PASSWORD
         if not self.email_addr or not self.app_password:
             raise ValueError(
-                "Gmail credentials not configured. "
-                "Set GMAIL_EMAIL and GMAIL_APP_PASSWORD in .env"
+                "Gmail credentials not configured. Set GMAIL_EMAIL and GMAIL_APP_PASSWORD in .env"
             )
 
     # ------------------------------------------------------------------
@@ -229,7 +227,11 @@ class GmailClient:
                 att_info = f", {len(atts)} anexo(s)" if atts else ""
                 logger.info(
                     "  [%d/%d] %s (id: %s%s)",
-                    idx + 1, len(msg_ids), subject[:60], ed.stable_id[:8], att_info,
+                    idx + 1,
+                    len(msg_ids),
+                    subject[:60],
+                    ed.stable_id[:8],
+                    att_info,
                 )
 
             return emails

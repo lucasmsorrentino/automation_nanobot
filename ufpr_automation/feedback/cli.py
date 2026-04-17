@@ -232,15 +232,11 @@ def cmd_review(store: FeedbackStore, approve_all: bool = False) -> None:
         if new_cat and new_cat in _VALID_CATEGORIES:
             corrected_data["categoria"] = new_cat
 
-        new_resumo = input(
-            f"  Novo resumo [{cls_data.get('resumo', '')[:60]}]: "
-        ).strip()
+        new_resumo = input(f"  Novo resumo [{cls_data.get('resumo', '')[:60]}]: ").strip()
         if new_resumo:
             corrected_data["resumo"] = new_resumo
 
-        new_acao = input(
-            f"  Nova acao [{cls_data.get('acao_necessaria', '')}]: "
-        ).strip()
+        new_acao = input(f"  Nova acao [{cls_data.get('acao_necessaria', '')}]: ").strip()
         if new_acao:
             corrected_data["acao_necessaria"] = new_acao
 

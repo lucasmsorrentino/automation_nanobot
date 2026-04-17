@@ -1,4 +1,5 @@
 """Tests for SEIWriter — safety regression suite."""
+
 import inspect
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ from ufpr_automation.sei.writer_models import (
 # ============================================================================
 # CRITICAL SAFETY REGRESSION TESTS — these must NEVER be skipped or removed
 # ============================================================================
+
 
 class TestWriterArchitecturalSafety:
     """Verify SEIWriter does NOT expose any sign/send/protocol methods."""
@@ -39,7 +41,8 @@ class TestWriterArchitecturalSafety:
 
     def test_writer_public_api_is_only_whitelisted_write_ops(self):
         public_methods = {
-            name for name in dir(SEIWriter)
+            name
+            for name in dir(SEIWriter)
             if not name.startswith("_") and callable(getattr(SEIWriter, name))
         }
         # Allow run_id property; everything else must be one of the three
@@ -62,11 +65,11 @@ class TestWriterArchitecturalSafety:
         # The _FORBIDDEN_SELECTORS list itself contains these tokens, which
         # is fine; we just want to ensure no .click('Assinar') sneaks in.
         forbidden_click_patterns = [
-            "click(\"text=Assinar",
+            'click("text=Assinar',
             "click('text=Assinar",
-            "click(\"text=Enviar",
+            'click("text=Enviar',
             "click('text=Enviar",
-            "click(\"text=Protocolar",
+            'click("text=Protocolar',
             "click('text=Protocolar",
         ]
         for pat in forbidden_click_patterns:
@@ -111,6 +114,7 @@ class TestForbiddenSelectorGuard:
 # Functional tests
 # ============================================================================
 
+
 @pytest.fixture
 def mock_page():
     page = AsyncMock()
@@ -128,6 +132,7 @@ def mock_page():
 @pytest.fixture
 def writer(mock_page, tmp_path, monkeypatch):
     from ufpr_automation.config import settings
+
     monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
     # Force dry_run so tests are isolated from ambient SEI_WRITE_MODE in .env
     # (tests that want live mode override via monkeypatch locally).
@@ -276,6 +281,7 @@ class TestCreateProcess:
         contract we guard here is that the old placeholder is gone.
         """
         from ufpr_automation.config import settings
+
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         with pytest.raises(Exception) as exc_info:
@@ -295,14 +301,13 @@ class TestAttachDocumentLiveMode:
         self, mock_page, tce_classification, tmp_path, monkeypatch
     ):
         from ufpr_automation.config import settings
+
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         fake_pdf = tmp_path / "doc.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4 fake")
         with pytest.raises(Exception) as exc_info:
-            await live_writer.attach_document(
-                "12345.000123/2026-01", fake_pdf, tce_classification
-            )
+            await live_writer.attach_document("12345.000123/2026-01", fake_pdf, tce_classification)
         assert not isinstance(exc_info.value, NotImplementedError)
 
 
@@ -322,14 +327,17 @@ class TestSaveDespachoDraftLiveMode:
         mocked Playwright page as originally intended.
         """
         from ufpr_automation.config import settings
+
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         stub_form = {"fields": {}}
-        with patch("ufpr_automation.graphrag.templates.get_registry") as gr, \
-             patch(
-                 "ufpr_automation.sei.writer_selectors.get_form",
-                 return_value=stub_form,
-             ):
+        with (
+            patch("ufpr_automation.graphrag.templates.get_registry") as gr,
+            patch(
+                "ufpr_automation.sei.writer_selectors.get_form",
+                return_value=stub_form,
+            ),
+        ):
             gr.return_value.get.return_value = "Despacho body: [NOME]"
             result = await live_writer.save_despacho_draft(
                 "12345.000123/2026-01",
@@ -352,11 +360,10 @@ class TestSaveDespachoDraftLiveMode:
 # (see SDD_SEI_SELECTOR_CAPTURE.md).
 # ============================================================================
 
+
 class TestSEIWriterDryRunEndToEnd:
     @pytest.mark.asyncio
-    async def test_full_estagios_chain_dryrun(
-        self, writer, tce_classification, tmp_path
-    ):
+    async def test_full_estagios_chain_dryrun(self, writer, tce_classification, tmp_path):
         # 1. create_process → synthetic id
         create_result = await writer.create_process(
             tipo_processo="Graduação/Ensino Técnico: Estágios não Obrigatórios",
@@ -371,9 +378,7 @@ class TestSEIWriterDryRunEndToEnd:
         # 2. attach_document → TCE PDF
         fake_tce = tmp_path / "tce.pdf"
         fake_tce.write_bytes(b"%PDF-1.4 fake-tce-content")
-        attach_result = await writer.attach_document(
-            processo_id, fake_tce, tce_classification
-        )
+        attach_result = await writer.attach_document(processo_id, fake_tce, tce_classification)
         assert attach_result.success is True
         assert attach_result.dry_run is True
         assert attach_result.processo_id == processo_id
@@ -384,8 +389,7 @@ class TestSEIWriterDryRunEndToEnd:
             tipo="tce_inicial",
             variables={"NOME_ALUNO": "ALANIS ROCHA", "GRR": "GRR20230091"},
             body_override=(
-                "Despacho: encaminha-se o TCE de [NOME_ALUNO] ([GRR]) "
-                "para análise da Coordenação."
+                "Despacho: encaminha-se o TCE de [NOME_ALUNO] ([GRR]) para análise da Coordenação."
             ),
         )
         assert draft_result.success is True
@@ -430,6 +434,7 @@ class TestSEIWriterDryRunEndToEnd:
 # cover the surgical helpers added by the Sprint 3 fix (template despacho
 # default loading) so regressions are caught without a live SEI.
 # ============================================================================
+
 
 class TestClearEditorBodyHelper:
     """Sprint 3 fix — save_despacho_draft clears the CKEditor body before
@@ -503,6 +508,7 @@ class TestAddToAcompanhamentoEspecial:
     @pytest.mark.asyncio
     async def test_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
         from ufpr_automation.config import settings
+
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
         with pytest.raises(NotImplementedError, match="acompanhamento_especial"):

@@ -41,9 +41,7 @@ class TestPensarAgentRun:
         result = await agent.run(semaphore)
 
         # Verified both methods were awaited in order.
-        client.classify_email_async.assert_awaited_once_with(
-            sample_email, rag_context="norma XYZ"
-        )
+        client.classify_email_async.assert_awaited_once_with(sample_email, rag_context="norma XYZ")
         client.self_refine_async.assert_awaited_once_with(
             sample_email, initial, rag_context="norma XYZ"
         )
@@ -109,10 +107,9 @@ class TestRunPensarConcurrently:
         fake_client.classify_email_async = AsyncMock(return_value=classification)
         fake_client.self_refine_async = AsyncMock(return_value=classification)
 
-        with patch(
-            "ufpr_automation.agents.pensar.LLMClient", return_value=fake_client
-        ), patch(
-            "ufpr_automation.agents.pensar._fetch_rag_contexts", return_value={}
+        with (
+            patch("ufpr_automation.agents.pensar.LLMClient", return_value=fake_client),
+            patch("ufpr_automation.agents.pensar._fetch_rag_contexts", return_value={}),
         ):
             ok_emails, results = await run_pensar_concurrently(emails)
 
@@ -140,10 +137,9 @@ class TestRunPensarConcurrently:
         fake_client.classify_email_async = AsyncMock(side_effect=_classify)
         fake_client.self_refine_async = AsyncMock(return_value=good)
 
-        with patch(
-            "ufpr_automation.agents.pensar.LLMClient", return_value=fake_client
-        ), patch(
-            "ufpr_automation.agents.pensar._fetch_rag_contexts", return_value={}
+        with (
+            patch("ufpr_automation.agents.pensar.LLMClient", return_value=fake_client),
+            patch("ufpr_automation.agents.pensar._fetch_rag_contexts", return_value={}),
         ):
             ok_emails, results = await run_pensar_concurrently(emails)
 

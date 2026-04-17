@@ -31,6 +31,7 @@ exists yet (e.g. before the grounder has run), any accessor raises
 :class:`SIGASelectorsError` with a clear "capture pending" message so
 callers can fall back to the legacy guess-based path.
 """
+
 from __future__ import annotations
 
 import os
@@ -80,11 +81,7 @@ _REQUIRED_TOP_LEVEL_KEYS = ("meta", "login", "screens")
 # procedures_data/siga_capture/<timestamp>/siga_selectors.yaml; this
 # symlink/copy convention mirrors sei_selectors — the concrete path is
 # overridable via SIGA_SELECTORS_PATH env var (handy for fixtures + tests).
-_DEFAULT_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "procedures_data"
-    / "siga_capture"
-)
+_DEFAULT_DIR = Path(__file__).resolve().parent.parent / "procedures_data" / "siga_capture"
 
 
 def _manifest_path() -> Path:
@@ -204,8 +201,11 @@ def _validate_no_forbidden_selectors(data: dict[str, Any], path: Path) -> None:
             # starts with #, ., text=, xpath=, input[.
             parent_key = loc.rsplit(".", 1)[-1] if "." in loc else loc
             is_selector_key = parent_key in {
-                "selector", "tab_selector", "submit_selector",
-                "result_indicator", "logged_in_indicator",
+                "selector",
+                "tab_selector",
+                "submit_selector",
+                "result_indicator",
+                "logged_in_indicator",
             } or parent_key.endswith("_selector")
             looks_like_selector = node.startswith(
                 ("#", ".", "text=", "xpath=", "input[", "button[", "a[")
@@ -223,13 +223,12 @@ def _validate_no_forbidden_selectors(data: dict[str, Any], path: Path) -> None:
 
 # Convenience accessors -----------------------------------------------------
 
+
 def get_screen(screen_name: str) -> dict[str, Any]:
     """Return the selector block for a named screen. Raises if unknown."""
     screens = get_selectors().get("screens", {})
     if screen_name not in screens:
-        raise SIGASelectorsError(
-            f"unknown screen '{screen_name}' — available: {sorted(screens)}"
-        )
+        raise SIGASelectorsError(f"unknown screen '{screen_name}' — available: {sorted(screens)}")
     return screens[screen_name]
 
 
@@ -238,8 +237,7 @@ def get_field(screen_name: str, field_name: str) -> dict[str, Any]:
     fields = get_screen(screen_name).get("fields", {})
     if field_name not in fields:
         raise SIGASelectorsError(
-            f"unknown field '{field_name}' on screen '{screen_name}' — "
-            f"available: {sorted(fields)}"
+            f"unknown field '{field_name}' on screen '{screen_name}' — available: {sorted(fields)}"
         )
     return fields[field_name]
 
@@ -248,9 +246,7 @@ def get_navigation(name: str) -> dict[str, Any]:
     """Return a named navigation path (menu clicks / URL hint)."""
     nav = get_selectors().get("navigation", {})
     if name not in nav:
-        raise SIGASelectorsError(
-            f"unknown navigation '{name}' — available: {sorted(nav)}"
-        )
+        raise SIGASelectorsError(f"unknown navigation '{name}' — available: {sorted(nav)}")
     return nav[name]
 
 

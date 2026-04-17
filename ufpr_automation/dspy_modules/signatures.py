@@ -45,9 +45,7 @@ class EmailClassifier(dspy.Signature):
     sugestao_resposta: str = dspy.OutputField(
         desc="Resposta formal redigida em nome do setor. Vazio se nao for necessario responder"
     )
-    confianca: float = dspy.OutputField(
-        desc="Confianca na classificacao e resposta (0.0 a 1.0)"
-    )
+    confianca: float = dspy.OutputField(desc="Confianca na classificacao e resposta (0.0 a 1.0)")
 
 
 class DraftCritic(dspy.Signature):

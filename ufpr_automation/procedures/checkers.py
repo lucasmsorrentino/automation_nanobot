@@ -295,8 +295,7 @@ def siga_curriculo_integralizado(ctx: CheckContext) -> CheckResult:
             check_id="siga_curriculo_integralizado",
             status="hard_block",
             reason=(
-                "Currículo já integralizado — estágio não-obrigatório "
-                "exige aluno ainda em curso."
+                "Currículo já integralizado — estágio não-obrigatório exige aluno ainda em curso."
             ),
         )
     return CheckResult(check_id="siga_curriculo_integralizado", status="pass")
@@ -605,9 +604,7 @@ def duracao_total_ate_24_meses(ctx: CheckContext) -> CheckResult:
     (proposed end date do aditivo, das vars extraídas).
     """
     tce_inicio_raw = (ctx.sei_context or {}).get("tce_data_inicio")
-    termino_novo_raw = ctx.vars.get("data_termino_novo") or ctx.vars.get(
-        "data_fim"
-    )
+    termino_novo_raw = ctx.vars.get("data_termino_novo") or ctx.vars.get("data_fim")
     if not tce_inicio_raw or not termino_novo_raw:
         return CheckResult(
             check_id="duracao_total_ate_24_meses",
@@ -623,10 +620,7 @@ def duracao_total_ate_24_meses(ctx: CheckContext) -> CheckResult:
         return CheckResult(
             check_id="duracao_total_ate_24_meses",
             status="soft_block",
-            reason=(
-                f"Datas ilegíveis: inicio={tce_inicio_raw!r} "
-                f"termino={termino_novo_raw!r}"
-            ),
+            reason=(f"Datas ilegíveis: inicio={tce_inicio_raw!r} termino={termino_novo_raw!r}"),
         )
     # 24 months ≈ 730 days; use calendar month arithmetic for precision.
     max_termino = date(inicio.year + 2, inicio.month, min(inicio.day, 28))
@@ -688,9 +682,7 @@ def relatorio_final_assinado_orientador(ctx: CheckContext) -> CheckResult:
     for m in re.finditer(r"orientador", relatorio_text):
         window = relatorio_text[max(0, m.start() - 400) : m.end() + 400]
         if any(mk in window for mk in signature_markers):
-            return CheckResult(
-                check_id="relatorio_final_assinado_orientador", status="pass"
-            )
+            return CheckResult(check_id="relatorio_final_assinado_orientador", status="pass")
     return CheckResult(
         check_id="relatorio_final_assinado_orientador",
         status="hard_block",

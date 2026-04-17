@@ -14,6 +14,7 @@ from ufpr_automation.core.models import EmailClassification, EmailData
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_email(sender: str = "prof@ufpr.br", subject: str = "Teste") -> EmailData:
     email = EmailData(sender=sender, subject=subject, body="corpo do email")
     email.compute_stable_id()
@@ -390,5 +391,7 @@ class TestAgirGmail:
             agir_gmail(state)
 
         call_kwargs = mock_gmail.save_draft.call_args
-        assert call_kwargs[1]["to_addr"] == "prof.silva@ufpr.br" or \
-               call_kwargs[0][0] == "prof.silva@ufpr.br"
+        assert (
+            call_kwargs[1]["to_addr"] == "prof.silva@ufpr.br"
+            or call_kwargs[0][0] == "prof.silva@ufpr.br"
+        )

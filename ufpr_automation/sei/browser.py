@@ -45,16 +45,12 @@ async def create_browser_context(
     headless: bool = True,
 ) -> BrowserContext:
     """Create a browser context with optional saved session state."""
-    return await _session_browser.create_browser_context(
-        browser, SEI_SESSION_FILE, log_label="SEI"
-    )
+    return await _session_browser.create_browser_context(browser, SEI_SESSION_FILE, log_label="SEI")
 
 
 async def save_session_state(context: BrowserContext) -> None:
     """Save browser session state (cookies + storage) to disk."""
-    await _session_browser.save_session_state(
-        context, SEI_SESSION_FILE, log_label="SEI"
-    )
+    await _session_browser.save_session_state(context, SEI_SESSION_FILE, log_label="SEI")
 
 
 async def is_logged_in(page: Page) -> bool:
@@ -100,14 +96,14 @@ async def auto_login(page: Page) -> bool:
         # (1) hidden <input type="password" name="pwdSenha"> decoy and
         # (2) visible <input type="text" id="pwdSenha"> (real field).
         # Selecting by id uniquely hits the visible one.
-        password_input = page.locator('input#pwdSenha')
+        password_input = page.locator("input#pwdSenha")
         await password_input.first.wait_for(state="visible", timeout=10000)
         await password_input.first.fill(SEI_PASSWORD)
 
         # Click login button — id is sbmAcessar on sei.ufpr.br.
         login_button = page.locator(
-            'button#sbmAcessar, input#sbmAcessar, '
-            'button#sbmLogin, input#sbmLogin, '
+            "button#sbmAcessar, input#sbmAcessar, "
+            "button#sbmLogin, input#sbmLogin, "
             'button[type="submit"], input[type="submit"]'
         )
         await login_button.first.click()

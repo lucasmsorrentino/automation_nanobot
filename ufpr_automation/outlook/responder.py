@@ -190,11 +190,17 @@ async def dismiss_owa_dialog(page: Page) -> None:
 
     # Click the best button inside the dialog
     button_texts = [
-        "Salvar", "Save",       # keep the draft
-        "Sim", "Yes",
-        "Não salvar", "Don't save",
-        "Descartar", "Discard",
-        "OK", "Fechar", "Close",
+        "Salvar",
+        "Save",  # keep the draft
+        "Sim",
+        "Yes",
+        "Não salvar",
+        "Don't save",
+        "Descartar",
+        "Discard",
+        "OK",
+        "Fechar",
+        "Close",
     ]
     for text in button_texts:
         try:

@@ -20,6 +20,7 @@ from ufpr_automation.agent_sdk.rag_auditor import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FakeSearchResult:
     text: str
@@ -67,6 +68,7 @@ class FakeRetriever:
 # load_ground_truth
 # ---------------------------------------------------------------------------
 
+
 class TestLoadGroundTruth:
     def test_loads_valid_yaml(self, tmp_path):
         gt = tmp_path / "gt.yaml"
@@ -96,11 +98,14 @@ class TestLoadGroundTruth:
 # run_query
 # ---------------------------------------------------------------------------
 
+
 class TestRunQuery:
     def test_query_hit_at_rank_0(self):
-        retriever = FakeRetriever({
-            "regulamento": [("Regulamento_Estagio.pdf", 0.85), ("other.pdf", 0.60)],
-        })
+        retriever = FakeRetriever(
+            {
+                "regulamento": [("Regulamento_Estagio.pdf", 0.85), ("other.pdf", 0.60)],
+            }
+        )
         spec = {
             "id": "q1",
             "query": "regulamento de estágio",
@@ -114,9 +119,11 @@ class TestRunQuery:
         assert result.top_score == 0.85
 
     def test_query_miss(self):
-        retriever = FakeRetriever({
-            "regulamento": [("OtherDoc.pdf", 0.70)],
-        })
+        retriever = FakeRetriever(
+            {
+                "regulamento": [("OtherDoc.pdf", 0.70)],
+            }
+        )
         spec = {
             "id": "q2",
             "query": "regulamento de estágio",
@@ -131,8 +138,11 @@ class TestRunQuery:
     def test_query_measures_latency(self):
         retriever = FakeRetriever({"q": [("doc.pdf", 0.5)]})
         spec = {
-            "id": "q3", "query": "q", "expected_doc_substring": "doc",
-            "expected_in_top_k": 1, "subset": "",
+            "id": "q3",
+            "query": "q",
+            "expected_doc_substring": "doc",
+            "expected_in_top_k": 1,
+            "subset": "",
         }
         result = run_query(spec, retriever)
         assert result.latency_ms >= 0
@@ -140,8 +150,11 @@ class TestRunQuery:
     def test_empty_results_returns_miss(self):
         retriever = FakeRetriever({})
         spec = {
-            "id": "q4", "query": "nothing", "expected_doc_substring": "x",
-            "expected_in_top_k": 3, "subset": "",
+            "id": "q4",
+            "query": "nothing",
+            "expected_doc_substring": "x",
+            "expected_in_top_k": 3,
+            "subset": "",
         }
         result = run_query(spec, retriever)
         assert result.is_hit is False
@@ -152,11 +165,16 @@ class TestRunQuery:
 # aggregate_metrics
 # ---------------------------------------------------------------------------
 
+
 class TestAggregateMetrics:
     def test_per_subset_aggregation(self):
         results = [
-            QueryResult("q1", "a", "estagio", "x", 3, found_at_rank=0, top_score=0.9, latency_ms=100),
-            QueryResult("q2", "b", "estagio", "y", 3, found_at_rank=-1, top_score=0.5, latency_ms=120),
+            QueryResult(
+                "q1", "a", "estagio", "x", 3, found_at_rank=0, top_score=0.9, latency_ms=100
+            ),
+            QueryResult(
+                "q2", "b", "estagio", "y", 3, found_at_rank=-1, top_score=0.5, latency_ms=120
+            ),
             QueryResult("q3", "c", "cepe", "z", 3, found_at_rank=1, top_score=0.8, latency_ms=200),
         ]
         metrics = aggregate_metrics(results)
@@ -174,12 +192,16 @@ class TestAggregateMetrics:
 # compare_to_baseline
 # ---------------------------------------------------------------------------
 
+
 class TestCompareToBaseline:
     def _make_report(self, recall=1.0, score=0.85, latency=100.0):
         return AuditReport(
-            run_id="r1", timestamp="2026-04-12T00:00:00Z",
+            run_id="r1",
+            timestamp="2026-04-12T00:00:00Z",
             total_queries=5,
-            overall_recall=recall, avg_score=score, avg_latency_ms=latency,
+            overall_recall=recall,
+            avg_score=score,
+            avg_latency_ms=latency,
             per_subset={},
         )
 
@@ -210,11 +232,16 @@ class TestCompareToBaseline:
 # format_report
 # ---------------------------------------------------------------------------
 
+
 class TestFormatReport:
     def test_report_contains_key_sections(self):
         report = AuditReport(
-            run_id="r1", timestamp="2026-04-12T00:00:00Z",
-            total_queries=2, overall_recall=0.5, avg_score=0.7, avg_latency_ms=150,
+            run_id="r1",
+            timestamp="2026-04-12T00:00:00Z",
+            total_queries=2,
+            overall_recall=0.5,
+            avg_score=0.7,
+            avg_latency_ms=150,
             per_query=[
                 QueryResult("q1", "test", "estagio", "doc", 3, found_at_rank=0, top_score=0.9),
             ],
@@ -233,6 +260,7 @@ class TestFormatReport:
 # run_audit (integration)
 # ---------------------------------------------------------------------------
 
+
 class TestRunAudit:
     def test_end_to_end_no_baseline(self, tmp_path):
         gt = tmp_path / "gt.yaml"
@@ -246,9 +274,11 @@ class TestRunAudit:
             encoding="utf-8",
         )
 
-        retriever = FakeRetriever({
-            "regulamento": [("Regulamento.pdf", 0.88)],
-        })
+        retriever = FakeRetriever(
+            {
+                "regulamento": [("Regulamento.pdf", 0.88)],
+            }
+        )
 
         report = run_audit(
             ground_truth_path=gt,
@@ -280,7 +310,9 @@ class TestRunAudit:
         retriever = FakeRetriever({})  # empty => recall 0
 
         baseline_path = tmp_path / "baseline.json"
-        baseline_path.write_text(json.dumps({"avg_score": 0.9, "avg_latency_ms": 100}), encoding="utf-8")
+        baseline_path.write_text(
+            json.dumps({"avg_score": 0.9, "avg_latency_ms": 100}), encoding="utf-8"
+        )
         original_baseline = baseline_path.read_text(encoding="utf-8")
 
         report = run_audit(

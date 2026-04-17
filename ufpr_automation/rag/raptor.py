@@ -60,6 +60,7 @@ def cluster_embeddings(
     # Reduce dimensionality if needed for GMM stability
     if embeddings.shape[1] > 50:
         from sklearn.decomposition import PCA
+
         n_components = min(50, n_samples - 1)
         pca = PCA(n_components=n_components, random_state=random_state)
         reduced = pca.fit_transform(embeddings)
@@ -243,29 +244,38 @@ def build_raptor_tree(
                 set(m["conselho"] for m in cluster_meta),
                 key=lambda x: sum(1 for m in cluster_meta if m["conselho"] == x),
             )
-            summary_metadata.append({
-                "conselho": most_common_conselho,
-                "tipo": "raptor_summary",
-                "arquivo": f"raptor_L{level}_C{ci}",
-                "caminho": f"raptor/level_{level}/cluster_{ci}",
-            })
-            logger.info("  Cluster %d: %d chunks -> summary (%d chars)", ci, len(cluster_indices), len(summary))
+            summary_metadata.append(
+                {
+                    "conselho": most_common_conselho,
+                    "tipo": "raptor_summary",
+                    "arquivo": f"raptor_L{level}_C{ci}",
+                    "caminho": f"raptor/level_{level}/cluster_{ci}",
+                }
+            )
+            logger.info(
+                "  Cluster %d: %d chunks -> summary (%d chars)",
+                ci,
+                len(cluster_indices),
+                len(summary),
+            )
 
         # Embed summaries
         summary_vectors = embed_texts(summaries)
 
         # Build records
         for text, vec, meta in zip(summaries, summary_vectors, summary_metadata):
-            all_records.append({
-                "text": text,
-                "vector": vec,
-                "conselho": meta["conselho"],
-                "tipo": meta["tipo"],
-                "arquivo": meta["arquivo"],
-                "caminho": meta["caminho"],
-                "chunk_idx": 0,
-                "raptor_level": level,
-            })
+            all_records.append(
+                {
+                    "text": text,
+                    "vector": vec,
+                    "conselho": meta["conselho"],
+                    "tipo": meta["tipo"],
+                    "arquivo": meta["arquivo"],
+                    "caminho": meta["caminho"],
+                    "chunk_idx": 0,
+                    "raptor_level": level,
+                }
+            )
 
         level_stats["summaries"] = len(summaries)
         stats["levels"].append(level_stats)
@@ -278,7 +288,9 @@ def build_raptor_tree(
 
     # Store RAPTOR nodes in a separate table
     if all_records and not dry_run:
-        logger.info("RAPTOR: inserting %d summary nodes into '%s'...", len(all_records), RAPTOR_TABLE)
+        logger.info(
+            "RAPTOR: inserting %d summary nodes into '%s'...", len(all_records), RAPTOR_TABLE
+        )
 
         # Add raptor_level to base table records (level 0) for collapsed tree search
         if RAPTOR_TABLE in db.list_tables().tables:
@@ -350,13 +362,15 @@ class RaptorRetriever:
                 search = search.where(f"conselho = '{conselho}'")
             tbl = search.to_arrow()
             for i in range(tbl.num_rows):
-                results.append({
-                    "text": tbl.column("text")[i].as_py(),
-                    "score": float(tbl.column("_distance")[i].as_py()),
-                    "level": 0,
-                    "conselho": tbl.column("conselho")[i].as_py(),
-                    "caminho": tbl.column("caminho")[i].as_py(),
-                })
+                results.append(
+                    {
+                        "text": tbl.column("text")[i].as_py(),
+                        "score": float(tbl.column("_distance")[i].as_py()),
+                        "level": 0,
+                        "conselho": tbl.column("conselho")[i].as_py(),
+                        "caminho": tbl.column("caminho")[i].as_py(),
+                    }
+                )
 
         # Search RAPTOR table (summary nodes)
         if RAPTOR_TABLE in self._db.list_tables().tables:
@@ -366,13 +380,15 @@ class RaptorRetriever:
                 search = search.where(f"conselho = '{conselho}'")
             tbl = search.to_arrow()
             for i in range(tbl.num_rows):
-                results.append({
-                    "text": tbl.column("text")[i].as_py(),
-                    "score": float(tbl.column("_distance")[i].as_py()),
-                    "level": int(tbl.column("raptor_level")[i].as_py()),
-                    "conselho": tbl.column("conselho")[i].as_py(),
-                    "caminho": tbl.column("caminho")[i].as_py(),
-                })
+                results.append(
+                    {
+                        "text": tbl.column("text")[i].as_py(),
+                        "score": float(tbl.column("_distance")[i].as_py()),
+                        "level": int(tbl.column("raptor_level")[i].as_py()),
+                        "conselho": tbl.column("conselho")[i].as_py(),
+                        "caminho": tbl.column("caminho")[i].as_py(),
+                    }
+                )
 
         # Sort by score (lower distance = more relevant)
         results.sort(key=lambda r: r["score"])

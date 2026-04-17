@@ -494,6 +494,7 @@ class TestRunChecks:
 
     def test_checker_exception_becomes_hard_block(self):
         """A raising checker must degrade to hard_block, not crash the pipeline."""
+
         @register("__test_boom")
         def _boom(ctx):
             raise RuntimeError("simulated bug")
@@ -543,20 +544,32 @@ class TestSeiProcessoTceExistente:
     def test_pass_when_vigente_tce_process_exists(self):
         r = _invoke(
             "sei_processo_tce_existente",
-            _make_ctx(sei={"processos_vigentes": [
-                {"numero": "23075.000001/2026-00",
-                 "tipo": "Graduação/Ensino Técnico: Estágios não Obrigatórios"},
-            ]}),
+            _make_ctx(
+                sei={
+                    "processos_vigentes": [
+                        {
+                            "numero": "23075.000001/2026-00",
+                            "tipo": "Graduação/Ensino Técnico: Estágios não Obrigatórios",
+                        },
+                    ]
+                }
+            ),
         )
         assert r.status == "pass"
 
     def test_hard_block_when_no_matching_tce_process(self):
         r = _invoke(
             "sei_processo_tce_existente",
-            _make_ctx(sei={"processos_vigentes": [
-                {"numero": "23075.000002/2026-00",
-                 "tipo": "Graduação: Aproveitamento de Disciplinas"},
-            ]}),
+            _make_ctx(
+                sei={
+                    "processos_vigentes": [
+                        {
+                            "numero": "23075.000002/2026-00",
+                            "tipo": "Graduação: Aproveitamento de Disciplinas",
+                        },
+                    ]
+                }
+            ),
         )
         assert r.status == "hard_block"
         assert "TCE original" in r.reason
@@ -619,9 +632,9 @@ class TestDuracaoTotalAte24Meses:
 class TestRelatorioFinalAssinadoOrientador:
     def _email_with_attachment(self, filename: str, text: str) -> CheckContext:
         from ufpr_automation.core.models import AttachmentData
+
         att = AttachmentData(filename=filename, extracted_text=text)
-        email = EmailData(sender="a@ufpr.br", subject="fim", body="",
-                          attachments=[att])
+        email = EmailData(sender="a@ufpr.br", subject="fim", body="", attachments=[att])
         return CheckContext(
             email=email,
             intent=Intent(intent_name="t", categoria="Estágios", keywords=["t"]),
@@ -636,8 +649,7 @@ class TestRelatorioFinalAssinadoOrientador:
     def test_pass_when_signature_marker_near_orientador(self):
         ctx = self._email_with_attachment(
             "relatorio_final.pdf",
-            "... conclusões ... Prof. Silva, orientador. "
-            "Assinado eletronicamente em 10/04/2026.",
+            "... conclusões ... Prof. Silva, orientador. Assinado eletronicamente em 10/04/2026.",
         )
         r = _invoke("relatorio_final_assinado_orientador", ctx)
         assert r.status == "pass"

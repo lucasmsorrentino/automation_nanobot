@@ -30,10 +30,10 @@ from ufpr_automation.utils.logging import logger
 class TaskType(enum.Enum):
     """LLM task types for model routing."""
 
-    CLASSIFY = "classify"    # Category + confidence (simpler, high volume)
-    DRAFT = "draft"          # Response generation (complex, quality-critical)
-    CRITIQUE = "critique"    # Self-Refine critique step
-    REFINE = "refine"        # Self-Refine refinement step
+    CLASSIFY = "classify"  # Category + confidence (simpler, high volume)
+    DRAFT = "draft"  # Response generation (complex, quality-critical)
+    CRITIQUE = "critique"  # Self-Refine critique step
+    REFINE = "refine"  # Self-Refine refinement step
 
 
 # Task → model mapping: which setting to use for each task type
@@ -137,7 +137,10 @@ async def cascaded_completion(
             try:
                 logger.debug(
                     "LLM cascade: %s → model=%s (attempt %d/%d)",
-                    task.value, model_id, attempt + 1, retries,
+                    task.value,
+                    model_id,
+                    attempt + 1,
+                    retries,
                 )
                 response = await litellm.acompletion(
                     model=model_id,
@@ -149,7 +152,8 @@ async def cascaded_completion(
                 if i > 0:
                     logger.info(
                         "LLM cascade: %s succeeded on fallback model %s",
-                        task.value, model_id,
+                        task.value,
+                        model_id,
                     )
                 return response
 
@@ -158,7 +162,9 @@ async def cascaded_completion(
                 is_retriable = _is_retriable_error(e)
                 logger.warning(
                     "LLM cascade: %s model=%s attempt %d failed (%s): %s",
-                    task.value, model_id, attempt + 1,
+                    task.value,
+                    model_id,
+                    attempt + 1,
                     "retriable" if is_retriable else "non-retriable",
                     str(e)[:200],
                 )
@@ -196,7 +202,8 @@ def cascaded_completion_sync(
                 if i > 0:
                     logger.info(
                         "LLM cascade: %s succeeded on fallback model %s",
-                        task.value, model_id,
+                        task.value,
+                        model_id,
                     )
                 return response
 

@@ -46,6 +46,7 @@ class TestNeo4jClient:
     def _make_client(self):
         """Create a Neo4jClient with a mocked driver injected."""
         import sys
+
         # Ensure neo4j module is available (mock it if not installed)
         mock_neo4j = MagicMock()
         sys.modules.setdefault("neo4j", mock_neo4j)
@@ -165,12 +166,26 @@ class TestGraphRetriever:
     def test_get_workflow_context(self):
         retriever, mock_client = self._make_retriever()
         mock_client.run_query.return_value = [
-            {"fluxo": "TCE Não Obrigatório", "desc": "Solicitação inicial",
-             "prazo": "10 dias úteis", "bloqueio": None,
-             "ordem": 1, "etapa": "Aluno preenche TCE", "papel": "Estagiário", "sistema": None},
-            {"fluxo": "TCE Não Obrigatório", "desc": "Solicitação inicial",
-             "prazo": "10 dias úteis", "bloqueio": None,
-             "ordem": 2, "etapa": "Secretaria abre processo SEI", "papel": "Secretário", "sistema": "SEI"},
+            {
+                "fluxo": "TCE Não Obrigatório",
+                "desc": "Solicitação inicial",
+                "prazo": "10 dias úteis",
+                "bloqueio": None,
+                "ordem": 1,
+                "etapa": "Aluno preenche TCE",
+                "papel": "Estagiário",
+                "sistema": None,
+            },
+            {
+                "fluxo": "TCE Não Obrigatório",
+                "desc": "Solicitação inicial",
+                "prazo": "10 dias úteis",
+                "bloqueio": None,
+                "ordem": 2,
+                "etapa": "Secretaria abre processo SEI",
+                "papel": "Secretário",
+                "sistema": "SEI",
+            },
         ]
         ctx = retriever._get_workflow_context("TCE Não Obrigatório")
         assert "Fluxo: TCE Não Obrigatório" in ctx
@@ -196,10 +211,12 @@ class TestGraphRetriever:
     def test_get_siga_hints_student_related(self):
         retriever, mock_client = self._make_retriever()
         mock_client.run_query.return_value = [
-            {"aba": "informacoes", "assunto": "Status de matrícula",
-             "verificar": "Status atual"},
-            {"aba": "estagio", "assunto": "Estágio",
-             "verificar": "Estágios vinculados ao discente"},
+            {"aba": "informacoes", "assunto": "Status de matrícula", "verificar": "Status atual"},
+            {
+                "aba": "estagio",
+                "assunto": "Estágio",
+                "verificar": "Estágios vinculados ao discente",
+            },
         ]
         ctx = retriever._get_siga_hints("Matrícula do aluno", "aluno GRR20210001")
         assert "SIGA" in ctx
@@ -213,8 +230,13 @@ class TestGraphRetriever:
     def test_get_org_context_estagio(self):
         retriever, mock_client = self._make_retriever()
         mock_client.run_query.return_value = [
-            {"nome": "COAPPE", "email": "estagio@ufpr.br", "tel": "(41) 3310-2706",
-             "desc": "Estágios", "parent_sigla": "PROGRAP"},
+            {
+                "nome": "COAPPE",
+                "email": "estagio@ufpr.br",
+                "tel": "(41) 3310-2706",
+                "desc": "Estágios",
+                "parent_sigla": "PROGRAP",
+            },
         ]
         ctx = retriever._get_org_context("Estágio", "tce do estágio")
         assert "COAPPE" in ctx
@@ -234,9 +256,16 @@ class TestGraphRetriever:
             call_count[0] += 1
             if "TEM_ETAPA" in query:
                 return [
-                    {"fluxo": "TCE Não Obrigatório", "desc": "Teste",
-                     "prazo": "", "bloqueio": None,
-                     "ordem": 1, "etapa": "Etapa 1", "papel": "Secretário", "sistema": None},
+                    {
+                        "fluxo": "TCE Não Obrigatório",
+                        "desc": "Teste",
+                        "prazo": "",
+                        "bloqueio": None,
+                        "ordem": 1,
+                        "etapa": "Etapa 1",
+                        "papel": "Secretário",
+                        "sistema": None,
+                    },
                 ]
             if "USADO_EM" in query:
                 return [{"nome": "Email: teste", "tipo": "email", "desc": "Teste"}]
@@ -273,8 +302,13 @@ class TestGraphRetriever:
     def test_search_nodes(self):
         retriever, mock_client = self._make_retriever()
         mock_client.run_query.return_value = [
-            {"tipo": "Norma", "nome": "Lei do Estágio", "id": "Lei 11.788/2008",
-             "descricao": "Lei federal", "score": 2.5},
+            {
+                "tipo": "Norma",
+                "nome": "Lei do Estágio",
+                "id": "Lei 11.788/2008",
+                "descricao": "Lei federal",
+                "score": 2.5,
+            },
         ]
         results = retriever.search_nodes("estágio")
         assert len(results) == 1

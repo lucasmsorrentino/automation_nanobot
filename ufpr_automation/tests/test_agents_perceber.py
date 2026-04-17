@@ -38,13 +38,16 @@ class TestPerceberAgentRun:
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_unread(self, mock_page):
         """If scrape_inbox returns nothing (or only read emails), run() returns []."""
-        with patch(
-            "ufpr_automation.agents.perceber.scrape_inbox",
-            new=AsyncMock(return_value=[]),
-        ), patch(
-            "ufpr_automation.agents.perceber.extract_email_body",
-            new=AsyncMock(return_value=""),
-        ) as mock_extract:
+        with (
+            patch(
+                "ufpr_automation.agents.perceber.scrape_inbox",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "ufpr_automation.agents.perceber.extract_email_body",
+                new=AsyncMock(return_value=""),
+            ) as mock_extract,
+        ):
             agent = PerceberAgent(mock_page)
             result = await agent.run()
 
@@ -55,13 +58,16 @@ class TestPerceberAgentRun:
     @pytest.mark.asyncio
     async def test_filters_read_emails(self, mock_page, canned_emails):
         """Only unread emails should be returned (and have bodies extracted)."""
-        with patch(
-            "ufpr_automation.agents.perceber.scrape_inbox",
-            new=AsyncMock(return_value=canned_emails),
-        ), patch(
-            "ufpr_automation.agents.perceber.extract_email_body",
-            new=AsyncMock(return_value="Corpo extraido"),
-        ) as mock_extract:
+        with (
+            patch(
+                "ufpr_automation.agents.perceber.scrape_inbox",
+                new=AsyncMock(return_value=canned_emails),
+            ),
+            patch(
+                "ufpr_automation.agents.perceber.extract_email_body",
+                new=AsyncMock(return_value="Corpo extraido"),
+            ) as mock_extract,
+        ):
             agent = PerceberAgent(mock_page)
             result = await agent.run()
 
@@ -75,12 +81,15 @@ class TestPerceberAgentRun:
     async def test_populates_body_and_stable_id(self, mock_page, canned_emails):
         """Each returned email should have body and stable_id populated."""
         extracted_body = "Corpo completo do e-mail do aluno."
-        with patch(
-            "ufpr_automation.agents.perceber.scrape_inbox",
-            new=AsyncMock(return_value=canned_emails),
-        ), patch(
-            "ufpr_automation.agents.perceber.extract_email_body",
-            new=AsyncMock(return_value=extracted_body),
+        with (
+            patch(
+                "ufpr_automation.agents.perceber.scrape_inbox",
+                new=AsyncMock(return_value=canned_emails),
+            ),
+            patch(
+                "ufpr_automation.agents.perceber.extract_email_body",
+                new=AsyncMock(return_value=extracted_body),
+            ),
         ):
             agent = PerceberAgent(mock_page)
             result = await agent.run()
@@ -93,12 +102,15 @@ class TestPerceberAgentRun:
     @pytest.mark.asyncio
     async def test_passes_page_to_scrape_inbox(self, mock_page):
         """The PerceberAgent should forward its page to scrape_inbox."""
-        with patch(
-            "ufpr_automation.agents.perceber.scrape_inbox",
-            new=AsyncMock(return_value=[]),
-        ) as mock_scrape, patch(
-            "ufpr_automation.agents.perceber.extract_email_body",
-            new=AsyncMock(return_value=""),
+        with (
+            patch(
+                "ufpr_automation.agents.perceber.scrape_inbox",
+                new=AsyncMock(return_value=[]),
+            ) as mock_scrape,
+            patch(
+                "ufpr_automation.agents.perceber.extract_email_body",
+                new=AsyncMock(return_value=""),
+            ),
         ):
             agent = PerceberAgent(mock_page)
             await agent.run()

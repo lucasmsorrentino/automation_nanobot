@@ -56,8 +56,8 @@ class EmailClassification(BaseModel):
         ge=0.0,
         le=1.0,
         description="Nível de confiança na classificação e resposta (0.0 = baixa, 1.0 = alta). "
-                    "Considere: clareza da demanda, certeza da regulamentação aplicável, "
-                    "e adequação da resposta sugerida.",
+        "Considere: clareza da demanda, certeza da regulamentação aplicável, "
+        "e adequação da resposta sugerida.",
     )
 
 
@@ -108,8 +108,8 @@ class EmailData:
     stable_id: str = ""
     classification: Optional[EmailClassification] = None
     # Gmail-specific fields (populated when using Gmail channel)
-    gmail_msg_id: str = ""         # IMAP UID for mark_read / fetch
-    gmail_message_id: str = ""     # RFC Message-ID header for threading
+    gmail_msg_id: str = ""  # IMAP UID for mark_read / fetch
+    gmail_message_id: str = ""  # RFC Message-ID header for threading
     # Attachments
     attachments: list[AttachmentData] = field(default_factory=list)
     has_attachments: bool = False
@@ -140,7 +140,9 @@ class EmailData:
             "is_unread": self.is_unread,
             "timestamp": self.timestamp,
             "stable_id": self.stable_id,
-            "classification": self.classification.model_dump() if self.classification is not None else None,
+            "classification": self.classification.model_dump()
+            if self.classification is not None
+            else None,
             "has_attachments": self.has_attachments,
             "attachments": [
                 {
@@ -152,5 +154,3 @@ class EmailData:
                 for a in self.attachments
             ],
         }
-
-

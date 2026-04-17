@@ -20,6 +20,7 @@ introduction of forbidden buttons via locator strings.
 Adding ANY write capability beyond attach/draft requires explicit code
 review by the project owner.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -312,9 +313,7 @@ class SEIWriter:
             href = None
             for frame in [page.main_frame, *page.frames]:
                 try:
-                    a = frame.locator(
-                        'xpath=//a[.//img[@title="Incluir Documento"]]'
-                    ).first
+                    a = frame.locator('xpath=//a[.//img[@title="Incluir Documento"]]').first
                     if await a.count() > 0:
                         href = await a.get_attribute("href")
                         break
@@ -334,9 +333,7 @@ class SEIWriter:
             else:
                 await vf.goto(absolute_url, wait_until="networkidle")
                 # Refresh frame handle after navigation.
-                vf = next(
-                    (f for f in page.frames if f.name == "ifrVisualizacao"), None
-                )
+                vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
 
             target = vf or page.main_frame
 
@@ -394,9 +391,7 @@ class SEIWriter:
 
             # 3. Texto Inicial = Nenhum.
             try:
-                await target.locator(
-                    form["fields"]["texto_inicial_nenhum"]["label"]
-                ).click()
+                await target.locator(form["fields"]["texto_inicial_nenhum"]["label"]).click()
             except Exception:
                 pass
 
@@ -406,26 +401,20 @@ class SEIWriter:
                 f"{classification.sei_classificacao or ''}"
             ).strip(" -")
             try:
-                await target.locator(
-                    form["fields"]["nome_na_arvore"]["selector"]
-                ).fill(nome_arvore)
+                await target.locator(form["fields"]["nome_na_arvore"]["selector"]).fill(nome_arvore)
             except Exception as e:
                 logger.debug("nome_arvore fill soft-failed: %s", e)
 
             # 5. Formato = Nato-digital (default for PDFs).
             try:
-                await target.locator(
-                    form["fields"]["formato"]["labels"]["nato_digital"]
-                ).click()
+                await target.locator(form["fields"]["formato"]["labels"]["nato_digital"]).click()
             except Exception:
                 pass
 
             # 6. Nível de Acesso.
             nivel_key = "restrito" if classification.sigiloso else "publico"
             try:
-                await target.locator(
-                    form["fields"]["nivel_acesso"]["labels"][nivel_key]
-                ).click()
+                await target.locator(form["fields"]["nivel_acesso"]["labels"][nivel_key]).click()
                 await page.wait_for_timeout(200)
             except Exception as e:
                 logger.warning("nivel_acesso click failed: %s", e)
@@ -449,9 +438,7 @@ class SEIWriter:
                     date_str = f"{d}/{m}/{y}"
                 except Exception:
                     pass
-            date_loc = target.locator(
-                form["fields"]["data_documento"]["selector"]
-            ).first
+            date_loc = target.locator(form["fields"]["data_documento"]["selector"]).first
             await date_loc.click()
             await date_loc.fill("")
             await date_loc.press_sequentially(date_str, delay=30)
@@ -472,9 +459,7 @@ class SEIWriter:
             # the progress frame reports idle or the Salvar button is enabled.
             await page.wait_for_timeout(3000)
 
-            artifacts.append(
-                await self._screenshot(f"attach_pre_save_{processo_id}_{sha}")
-            )
+            artifacts.append(await self._screenshot(f"attach_pre_save_{processo_id}_{sha}"))
 
             # 9. Click Salvar. SEI renders the button twice (top + bottom
             # toolbars of the form); use .first to pick the top one.
@@ -484,9 +469,7 @@ class SEIWriter:
             await page.wait_for_load_state("networkidle", timeout=30000)
 
             if dialog_texts:
-                artifacts.append(
-                    await self._screenshot(f"attach_dialog_{processo_id}")
-                )
+                artifacts.append(await self._screenshot(f"attach_dialog_{processo_id}"))
                 return AttachResult(
                     success=False,
                     processo_id=processo_id,
@@ -497,9 +480,7 @@ class SEIWriter:
                     error=f"SEI alerts blocked save: {dialog_texts}",
                 )
 
-            artifacts.append(
-                await self._screenshot(f"attach_post_save_{processo_id}_{sha}")
-            )
+            artifacts.append(await self._screenshot(f"attach_post_save_{processo_id}_{sha}"))
 
             self._audit(
                 "attach_document",
@@ -643,21 +624,15 @@ class SEIWriter:
             await page.wait_for_load_state("networkidle", timeout=15000)
 
             # Fill the form.
-            await page.locator(form["fields"]["especificacao"]["selector"]).fill(
-                especificacao
-            )
+            await page.locator(form["fields"]["especificacao"]["selector"]).fill(especificacao)
             if interessado:
                 try:
-                    await page.locator(
-                        form["fields"]["interessados"]["selector"]
-                    ).fill(interessado)
+                    await page.locator(form["fields"]["interessados"]["selector"]).fill(interessado)
                 except Exception as e:
                     logger.debug("interessado fill soft-failed: %s", e)
             if motivo:
                 try:
-                    await page.locator(
-                        form["fields"]["observacoes"]["selector"]
-                    ).fill(motivo)
+                    await page.locator(form["fields"]["observacoes"]["selector"]).fill(motivo)
                 except Exception as e:
                     logger.debug("observacoes fill soft-failed: %s", e)
 
@@ -675,9 +650,7 @@ class SEIWriter:
             await page.wait_for_load_state("networkidle", timeout=20000)
 
             if dialog_texts:
-                artifacts.append(
-                    await self._screenshot(f"create_proc_dialog_{self._run_id}")
-                )
+                artifacts.append(await self._screenshot(f"create_proc_dialog_{self._run_id}"))
                 return CreateProcessResult(
                     success=False,
                     tipo_processo=tipo_processo,
@@ -874,9 +847,7 @@ class SEIWriter:
 
             async def _on_dialog(d):
                 dialog_texts.append(d.message)
-                logger.warning(
-                    "save_despacho_draft dialog[%s]: %s", d.type, d.message
-                )
+                logger.warning("save_despacho_draft dialog[%s]: %s", d.type, d.message)
                 await d.accept()
 
             page.on("dialog", _on_dialog)
@@ -899,23 +870,17 @@ class SEIWriter:
                 href = None
                 for frame in [page.main_frame, *page.frames]:
                     try:
-                        a = frame.locator(
-                            'xpath=//a[.//img[@title="Incluir Documento"]]'
-                        ).first
+                        a = frame.locator('xpath=//a[.//img[@title="Incluir Documento"]]').first
                         if await a.count() > 0:
                             href = await a.get_attribute("href")
                             break
                     except Exception:
                         pass
                 if not href:
-                    raise RuntimeError(
-                        "save_despacho_draft: 'Incluir Documento' anchor not found"
-                    )
+                    raise RuntimeError("save_despacho_draft: 'Incluir Documento' anchor not found")
                 absolute_url = urljoin(page.url, href)
 
-                vf = next(
-                    (f for f in page.frames if f.name == "ifrVisualizacao"), None
-                )
+                vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
                 if vf is None:
                     await page.goto(absolute_url, wait_until="networkidle")
                 else:
@@ -929,9 +894,7 @@ class SEIWriter:
                 # Click Despacho option (escolher(5)).
                 await target.evaluate("() => escolher(5)")
                 await page.wait_for_timeout(1500)
-                vf = next(
-                    (f for f in page.frames if f.name == "ifrVisualizacao"), None
-                )
+                vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
                 target = vf or page.main_frame
 
                 # Texto Inicial = Nenhum. Explicitly click the radio input
@@ -939,22 +902,16 @@ class SEIWriter:
                 # we observed the label-click silently not registering, which
                 # caused the default template to load into the editor.
                 texto_inicial_cfg = form["fields"]["texto_inicial_nenhum"]
-                nenhum_radio_sel = texto_inicial_cfg.get(
-                    "selector", texto_inicial_cfg.get("label")
-                )
+                nenhum_radio_sel = texto_inicial_cfg.get("selector", texto_inicial_cfg.get("label"))
                 try:
                     await target.locator(nenhum_radio_sel).first.check()
                 except Exception:
                     try:
-                        await target.locator(
-                            texto_inicial_cfg["label"]
-                        ).click()
+                        await target.locator(texto_inicial_cfg["label"]).click()
                     except Exception:
                         pass
                 try:
-                    is_checked = await target.locator(
-                        nenhum_radio_sel
-                    ).first.is_checked()
+                    is_checked = await target.locator(nenhum_radio_sel).first.is_checked()
                     if not is_checked:
                         logger.warning(
                             "save_despacho_draft: 'Texto Inicial = Nenhum' "
@@ -974,9 +931,7 @@ class SEIWriter:
                 except Exception as e:
                     logger.warning("nivel_acesso click failed: %s", e)
 
-                artifacts.append(
-                    await self._screenshot(f"draft_pre_save_{processo_id}_{tipo}")
-                )
+                artifacts.append(await self._screenshot(f"draft_pre_save_{processo_id}_{tipo}"))
 
                 # Click Salvar — opens CKEditor popup. Button appears twice
                 # (top + bottom toolbars); use .first.
@@ -984,9 +939,7 @@ class SEIWriter:
                 popup = None
                 try:
                     async with context.expect_page(timeout=10000) as popup_info:
-                        await target.locator(
-                            form["submit_form"]["selector"]
-                        ).first.click()
+                        await target.locator(form["submit_form"]["selector"]).first.click()
                     popup = await popup_info.value
                     logger.info(
                         "save_despacho_draft: editor popup opened: %s",
@@ -1001,11 +954,7 @@ class SEIWriter:
 
                 if popup is None:
                     # Fallback: editor might be in a frame of the main page.
-                    artifacts.append(
-                        await self._screenshot(
-                            f"draft_no_popup_{processo_id}_{tipo}"
-                        )
-                    )
+                    artifacts.append(await self._screenshot(f"draft_no_popup_{processo_id}_{tipo}"))
                     return DraftResult(
                         success=False,
                         processo_id=processo_id,
@@ -1146,9 +1095,7 @@ class SEIWriter:
 
         if self._dry_run:
             try:
-                artifacts.append(
-                    await self._screenshot(f"acompesp_dryrun_{processo_id}")
-                )
+                artifacts.append(await self._screenshot(f"acompesp_dryrun_{processo_id}"))
             except Exception:
                 pass
             self._audit(
@@ -1160,8 +1107,7 @@ class SEIWriter:
                 artifacts=[str(p) for p in artifacts],
             )
             logger.info(
-                "SEIWriter[dry_run]: would add %s to Acompanhamento Especial "
-                "grupo=%r",
+                "SEIWriter[dry_run]: would add %s to Acompanhamento Especial grupo=%r",
                 processo_id,
                 grupo,
             )

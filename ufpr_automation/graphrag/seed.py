@@ -111,6 +111,7 @@ _DESPACHO_NODE_MAP: dict[str, str] = {
 # 1. ORGANIZATIONAL HIERARCHY
 # ============================================================================
 
+
 def _seed_orgaos(client: Neo4jClient) -> int:
     """Create organizational units and SUBORDINADO_A relationships."""
     cypher = """
@@ -193,6 +194,7 @@ def _seed_orgaos(client: Neo4jClient) -> int:
 # 2. PEOPLE
 # ============================================================================
 
+
 def _seed_pessoas(client: Neo4jClient) -> int:
     """Create people nodes (docentes, coordination)."""
     cypher = """
@@ -240,6 +242,7 @@ def _seed_pessoas(client: Neo4jClient) -> int:
 # 3. SYSTEMS
 # ============================================================================
 
+
 def _seed_sistemas(client: Neo4jClient) -> int:
     """Create IT system nodes."""
     cypher = """
@@ -283,18 +286,28 @@ def _seed_sistemas(client: Neo4jClient) -> int:
 # 4. ROLES (papéis nos fluxos)
 # ============================================================================
 
+
 def _seed_papeis(client: Neo4jClient) -> int:
     """Create workflow role nodes (MERGE on nome, SET description separately)."""
     papeis = [
         ("Coordenador", "Coordenador(a) do curso — aprova processos, assina despachos SEI"),
         ("Vice-Coordenador", "Vice-Coordenador(a) do curso"),
-        ("Secretário", "Secretário(a) — operações diárias, triagem de emails, abertura de processos SEI"),
+        (
+            "Secretário",
+            "Secretário(a) — operações diárias, triagem de emails, abertura de processos SEI",
+        ),
         ("Orientador", "Professor orientador de estágio — acompanha estagiário, assina relatórios"),
-        ("Supervisor", "Supervisor na concedente — formação/experiência em Design, acompanha atividades"),
+        (
+            "Supervisor",
+            "Supervisor na concedente — formação/experiência em Design, acompanha atividades",
+        ),
         ("Estagiário", "Discente estagiário — preenche TCE, coleta assinaturas, envia relatórios"),
         ("COE", "Comissão Orientadora de Estágio — analisa documentação, define critérios"),
         ("COAPPE", "Coordenação de Estágios (PROGRAP) — registra estágio, emite certificados"),
-        ("PROGEPE", "Gestão de Pessoas — cadastro SIAPE, pagamento de estágios remunerados na UFPR"),
+        (
+            "PROGEPE",
+            "Gestão de Pessoas — cadastro SIAPE, pagamento de estágios remunerados na UFPR",
+        ),
         ("Docente", "Professor da disciplina de estágio supervisionado (OD501/ODDA5)"),
     ]
     for nome, desc in papeis:
@@ -309,6 +322,7 @@ def _seed_papeis(client: Neo4jClient) -> int:
 # ============================================================================
 # 5. NORMS / REGULATIONS
 # ============================================================================
+
 
 def _seed_normas(client: Neo4jClient) -> int:
     """Create regulatory document nodes and relationships."""
@@ -351,6 +365,7 @@ def _seed_normas(client: Neo4jClient) -> int:
 # 6. DOCUMENTS
 # ============================================================================
 
+
 def _seed_documentos(client: Neo4jClient) -> int:
     """Create document type nodes."""
     cypher = """
@@ -392,6 +407,7 @@ def _seed_documentos(client: Neo4jClient) -> int:
 # ============================================================================
 # 7. SEI PROCESS TYPES (with frequency data from manual)
 # ============================================================================
+
 
 def _seed_tipos_processo(client: Neo4jClient) -> int:
     """Create SEI process types with frequency counts."""
@@ -469,6 +485,7 @@ def _seed_tipos_processo(client: Neo4jClient) -> int:
 # 8. WORKFLOWS (Fluxos + Etapas)
 # ============================================================================
 
+
 def _seed_fluxos(client: Neo4jClient) -> int:
     """Create workflow nodes with ordered steps."""
     fluxos = {
@@ -480,7 +497,11 @@ def _seed_fluxos(client: Neo4jClient) -> int:
                 ("Aluno envia documentação em PDF para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria verifica situação acadêmica no SIGA", "Secretário", "SIGA"),
                 ("Secretaria analisa documentação e condições", "Secretário", None),
-                ("Secretaria abre processo no SEI (tipo: Estágios não Obrigatórios)", "Secretário", "SEI"),
+                (
+                    "Secretaria abre processo no SEI (tipo: Estágios não Obrigatórios)",
+                    "Secretário",
+                    "SEI",
+                ),
                 ("Coordenação gera despacho e inclui no processo SEI", "Coordenador", "SEI"),
                 ("Coordenação envia processo SEI para COAPPE", "Coordenador", "SEI"),
                 ("COAPPE analisa e registra o estágio", "COAPPE", "SEI"),
@@ -495,7 +516,11 @@ def _seed_fluxos(client: Neo4jClient) -> int:
                 ("Aluno preenche e assina TCE + Plano de Atividades", "Estagiário", None),
                 ("Aluno envia documentação em PDF para design.grafico@ufpr.br", "Estagiário", None),
                 ("Secretaria verifica situação acadêmica no SIGA", "Secretário", "SIGA"),
-                ("Secretaria abre processo no SEI (tipo: Estágio Obrigatório)", "Secretário", "SEI"),
+                (
+                    "Secretaria abre processo no SEI (tipo: Estágio Obrigatório)",
+                    "Secretário",
+                    "SEI",
+                ),
                 ("Coordenação gera despacho para docente da disciplina", "Coordenador", "SEI"),
                 ("Docente gera despacho e retorna processo", "Docente", "SEI"),
                 ("Coordenação envia processo SEI para COAPPE", "Coordenador", "SEI"),
@@ -522,7 +547,11 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "descricao": "Encerramento antecipado de estágio",
             "etapas": [
                 ("Aluno preenche Termo de Rescisão + Relatório Final", "Estagiário", None),
-                ("Aluno coleta assinaturas e envia para design.grafico@ufpr.br", "Estagiário", None),
+                (
+                    "Aluno coleta assinaturas e envia para design.grafico@ufpr.br",
+                    "Estagiário",
+                    None,
+                ),
                 ("Secretaria inclui documentos no processo SEI existente", "Secretário", "SEI"),
                 ("Coordenação gera despacho de rescisão/conclusão", "Coordenador", "SEI"),
                 ("Coordenação envia processo para COAPPE", "Coordenador", "SEI"),
@@ -535,7 +564,11 @@ def _seed_fluxos(client: Neo4jClient) -> int:
             "descricao": "Emissão de certificado (apenas estágio não obrigatório)",
             "etapas": [
                 ("Supervisor preenche Ficha de Avaliação", "Supervisor", None),
-                ("Aluno coleta assinaturas e envia para design.grafico@ufpr.br", "Estagiário", None),
+                (
+                    "Aluno coleta assinaturas e envia para design.grafico@ufpr.br",
+                    "Estagiário",
+                    None,
+                ),
                 ("Secretaria inclui no processo SEI", "Secretário", "SEI"),
                 ("COE aprecia e emite parecer favorável", "COE", None),
                 ("Coordenação encaminha para COAPPE via SEI", "Coordenador", "SEI"),
@@ -561,8 +594,7 @@ def _seed_fluxos(client: Neo4jClient) -> int:
         # Create Fluxo node
         client.run_write(
             "MERGE (f:Fluxo {nome: $nome}) SET f.descricao = $desc, f.prazo = $prazo",
-            {"nome": nome_fluxo, "desc": data["descricao"],
-             "prazo": data.get("prazo", "")},
+            {"nome": nome_fluxo, "desc": data["descricao"], "prazo": data.get("prazo", "")},
         )
         if "regra_bloqueio" in data:
             client.run_write(
@@ -583,8 +615,13 @@ def _seed_fluxos(client: Neo4jClient) -> int:
                 MATCH (p:Papel {nome: $papel})
                 MERGE (e)-[:EXECUTADA_POR]->(p)
                 """,
-                {"id": etapa_id, "desc": descricao, "ordem": i,
-                 "fluxo": nome_fluxo, "papel": papel_nome},
+                {
+                    "id": etapa_id,
+                    "desc": descricao,
+                    "ordem": i,
+                    "fluxo": nome_fluxo,
+                    "papel": papel_nome,
+                },
             )
             if sistema_nome:
                 client.run_write(
@@ -604,39 +641,100 @@ def _seed_fluxos(client: Neo4jClient) -> int:
 # 9. TEMPLATES (email + despacho SEI)
 # ============================================================================
 
+
 def _seed_templates(client: Neo4jClient) -> int:
     """Create email and despacho template nodes."""
     templates = [
-        ("Email: Como iniciar estágio não obrigatório", "email", "TCE Não Obrigatório",
-         "Resposta para aluno que pergunta como começar estágio"),
-        ("Email: Como iniciar estágio obrigatório", "email", "TCE Obrigatório",
-         "Resposta para aluno matriculado em OD501/ODDA5"),
-        ("Email: Documentação incompleta / Pendência no TCE", "email", "TCE Não Obrigatório",
-         "TCE recebido com erro, faltando assinatura, dados incorretos"),
-        ("Email: Estágio deferido / aprovado", "email", "TCE Não Obrigatório",
-         "Após aprovação pela COAPPE, informar o aluno"),
-        ("Email: Prorrogação de estágio (Termo Aditivo)", "email", "Termo Aditivo",
-         "Aluno quer prorrogar estágio em andamento"),
-        ("Email: Encerramento antecipado (Rescisão)", "email", "Rescisão",
-         "Aluno quer encerrar estágio antes do prazo"),
-        ("Email: Convalidação de estágio", "email", "Convalidação",
-         "Aluno pergunta sobre convalidar IC, trabalho, extensão"),
-        ("Email: Empresa oferece vagas", "email", None,
-         "Empresa/RH quer divulgar vagas de estágio"),
-        ("Email: Aluno não cumpre requisitos", "email", None,
-         "Aluno impedido por reprovação, currículo integralizado, etc."),
-        ("Email: Solicitação de relatório parcial", "email", None,
-         "Lembrete semestral para alunos com estágio em andamento"),
-        ("Email: Certificado de estágio", "email", "Certificação",
-         "Aluno pergunta como obter certificado"),
-        ("Despacho SEI: TCE Inicial", "despacho_sei", "TCE Não Obrigatório",
-         "Despacho para novo estágio (TCE inicial)"),
-        ("Despacho SEI: Termo Aditivo com Relatório", "despacho_sei", "Termo Aditivo",
-         "Despacho para prorrogação com relatório parcial"),
-        ("Despacho SEI: Rescisão/Conclusão", "despacho_sei", "Rescisão",
-         "Despacho para encerramento de estágio"),
-        ("Email: Encaminhamento à COAPPE", "email_interno", "TCE Não Obrigatório",
-         "Email interno para estagio@ufpr.br encaminhando processo SEI"),
+        (
+            "Email: Como iniciar estágio não obrigatório",
+            "email",
+            "TCE Não Obrigatório",
+            "Resposta para aluno que pergunta como começar estágio",
+        ),
+        (
+            "Email: Como iniciar estágio obrigatório",
+            "email",
+            "TCE Obrigatório",
+            "Resposta para aluno matriculado em OD501/ODDA5",
+        ),
+        (
+            "Email: Documentação incompleta / Pendência no TCE",
+            "email",
+            "TCE Não Obrigatório",
+            "TCE recebido com erro, faltando assinatura, dados incorretos",
+        ),
+        (
+            "Email: Estágio deferido / aprovado",
+            "email",
+            "TCE Não Obrigatório",
+            "Após aprovação pela COAPPE, informar o aluno",
+        ),
+        (
+            "Email: Prorrogação de estágio (Termo Aditivo)",
+            "email",
+            "Termo Aditivo",
+            "Aluno quer prorrogar estágio em andamento",
+        ),
+        (
+            "Email: Encerramento antecipado (Rescisão)",
+            "email",
+            "Rescisão",
+            "Aluno quer encerrar estágio antes do prazo",
+        ),
+        (
+            "Email: Convalidação de estágio",
+            "email",
+            "Convalidação",
+            "Aluno pergunta sobre convalidar IC, trabalho, extensão",
+        ),
+        (
+            "Email: Empresa oferece vagas",
+            "email",
+            None,
+            "Empresa/RH quer divulgar vagas de estágio",
+        ),
+        (
+            "Email: Aluno não cumpre requisitos",
+            "email",
+            None,
+            "Aluno impedido por reprovação, currículo integralizado, etc.",
+        ),
+        (
+            "Email: Solicitação de relatório parcial",
+            "email",
+            None,
+            "Lembrete semestral para alunos com estágio em andamento",
+        ),
+        (
+            "Email: Certificado de estágio",
+            "email",
+            "Certificação",
+            "Aluno pergunta como obter certificado",
+        ),
+        (
+            "Despacho SEI: TCE Inicial",
+            "despacho_sei",
+            "TCE Não Obrigatório",
+            "Despacho para novo estágio (TCE inicial)",
+        ),
+        (
+            "Despacho SEI: Termo Aditivo com Relatório",
+            "despacho_sei",
+            "Termo Aditivo",
+            "Despacho para prorrogação com relatório parcial",
+        ),
+        (
+            "Despacho SEI: Rescisão/Conclusão",
+            "despacho_sei",
+            "Rescisão",
+            "Despacho para encerramento de estágio",
+        ),
+        (
+            "Email: Encaminhamento à COAPPE",
+            "email_interno",
+            "TCE Não Obrigatório",
+            "Email interno para estagio@ufpr.br encaminhando processo SEI",
+        ),
     ]
 
     for nome, tipo, fluxo_nome, descricao in templates:
@@ -679,6 +777,7 @@ def _seed_templates(client: Neo4jClient) -> int:
 # 10. COURSE + DISCIPLINES
 # ============================================================================
 
+
 def _seed_curso(client: Neo4jClient) -> int:
     """Create course and discipline nodes."""
     cypher = """
@@ -706,13 +805,18 @@ def _seed_curso(client: Neo4jClient) -> int:
 # 11. SIGA NAVIGATION MAP (abas x assuntos)
 # ============================================================================
 
+
 def _seed_siga_navigation(client: Neo4jClient) -> int:
     """Create SIGA navigation hints as relationship properties."""
     abas = [
         ("informacoes", "Status de matrícula", "Status atual (ativo/trancado/cancelado)"),
         ("informacoes", "Dados de contato", "E-mail pessoal e institucional"),
         ("historico", "Histórico de notas/IRA", "Desempenho por semestre, IRA geral"),
-        ("integralizacao", "Situação para formatura", "CH concluída vs. exigida, status integralizado"),
+        (
+            "integralizacao",
+            "Situação para formatura",
+            "CH concluída vs. exigida, status integralizado",
+        ),
         ("trancamento", "Trancamento/destrancamento", "Histórico e status da solicitação"),
         ("estagio", "Estágio", "Estágios vinculados ao discente"),
         ("exames", "Exame de aproveitamento", "Solicitações em aberto"),
@@ -733,6 +837,7 @@ def _seed_siga_navigation(client: Neo4jClient) -> int:
 # ============================================================================
 # MAIN SEED ORCHESTRATOR
 # ============================================================================
+
 
 def seed_all(client: Neo4jClient, clear: bool = False) -> dict[str, int]:
     """Run all seed functions and return counts per category.
@@ -782,6 +887,7 @@ def seed_all(client: Neo4jClient, clear: bool = False) -> dict[str, int]:
 # ============================================================================
 # CLI
 # ============================================================================
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Neo4j knowledge graph — UFPR")

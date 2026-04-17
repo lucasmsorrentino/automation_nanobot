@@ -43,10 +43,12 @@ class TestConsultarSEI:
 
         email = _make_email(stable_id="x1")
         cls = _make_cls(categoria="Outros")
-        result = consultar_sei({
-            "emails": [email],
-            "classifications": {"x1": cls},
-        })
+        result = consultar_sei(
+            {
+                "emails": [email],
+                "classifications": {"x1": cls},
+            }
+        )
         assert result["sei_contexts"] == {}
 
     @patch("ufpr_automation.sei.browser.has_credentials", return_value=False)
@@ -55,10 +57,12 @@ class TestConsultarSEI:
 
         email = _make_email(stable_id="x1")
         cls = _make_cls()
-        result = consultar_sei({
-            "emails": [email],
-            "classifications": {"x1": cls},
-        })
+        result = consultar_sei(
+            {
+                "emails": [email],
+                "classifications": {"x1": cls},
+            }
+        )
         assert result["sei_contexts"] == {}
 
 
@@ -74,10 +78,12 @@ class TestConsultarSIGA:
 
         email = _make_email(subject="Oficio generico", body="Sem matricula", stable_id="x1")
         cls = _make_cls()
-        result = consultar_siga({
-            "emails": [email],
-            "classifications": {"x1": cls},
-        })
+        result = consultar_siga(
+            {
+                "emails": [email],
+                "classifications": {"x1": cls},
+            }
+        )
         assert result["siga_contexts"] == {}
 
     @patch("ufpr_automation.siga.browser.has_credentials", return_value=False)
@@ -86,10 +92,12 @@ class TestConsultarSIGA:
 
         email = _make_email(stable_id="x1")
         cls = _make_cls()
-        result = consultar_siga({
-            "emails": [email],
-            "classifications": {"x1": cls},
-        })
+        result = consultar_siga(
+            {
+                "emails": [email],
+                "classifications": {"x1": cls},
+            }
+        )
         assert result["siga_contexts"] == {}
 
 
@@ -98,15 +106,17 @@ class TestRegistrarProcedimento:
         from ufpr_automation.graph.nodes import registrar_procedimento
 
         with patch("ufpr_automation.procedures.store.PROCEDURES_FILE", tmp_path / "procs.jsonl"):
-            result = registrar_procedimento({
-                "emails": [],
-                "classifications": {},
-                "drafts_saved": [],
-                "sei_contexts": {},
-                "siga_contexts": {},
-                "auto_draft": [],
-                "manual_escalation": [],
-            })
+            result = registrar_procedimento(
+                {
+                    "emails": [],
+                    "classifications": {},
+                    "drafts_saved": [],
+                    "sei_contexts": {},
+                    "siga_contexts": {},
+                    "auto_draft": [],
+                    "manual_escalation": [],
+                }
+            )
             assert result["procedures_logged"] == 0
 
     def test_logs_procedure(self, tmp_path):
@@ -116,15 +126,17 @@ class TestRegistrarProcedimento:
         cls = _make_cls()
 
         with patch("ufpr_automation.procedures.store.PROCEDURES_FILE", tmp_path / "procs.jsonl"):
-            result = registrar_procedimento({
-                "emails": [email],
-                "classifications": {"x1": cls},
-                "drafts_saved": ["x1"],
-                "sei_contexts": {"x1": {"numero": "23075.123456/2026-01"}},
-                "siga_contexts": {},
-                "auto_draft": ["x1"],
-                "manual_escalation": [],
-            })
+            result = registrar_procedimento(
+                {
+                    "emails": [email],
+                    "classifications": {"x1": cls},
+                    "drafts_saved": ["x1"],
+                    "sei_contexts": {"x1": {"numero": "23075.123456/2026-01"}},
+                    "siga_contexts": {},
+                    "auto_draft": ["x1"],
+                    "manual_escalation": [],
+                }
+            )
         assert result["procedures_logged"] == 1
 
 

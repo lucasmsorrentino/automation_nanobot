@@ -34,9 +34,7 @@ class PensarAgent:
         rag_context: Pre-fetched RAG context for this email (if available).
     """
 
-    def __init__(
-        self, client: LLMClient, email: EmailData, rag_context: str | None = None
-    ) -> None:
+    def __init__(self, client: LLMClient, email: EmailData, rag_context: str | None = None) -> None:
         self._client = client
         self._email = email
         self._rag_context = rag_context
@@ -55,7 +53,8 @@ class PensarAgent:
             except Exception as e:
                 logger.warning(
                     "  Self-Refine falhou para '%s': %s (usando classificação original)",
-                    self._email.subject[:40], e,
+                    self._email.subject[:40],
+                    e,
                 )
             return classification
 
@@ -68,6 +67,7 @@ def _fetch_rag_contexts(emails: list[EmailData]) -> dict[int, str]:
     """
     try:
         from ufpr_automation.rag.retriever import Retriever
+
         retriever = Retriever()
     except Exception as e:
         logger.debug("RAG não disponível, prosseguindo sem contexto normativo: %s", e)
@@ -116,8 +116,11 @@ async def run_pensar_concurrently(
     # Fetch RAG context (synchronous — embedding model runs locally)
     rag_contexts = _fetch_rag_contexts(emails)
     if rag_contexts:
-        logger.info("RAG: contexto normativo recuperado para %d/%d e-mail(s)",
-                     len(rag_contexts), len(emails))
+        logger.info(
+            "RAG: contexto normativo recuperado para %d/%d e-mail(s)",
+            len(rag_contexts),
+            len(emails),
+        )
 
     # One shared client (one HTTP connection pool, one API key auth)
     client = LLMClient()
@@ -131,7 +134,8 @@ async def run_pensar_concurrently(
 
     logger.info(
         "Disparando %d chamada(s) assíncronas ao LLM (máx %d simultâneas)...",
-        len(tasks), MAX_CONCURRENT_LLM_CALLS,
+        len(tasks),
+        MAX_CONCURRENT_LLM_CALLS,
     )
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -162,6 +166,7 @@ async def run_pensar_concurrently(
 
     logger.info(
         "PensarAgent concluído — %d/%d classificação(ões) bem-sucedidas",
-        len(classifications), len(emails),
+        len(classifications),
+        len(emails),
     )
     return successful_emails, classifications

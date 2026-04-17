@@ -32,6 +32,7 @@ from ufpr_automation.utils.logging import logger
 @dataclass
 class ExtractedNorm:
     """A norm extracted from a RAG chunk."""
+
     codigo: str
     tipo: str
     conselho: str
@@ -112,8 +113,11 @@ def extract_identity(text: str, arquivo: str, conselho_meta: str) -> ExtractedNo
         ementa = re.sub(r"\s+", " ", m_em.group(0).strip())
 
     return ExtractedNorm(
-        codigo=codigo, tipo=tipo, conselho=conselho,
-        ementa=ementa[:500], arquivo=arquivo,
+        codigo=codigo,
+        tipo=tipo,
+        conselho=conselho,
+        ementa=ementa[:500],
+        arquivo=arquivo,
     )
 
 
@@ -137,6 +141,7 @@ def extract_references(text: str, source_code: str) -> tuple[list[str], list[str
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
+
 
 def load_all_chunks(conselho_filter: str | None = None):
     """Load all resolution chunks from LanceDB, grouped by file."""
@@ -215,7 +220,9 @@ def extract_all(
 
     logger.info(
         "Extração: %d normas, %d não reconhecidas (%d total)",
-        len(norms), failed, len(files),
+        len(norms),
+        failed,
+        len(files),
     )
     return norms
 
@@ -223,6 +230,7 @@ def extract_all(
 # ---------------------------------------------------------------------------
 # Neo4j insertion with lineage
 # ---------------------------------------------------------------------------
+
 
 def insert_norms(client: Neo4jClient, norms: list[ExtractedNorm]) -> dict[str, int]:
     """Insert norms into Neo4j with lineage relationships and status."""
@@ -290,7 +298,10 @@ def insert_norms(client: Neo4jClient, norms: list[ExtractedNorm]) -> dict[str, i
 
     logger.info(
         "Neo4j norms: %d inseridas, %d ALTERA, %d REVOGA, %d EMITIDA_POR",
-        inserted, rel_altera, rel_revoga, rel_emitida,
+        inserted,
+        rel_altera,
+        rel_revoga,
+        rel_emitida,
     )
     return {
         "inserted": inserted,
@@ -348,7 +359,9 @@ def compute_status(client: Neo4jClient) -> dict[str, int]:
 
     logger.info(
         "Status: %d vigentes, %d alteradas, %d revogadas",
-        vigentes, alteradas, revogadas,
+        vigentes,
+        alteradas,
+        revogadas,
     )
     return {"vigentes": vigentes, "alteradas": alteradas, "revogadas": revogadas}
 
@@ -385,6 +398,7 @@ def build_consolidation_links(client: Neo4jClient) -> int:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def enrich(
     client: Neo4jClient | None = None,
@@ -452,11 +466,13 @@ def enrich(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Enrich Neo4j graph from RAG resolutions")
     parser.add_argument("--dry-run", action="store_true", help="Extract only, don't insert")
-    parser.add_argument("--conselho", choices=["cepe", "coplad", "coun", "concur"],
-                        help="Filter by conselho")
+    parser.add_argument(
+        "--conselho", choices=["cepe", "coplad", "coun", "concur"], help="Filter by conselho"
+    )
     parser.add_argument("--limit", type=int, help="Limit number of resolutions to process")
     args = parser.parse_args()
 

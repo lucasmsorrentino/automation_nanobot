@@ -206,8 +206,13 @@ class TestSearchResult:
 
     def test_equality(self):
         kwargs = dict(
-            text="t", score=0.1, conselho="c", tipo="t",
-            arquivo="a.pdf", caminho="c/t/a.pdf", chunk_idx=0,
+            text="t",
+            score=0.1,
+            conselho="c",
+            tipo="t",
+            arquivo="a.pdf",
+            caminho="c/t/a.pdf",
+            chunk_idx=0,
         )
         r1 = SearchResult(**kwargs)
         r2 = SearchResult(**kwargs)
@@ -229,15 +234,17 @@ class TestRetrieverMocked:
 
         import pyarrow as pa
 
-        empty_table = pa.table({
-            "text": pa.array([], type=pa.string()),
-            "_distance": pa.array([], type=pa.float32()),
-            "conselho": pa.array([], type=pa.string()),
-            "tipo": pa.array([], type=pa.string()),
-            "arquivo": pa.array([], type=pa.string()),
-            "caminho": pa.array([], type=pa.string()),
-            "chunk_idx": pa.array([], type=pa.int64()),
-        })
+        empty_table = pa.table(
+            {
+                "text": pa.array([], type=pa.string()),
+                "_distance": pa.array([], type=pa.float32()),
+                "conselho": pa.array([], type=pa.string()),
+                "tipo": pa.array([], type=pa.string()),
+                "arquivo": pa.array([], type=pa.string()),
+                "caminho": pa.array([], type=pa.string()),
+                "chunk_idx": pa.array([], type=pa.int64()),
+            }
+        )
 
         mock_search = MagicMock()
         mock_search.limit.return_value = mock_search
@@ -256,15 +263,17 @@ class TestRetrieverMocked:
 
         import pyarrow as pa
 
-        results_table = pa.table({
-            "text": ["Art. 1º Teste de resolução."],
-            "_distance": [0.1234],
-            "conselho": ["cepe"],
-            "tipo": ["resolucoes"],
-            "arquivo": ["res.pdf"],
-            "caminho": ["cepe/resolucoes/res.pdf"],
-            "chunk_idx": [0],
-        })
+        results_table = pa.table(
+            {
+                "text": ["Art. 1º Teste de resolução."],
+                "_distance": [0.1234],
+                "conselho": ["cepe"],
+                "tipo": ["resolucoes"],
+                "arquivo": ["res.pdf"],
+                "caminho": ["cepe/resolucoes/res.pdf"],
+                "chunk_idx": [0],
+            }
+        )
 
         mock_search = MagicMock()
         mock_search.limit.return_value = mock_search
@@ -284,15 +293,17 @@ class TestRetrieverMocked:
 
         import pyarrow as pa
 
-        empty_table = pa.table({
-            "text": pa.array([], type=pa.string()),
-            "_distance": pa.array([], type=pa.float32()),
-            "conselho": pa.array([], type=pa.string()),
-            "tipo": pa.array([], type=pa.string()),
-            "arquivo": pa.array([], type=pa.string()),
-            "caminho": pa.array([], type=pa.string()),
-            "chunk_idx": pa.array([], type=pa.int64()),
-        })
+        empty_table = pa.table(
+            {
+                "text": pa.array([], type=pa.string()),
+                "_distance": pa.array([], type=pa.float32()),
+                "conselho": pa.array([], type=pa.string()),
+                "tipo": pa.array([], type=pa.string()),
+                "arquivo": pa.array([], type=pa.string()),
+                "caminho": pa.array([], type=pa.string()),
+                "chunk_idx": pa.array([], type=pa.int64()),
+            }
+        )
 
         mock_search = MagicMock()
         mock_search.limit.return_value = mock_search
@@ -303,9 +314,7 @@ class TestRetrieverMocked:
         r.search("query", conselho="cepe", tipo="resolucoes")
 
         # Verify .where() was called with correct filter
-        mock_search.where.assert_called_once_with(
-            "conselho = 'cepe' AND tipo = 'resolucoes'"
-        )
+        mock_search.where.assert_called_once_with("conselho = 'cepe' AND tipo = 'resolucoes'")
 
     def test_search_formatted_output_format(self):
         r = Retriever()
@@ -315,15 +324,17 @@ class TestRetrieverMocked:
 
         import pyarrow as pa
 
-        results_table = pa.table({
-            "text": ["Texto do chunk 1.", "Texto do chunk 2."],
-            "_distance": [0.1, 0.2],
-            "conselho": ["cepe", "coun"],
-            "tipo": ["resolucoes", "atas"],
-            "arquivo": ["res.pdf", "ata.pdf"],
-            "caminho": ["cepe/resolucoes/res.pdf", "coun/atas/ata.pdf"],
-            "chunk_idx": [0, 0],
-        })
+        results_table = pa.table(
+            {
+                "text": ["Texto do chunk 1.", "Texto do chunk 2."],
+                "_distance": [0.1, 0.2],
+                "conselho": ["cepe", "coun"],
+                "tipo": ["resolucoes", "atas"],
+                "arquivo": ["res.pdf", "ata.pdf"],
+                "caminho": ["cepe/resolucoes/res.pdf", "coun/atas/ata.pdf"],
+                "chunk_idx": [0, 0],
+            }
+        )
 
         mock_search = MagicMock()
         mock_search.limit.return_value = mock_search
@@ -373,11 +384,12 @@ class TestIngestIntegration:
         pdf1 = estagio_dir / "regulamento-estagio-test.pdf"
         doc = pymupdf.open()
         page = doc.new_page()
-        page.insert_text((72, 72),
+        page.insert_text(
+            (72, 72),
             "Art. 1º O estágio obrigatório é componente curricular.\n"
             "Art. 2º A duração máxima é de 2 anos.\n"
             "Art. 3º A jornada não excederá 6 horas diárias.\n"
-            "Parágrafo único. Em períodos de prova a jornada pode ser reduzida pela metade."
+            "Parágrafo único. Em períodos de prova a jornada pode ser reduzida pela metade.",
         )
         doc.save(str(pdf1))
         doc.close()
@@ -386,11 +398,12 @@ class TestIngestIntegration:
         pdf2 = cepe_dir / "resolucao-01-2024.pdf"
         doc = pymupdf.open()
         page = doc.new_page()
-        page.insert_text((72, 72),
+        page.insert_text(
+            (72, 72),
             "Resolução nº 01/2024 - CEPE\n"
             "Aprova as normas para realização de estágio curricular.\n"
             "Art. 1º O estudante deve estar regularmente matriculado.\n"
-            "Art. 2º O supervisor deve ter formação na área."
+            "Art. 2º O supervisor deve ter formação na área.",
         )
         doc.save(str(pdf2))
         doc.close()
@@ -409,6 +422,7 @@ class TestIngestIntegration:
 
         def mock_embed(texts):
             import hashlib
+
             vectors = []
             for t in texts:
                 h = hashlib.md5(t.encode()).digest()
@@ -450,6 +464,7 @@ class TestIngestIntegration:
 
         def mock_embed(texts):
             import hashlib
+
             vectors = []
             for t in texts:
                 h = hashlib.md5(t.encode()).digest()
@@ -497,6 +512,7 @@ class TestIngestIntegration:
 
         def mock_embed(texts):
             import hashlib
+
             vectors = []
             for t in texts:
                 h = hashlib.md5(t.encode()).digest()

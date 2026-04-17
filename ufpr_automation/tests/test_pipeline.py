@@ -17,12 +17,14 @@ def _make_email(sender: str, subject: str) -> EmailData:
 
 
 def _make_classification_json(categoria: str = "Estágios") -> str:
-    return json.dumps({
-        "categoria": categoria,
-        "resumo": "Resumo automático.",
-        "acao_necessaria": "Arquivar",
-        "sugestao_resposta": "",
-    })
+    return json.dumps(
+        {
+            "categoria": categoria,
+            "resumo": "Resumo automático.",
+            "acao_necessaria": "Arquivar",
+            "sugestao_resposta": "",
+        }
+    )
 
 
 def _mock_completion_response(text: str) -> MagicMock:

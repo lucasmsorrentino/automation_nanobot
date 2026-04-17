@@ -137,12 +137,16 @@ def _extract_xlsx(path: Path) -> str:
 def _configure_tesseract():
     """Set Tesseract path on Windows if not already on PATH."""
     import sys
+
     if sys.platform == "win32":
         import shutil
+
         if not shutil.which("tesseract"):
             import pytesseract
+
             win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
             from pathlib import Path
+
             if Path(win_path).exists():
                 pytesseract.pytesseract.tesseract_cmd = win_path
 
@@ -151,6 +155,7 @@ def _is_tesseract_available() -> bool:
     """Check if Tesseract OCR is installed and accessible."""
     try:
         import pytesseract
+
         _configure_tesseract()
         pytesseract.get_tesseract_version()
         return True
@@ -198,9 +203,7 @@ def _ocr_pdf_scanned(path: Path) -> str:
         import pytesseract
         from PIL import Image
     except ImportError:
-        logger.debug(
-            "pytesseract/Pillow nao instalado — pip install pytesseract Pillow"
-        )
+        logger.debug("pytesseract/Pillow nao instalado — pip install pytesseract Pillow")
         return ""
 
     if not _is_tesseract_available():
@@ -231,7 +234,9 @@ def _ocr_pdf_scanned(path: Path) -> str:
         if full_text:
             logger.debug(
                 "OCR extraiu %d chars de PDF escaneado '%s' (%d paginas)",
-                len(full_text), path.name, len(pages_text),
+                len(full_text),
+                path.name,
+                len(pages_text),
             )
         return full_text
 

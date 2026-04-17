@@ -32,8 +32,7 @@ class TemplateRegistry:
         try:
             client = self._get_client()
             rows = client.run_query(
-                "MATCH (t:Template {despacho_tipo: $tipo}) "
-                "RETURN t.conteudo AS conteudo LIMIT 1",
+                "MATCH (t:Template {despacho_tipo: $tipo}) RETURN t.conteudo AS conteudo LIMIT 1",
                 {"tipo": tipo},
             )
             if not rows:

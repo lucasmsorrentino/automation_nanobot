@@ -182,7 +182,12 @@ class ReflexionMemory:
         else:
             self._table.add([entry])
 
-        logger.info("Reflexion salva: [%s -> %s] %s", original.categoria, corrected.categoria, email_subject[:40])
+        logger.info(
+            "Reflexion salva: [%s -> %s] %s",
+            original.categoria,
+            corrected.categoria,
+            email_subject[:40],
+        )
         return reflection_text
 
     def retrieve(self, query: str, top_k: int = 3) -> list[dict]:
@@ -205,13 +210,15 @@ class ReflexionMemory:
 
         results = []
         for i in range(tbl.num_rows):
-            results.append({
-                "text": tbl.column("text")[i].as_py(),
-                "score": float(tbl.column("_distance")[i].as_py()),
-                "original_categoria": tbl.column("original_categoria")[i].as_py(),
-                "corrected_categoria": tbl.column("corrected_categoria")[i].as_py(),
-                "email_subject": tbl.column("email_subject")[i].as_py(),
-            })
+            results.append(
+                {
+                    "text": tbl.column("text")[i].as_py(),
+                    "score": float(tbl.column("_distance")[i].as_py()),
+                    "original_categoria": tbl.column("original_categoria")[i].as_py(),
+                    "corrected_categoria": tbl.column("corrected_categoria")[i].as_py(),
+                    "email_subject": tbl.column("email_subject")[i].as_py(),
+                }
+            )
         return results
 
     def retrieve_formatted(self, query: str, top_k: int = 3) -> str:

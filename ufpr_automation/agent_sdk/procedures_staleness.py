@@ -109,9 +109,7 @@ def check_intent(
     # 1. blocking_checks — all must be registered
     for check_id in intent.blocking_checks:
         if check_id not in registered_checks:
-            result.issues.append(
-                f"blocking_check '{check_id}' not registered in checkers.py"
-            )
+            result.issues.append(f"blocking_check '{check_id}' not registered in checkers.py")
 
     # 2. sources — SOUL.md §X references should match
     for source in intent.sources:
@@ -135,16 +133,12 @@ def check_intent(
                     f"(threshold: {max_age_days})"
                 )
         except ValueError:
-            result.issues.append(
-                f"last_update '{intent.last_update}' is not a valid ISO date"
-            )
+            result.issues.append(f"last_update '{intent.last_update}' is not a valid ISO date")
 
     # 4. SEI action consistency
     if intent.sei_action != "none":
         if not intent.sei_process_type:
-            result.issues.append(
-                f"sei_action='{intent.sei_action}' but sei_process_type is empty"
-            )
+            result.issues.append(f"sei_action='{intent.sei_action}' but sei_process_type is empty")
         elif catalog_types and intent.sei_process_type not in catalog_types:
             result.issues.append(
                 f"sei_process_type '{intent.sei_process_type}' not found in SEI_DOC_CATALOG.yaml"
@@ -153,9 +147,7 @@ def check_intent(
     # 5. Template sanity — check for unresolved placeholders info
     if intent.template and not re.search(r"\[.+?\]", intent.template):
         if intent.required_fields:
-            result.issues.append(
-                "template has no [PLACEHOLDER]s but required_fields is non-empty"
-            )
+            result.issues.append("template has no [PLACEHOLDER]s but required_fields is non-empty")
 
     # Determine overall status
     if any("not registered" in i or "not found in current" in i for i in result.issues):
@@ -256,7 +248,9 @@ def main() -> None:
         description="Check PROCEDURES.md intents for staleness against SOUL.md / checkers",
     )
     parser.add_argument(
-        "--max-age-days", type=int, default=90,
+        "--max-age-days",
+        type=int,
+        default=90,
         help="Flag intents older than N days (default: 90)",
     )
     args = parser.parse_args()

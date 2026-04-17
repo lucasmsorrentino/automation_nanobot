@@ -35,8 +35,8 @@ TIPOS = ("atas", "resolucoes", "instrucoes-normativas", "estagio")
 
 HELP_TEXT = f"""
 {BOLD}Comandos especiais:{RESET}
-  {CYAN}/conselho <nome>{RESET}  — Filtrar por conselho ({', '.join(CONSELHOS)}) ou 'todos'
-  {CYAN}/tipo <nome>{RESET}      — Filtrar por tipo ({', '.join(TIPOS)}) ou 'todos'
+  {CYAN}/conselho <nome>{RESET}  — Filtrar por conselho ({", ".join(CONSELHOS)}) ou 'todos'
+  {CYAN}/tipo <nome>{RESET}      — Filtrar por tipo ({", ".join(TIPOS)}) ou 'todos'
   {CYAN}/top <n>{RESET}          — Alterar quantidade de resultados (padrão: 5)
   {CYAN}/filtros{RESET}          — Mostrar filtros ativos
   {CYAN}/ajuda{RESET}            — Mostrar esta mensagem
@@ -54,8 +54,7 @@ def print_results(results: list, query: str) -> None:
 
     for i, r in enumerate(results, 1):
         score_color = GREEN if r.score < 0.3 else YELLOW
-        print(f"  {BOLD}[{i}]{RESET} {score_color}{r.score:.4f}{RESET}  "
-              f"{DIM}{r.caminho}{RESET}")
+        print(f"  {BOLD}[{i}]{RESET} {score_color}{r.score:.4f}{RESET}  {DIM}{r.caminho}{RESET}")
         # Show text preview (first 300 chars, indented)
         preview = r.text.strip().replace("\n", "\n      ")
         if len(preview) > 300:
@@ -171,12 +170,15 @@ def run_chat(
 
 def main():
     parser = argparse.ArgumentParser(description="Interactive RAG query CLI")
-    parser.add_argument("--conselho", type=str, default=None,
-                        help=f"Pre-filter by council ({', '.join(CONSELHOS)})")
-    parser.add_argument("--tipo", type=str, default=None,
-                        help=f"Pre-filter by doc type ({', '.join(TIPOS)})")
-    parser.add_argument("--top-k", type=int, default=5,
-                        help="Number of results per query (default: 5)")
+    parser.add_argument(
+        "--conselho", type=str, default=None, help=f"Pre-filter by council ({', '.join(CONSELHOS)})"
+    )
+    parser.add_argument(
+        "--tipo", type=str, default=None, help=f"Pre-filter by doc type ({', '.join(TIPOS)})"
+    )
+    parser.add_argument(
+        "--top-k", type=int, default=5, help="Number of results per query (default: 5)"
+    )
     args = parser.parse_args()
 
     run_chat(conselho=args.conselho, tipo=args.tipo, top_k=args.top_k)

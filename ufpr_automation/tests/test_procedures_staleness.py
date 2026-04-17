@@ -39,6 +39,7 @@ REGISTERED_CHECKS = {
 # _load_soul_sections
 # ---------------------------------------------------------------------------
 
+
 class TestLoadSoulSections:
     def test_extracts_sections(self, tmp_path):
         soul = tmp_path / "SOUL.md"
@@ -55,12 +56,15 @@ class TestLoadSoulSections:
 # check_intent — blocking_checks
 # ---------------------------------------------------------------------------
 
+
 class TestCheckIntentBlockingChecks:
     def test_all_checks_registered(self):
         intent = _make_intent(blocking_checks=["siga_matricula_ativa", "data_inicio_retroativa"])
         result = check_intent(
-            intent, registered_checks=REGISTERED_CHECKS,
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=REGISTERED_CHECKS,
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "ok"
         assert not result.issues
@@ -68,8 +72,10 @@ class TestCheckIntentBlockingChecks:
     def test_unregistered_check_is_stale(self):
         intent = _make_intent(blocking_checks=["nonexistent_check"])
         result = check_intent(
-            intent, registered_checks=REGISTERED_CHECKS,
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=REGISTERED_CHECKS,
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "stale"
         assert any("not registered" in i for i in result.issues)
@@ -77,8 +83,10 @@ class TestCheckIntentBlockingChecks:
     def test_empty_blocking_checks_ok(self):
         intent = _make_intent(blocking_checks=[])
         result = check_intent(
-            intent, registered_checks=REGISTERED_CHECKS,
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=REGISTERED_CHECKS,
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "ok"
 
@@ -87,20 +95,25 @@ class TestCheckIntentBlockingChecks:
 # check_intent — sources
 # ---------------------------------------------------------------------------
 
+
 class TestCheckIntentSources:
     def test_valid_soul_reference(self):
         intent = _make_intent(sources=["SOUL.md §8"])
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections={"8", "11"}, catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections={"8", "11"},
+            catalog_types=set(),
         )
         assert result.status == "ok"
 
     def test_invalid_soul_reference_is_stale(self):
         intent = _make_intent(sources=["SOUL.md §99"])
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections={"8", "11"}, catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections={"8", "11"},
+            catalog_types=set(),
         )
         assert result.status == "stale"
         assert any("§99" in i for i in result.issues)
@@ -108,8 +121,10 @@ class TestCheckIntentSources:
     def test_non_soul_sources_ignored(self):
         intent = _make_intent(sources=["Lei 11.788/2008", "Resolução 70/04-CEPE"])
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections={"8"}, catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections={"8"},
+            catalog_types=set(),
         )
         assert result.status == "ok"
 
@@ -118,12 +133,16 @@ class TestCheckIntentSources:
 # check_intent — last_update age
 # ---------------------------------------------------------------------------
 
+
 class TestCheckIntentAge:
     def test_recent_update_ok(self):
         intent = _make_intent(last_update=date.today().isoformat())
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(), max_age_days=90,
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
+            max_age_days=90,
         )
         assert result.status == "ok"
 
@@ -131,8 +150,11 @@ class TestCheckIntentAge:
         old_date = (date.today() - timedelta(days=120)).isoformat()
         intent = _make_intent(last_update=old_date)
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(), max_age_days=90,
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
+            max_age_days=90,
         )
         assert result.status == "warning"
         assert any("120 days old" in i for i in result.issues)
@@ -140,8 +162,10 @@ class TestCheckIntentAge:
     def test_invalid_date_warns(self):
         intent = _make_intent(last_update="not-a-date")
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "warning"
         assert any("not a valid ISO date" in i for i in result.issues)
@@ -149,8 +173,10 @@ class TestCheckIntentAge:
     def test_empty_last_update_ok(self):
         intent = _make_intent(last_update="")
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "ok"
 
@@ -158,6 +184,7 @@ class TestCheckIntentAge:
 # ---------------------------------------------------------------------------
 # check_intent — SEI action consistency
 # ---------------------------------------------------------------------------
+
 
 class TestCheckIntentSEI:
     def test_sei_action_with_valid_type(self):
@@ -167,16 +194,20 @@ class TestCheckIntentSEI:
         )
         catalog = {"Graduação/Ensino Técnico: Estágios não Obrigatórios"}
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=catalog,
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=catalog,
         )
         assert result.status == "ok"
 
     def test_sei_action_empty_type_warns(self):
         intent = _make_intent(sei_action="create_process", sei_process_type="")
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "warning"
         assert any("sei_process_type is empty" in i for i in result.issues)
@@ -184,8 +215,10 @@ class TestCheckIntentSEI:
     def test_sei_action_none_no_check(self):
         intent = _make_intent(sei_action="none", sei_process_type="")
         result = check_intent(
-            intent, registered_checks=set(),
-            soul_sections=set(), catalog_types=set(),
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
         )
         assert result.status == "ok"
 
@@ -194,16 +227,17 @@ class TestCheckIntentSEI:
 # run_staleness_check (integration with real PROCEDURES.md)
 # ---------------------------------------------------------------------------
 
+
 class TestRunStalenessCheck:
     def test_with_synthetic_procedures(self, tmp_path):
         proc = tmp_path / "PROCEDURES.md"
         proc.write_text(
-            '```intent\n'
-            'intent_name: test_ok\n'
+            "```intent\n"
+            "intent_name: test_ok\n"
             'keywords: ["test"]\n'
-            'categoria: Outros\n'
+            "categoria: Outros\n"
             'last_update: "' + date.today().isoformat() + '"\n'
-            '```\n',
+            "```\n",
             encoding="utf-8",
         )
 
@@ -222,15 +256,15 @@ class TestRunStalenessCheck:
     def test_detects_stale_intent(self, tmp_path):
         proc = tmp_path / "PROCEDURES.md"
         proc.write_text(
-            '```intent\n'
-            'intent_name: broken_intent\n'
+            "```intent\n"
+            "intent_name: broken_intent\n"
             'keywords: ["broken"]\n'
-            'categoria: Outros\n'
-            'blocking_checks:\n'
-            '  - nonexistent_checker\n'
-            'sources:\n'
+            "categoria: Outros\n"
+            "blocking_checks:\n"
+            "  - nonexistent_checker\n"
+            "sources:\n"
             '  - "SOUL.md §999"\n'
-            '```\n',
+            "```\n",
             encoding="utf-8",
         )
         soul = tmp_path / "SOUL.md"
@@ -257,17 +291,17 @@ class TestRunStalenessCheck:
     def test_report_contains_status_table(self, tmp_path):
         proc = tmp_path / "PROCEDURES.md"
         proc.write_text(
-            '```intent\n'
-            'intent_name: intent_a\n'
+            "```intent\n"
+            "intent_name: intent_a\n"
             'keywords: ["a"]\n'
-            'categoria: Outros\n'
-            '```\n'
-            '```intent\n'
-            'intent_name: intent_b\n'
+            "categoria: Outros\n"
+            "```\n"
+            "```intent\n"
+            "intent_name: intent_b\n"
             'keywords: ["b"]\n'
-            'categoria: Outros\n'
-            'blocking_checks:\n  - fake_check\n'
-            '```\n',
+            "categoria: Outros\n"
+            "blocking_checks:\n  - fake_check\n"
+            "```\n",
             encoding="utf-8",
         )
         results = run_staleness_check(

@@ -72,8 +72,7 @@ class Retriever:
         self._db = lancedb.connect(str(db_path))
         if TABLE_NAME not in self._db.list_tables().tables:
             raise ValueError(
-                f"Table '{TABLE_NAME}' not found. "
-                "Run `python -m ufpr_automation.rag.ingest` first."
+                f"Table '{TABLE_NAME}' not found. Run `python -m ufpr_automation.rag.ingest` first."
             )
         self._table = self._db.open_table(TABLE_NAME)
 
@@ -83,9 +82,7 @@ class Retriever:
 
     def _embed_query(self, query: str) -> list[float]:
         """Embed a query string. Prepends 'query: ' for E5 models."""
-        vec = self._model.encode(
-            f"query: {query}", normalize_embeddings=True
-        )
+        vec = self._model.encode(f"query: {query}", normalize_embeddings=True)
         return vec.tolist()
 
     def search(
@@ -153,15 +150,14 @@ class Retriever:
 
         parts = []
         for i, r in enumerate(results, 1):
-            parts.append(
-                f"[{i}] {r.caminho} (score: {r.score:.4f})\n{r.text}"
-            )
+            parts.append(f"[{i}] {r.caminho} (score: {r.score:.4f})\n{r.text}")
         return "\n\n---\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(description="Search UFPR docs vector store")
@@ -172,9 +168,7 @@ def main():
     args = parser.parse_args()
 
     r = Retriever()
-    print(r.search_formatted(
-        args.query, conselho=args.conselho, tipo=args.tipo, top_k=args.top_k
-    ))
+    print(r.search_formatted(args.query, conselho=args.conselho, tipo=args.tipo, top_k=args.top_k))
 
 
 if __name__ == "__main__":

@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
         choices=["gmail", "owa"],
         default=None,
         help="Email channel to use. Overrides EMAIL_CHANNEL from .env. "
-             "gmail = IMAP API (no MFA), owa = Playwright scraping.",
+        "gmail = IMAP API (no MFA), owa = Playwright scraping.",
     )
     parser.add_argument(
         "--langgraph",
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
         "--schedule",
         action="store_true",
         help="Start the scheduler to run the pipeline automatically (3x/day by default). "
-             "Configure via SCHEDULE_HOURS and SCHEDULE_TZ in .env.",
+        "Configure via SCHEDULE_HOURS and SCHEDULE_TZ in .env.",
     )
     parser.add_argument(
         "--once",
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Cap on number of unread emails to fetch for this run. "
-             "Useful for smoke tests. Default: client default (Gmail: 20).",
+        "Useful for smoke tests. Default: client default (Gmail: 20).",
     )
     return parser.parse_args()
 
@@ -186,6 +186,7 @@ async def run_main(
         if perceber_only:
             # Perceber-only mode: scrape + body extraction, no LLM calls
             from ufpr_automation.agents.perceber import PerceberAgent
+
             agent = PerceberAgent(page)
             emails = await agent.run()
             if limit is not None:
@@ -232,6 +233,7 @@ async def run_gmail_channel(use_langgraph: bool = False, limit: int | None = Non
 
     if use_langgraph:
         from ufpr_automation.graph.builder import build_graph
+
         graph = build_graph(channel="gmail")
         initial_state: dict = {"channel": "gmail"}
         if limit is not None:
@@ -254,6 +256,7 @@ async def run_gmail_channel(use_langgraph: bool = False, limit: int | None = Non
         _print_summary(summary)
     else:
         from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
+
         result = await run_pipeline_gmail(limit=limit)
         print_summary(result)
 

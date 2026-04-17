@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 from ufpr_automation.config.settings import DEBUG_OUTPUT_DIR
 
 
-async def capture_debug_info(
-    page: "Page", output_dir: str | Path | None = None
-) -> None:
+async def capture_debug_info(page: "Page", output_dir: str | Path | None = None) -> None:
     """Capture a screenshot and the full DOM for debugging selector issues.
 
     Args:
@@ -45,7 +43,5 @@ async def capture_debug_info(
         "url": page.url,
         "title": await page.title(),
     }
-    info_path.write_text(
-        json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    info_path.write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"ℹ️  Info da página salvo: {info_path}")

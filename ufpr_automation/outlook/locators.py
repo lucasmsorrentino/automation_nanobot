@@ -58,7 +58,7 @@ CHAINS: dict[str, LocatorChain] = {
             LocatorStrategy('[role="list"]', "semantic", "ARIA list role"),
             LocatorStrategy('div[aria-label*="message list"]', "semantic", "aria-label EN"),
             LocatorStrategy('div[aria-label*="lista de mensagens"]', "semantic", "aria-label PT"),
-            LocatorStrategy('#MailList', "id", "legacy ID"),
+            LocatorStrategy("#MailList", "id", "legacy ID"),
             LocatorStrategy('div[data-app-section="MailList"]', "id", "data-app-section"),
         ],
     ),
@@ -68,9 +68,13 @@ CHAINS: dict[str, LocatorChain] = {
         strategies=[
             LocatorStrategy('[role="listitem"]', "semantic", "ARIA listitem"),
             LocatorStrategy('[role="option"]', "semantic", "ARIA option"),
-            LocatorStrategy('[data-convid]', "id", "conversation ID attribute"),
-            LocatorStrategy('[data-mid]', "id", "message ID attribute"),
-            LocatorStrategy('div[class*="customScrollBar"] > div > div > div', "css", "scroll container children"),
+            LocatorStrategy("[data-convid]", "id", "conversation ID attribute"),
+            LocatorStrategy("[data-mid]", "id", "message ID attribute"),
+            LocatorStrategy(
+                'div[class*="customScrollBar"] > div > div > div',
+                "css",
+                "scroll container children",
+            ),
         ],
     ),
     # --- Sender element within email row ---
@@ -78,7 +82,7 @@ CHAINS: dict[str, LocatorChain] = {
         name="sender",
         strategies=[
             LocatorStrategy('[data-testid*="sender"]', "id", "testid sender"),
-            LocatorStrategy('span[title]', "semantic", "span with title attr"),
+            LocatorStrategy("span[title]", "semantic", "span with title attr"),
             LocatorStrategy('[class*="sender"]', "css", "class contains sender"),
             LocatorStrategy('[class*="from"]', "css", "class contains from"),
         ],
@@ -107,8 +111,16 @@ CHAINS: dict[str, LocatorChain] = {
         strategies=[
             LocatorStrategy("div[aria-label='Message body']", "semantic", "aria-label EN"),
             LocatorStrategy("div[aria-label='Corpo da mensagem']", "semantic", "aria-label PT"),
-            LocatorStrategy("div[class*='ReadingPane'] div[role='document']", "semantic", "reading pane document role"),
-            LocatorStrategy("div[class*='readingPane'] div[role='document']", "semantic", "reading pane document role (lower)"),
+            LocatorStrategy(
+                "div[class*='ReadingPane'] div[role='document']",
+                "semantic",
+                "reading pane document role",
+            ),
+            LocatorStrategy(
+                "div[class*='readingPane'] div[role='document']",
+                "semantic",
+                "reading pane document role (lower)",
+            ),
             LocatorStrategy("div[id='UniqueMessageBody']", "id", "UniqueMessageBody"),
             LocatorStrategy("div[class*='messageBody']", "css", "class messageBody"),
             LocatorStrategy("div[class*='MessageBody']", "css", "class MessageBody"),
@@ -131,10 +143,22 @@ CHAINS: dict[str, LocatorChain] = {
     "compose_area": LocatorChain(
         name="compose_area",
         strategies=[
-            LocatorStrategy("div[aria-label='Corpo da mensagem'][contenteditable='true']", "semantic", "aria-label PT + contenteditable"),
-            LocatorStrategy("div[aria-label='Message body'][contenteditable='true']", "semantic", "aria-label EN + contenteditable"),
-            LocatorStrategy("div[role='textbox'][contenteditable='true']", "semantic", "textbox role"),
-            LocatorStrategy("div[class*='compose'][contenteditable='true']", "css", "compose class"),
+            LocatorStrategy(
+                "div[aria-label='Corpo da mensagem'][contenteditable='true']",
+                "semantic",
+                "aria-label PT + contenteditable",
+            ),
+            LocatorStrategy(
+                "div[aria-label='Message body'][contenteditable='true']",
+                "semantic",
+                "aria-label EN + contenteditable",
+            ),
+            LocatorStrategy(
+                "div[role='textbox'][contenteditable='true']", "semantic", "textbox role"
+            ),
+            LocatorStrategy(
+                "div[class*='compose'][contenteditable='true']", "css", "compose class"
+            ),
             LocatorStrategy("div[class*='editor'][contenteditable='true']", "css", "editor class"),
             LocatorStrategy("[contenteditable='true']", "semantic", "any contenteditable"),
         ],
@@ -228,7 +252,9 @@ async def find_element(
                         pass
                 logger.debug(
                     "Locator '%s': matched via %s (%s)",
-                    chain_name, strategy.approach, strategy.description,
+                    chain_name,
+                    strategy.approach,
+                    strategy.description,
                 )
                 return el
         except Exception:
@@ -267,7 +293,10 @@ async def find_all_elements(
             if elements:
                 logger.debug(
                     "Locator '%s': %d match(es) via %s (%s)",
-                    chain_name, len(elements), strategy.approach, strategy.description,
+                    chain_name,
+                    len(elements),
+                    strategy.approach,
+                    strategy.description,
                 )
                 return elements
         except Exception:
@@ -351,7 +380,9 @@ async def wait_for_any(
             )
             logger.debug(
                 "wait_for_any '%s': found via %s (%s)",
-                chain_name, strategy.approach, strategy.description,
+                chain_name,
+                strategy.approach,
+                strategy.description,
             )
             return True
         except Exception:

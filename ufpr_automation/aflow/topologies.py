@@ -17,6 +17,7 @@ Variants:
 All topologies must accept a ``channel`` arg and an optional ``checkpointer``
 for parity with the existing ``build_graph`` signature.
 """
+
 from __future__ import annotations
 
 from typing import Callable
@@ -172,9 +173,7 @@ def get_topology(name: str) -> Callable:
     """
     name = name.lower()
     if name not in _TOPOLOGY_FACTORIES:
-        raise KeyError(
-            f"Unknown topology '{name}'. Valid: {sorted(_TOPOLOGY_FACTORIES)}"
-        )
+        raise KeyError(f"Unknown topology '{name}'. Valid: {sorted(_TOPOLOGY_FACTORIES)}")
     return _TOPOLOGY_FACTORIES[name]
 
 

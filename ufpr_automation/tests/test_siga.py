@@ -83,6 +83,7 @@ class TestEligibilityResult:
 # get_integralizacao, and get_historico so the rule engine is exercised
 # in isolation without Playwright.
 
+
 def _mk_client():
     """SIGAClient requires a Page; we never hit Playwright in these
     tests because all data-fetching helpers are mocked."""
@@ -223,8 +224,14 @@ class TestValidateInternshipEligibility:
             integ=_default_integ(
                 nao_vencidas=["OD999"],
                 disciplines=[
-                    {"sigla": "OD999", "disciplina": "X", "carga_horaria": "60h",
-                     "situacao": "Não Vencida", "vencida_em": "", "observacoes": ""},
+                    {
+                        "sigla": "OD999",
+                        "disciplina": "X",
+                        "carga_horaria": "60h",
+                        "situacao": "Não Vencida",
+                        "vencida_em": "",
+                        "observacoes": "",
+                    },
                 ],
             ),
         )
@@ -240,9 +247,14 @@ class TestValidateInternshipEligibility:
             integ=_default_integ(
                 nao_vencidas=["OD501"],
                 disciplines=[
-                    {"sigla": "OD501", "disciplina": "ESTÁGIO SUPERVISIONADO",
-                     "carga_horaria": "360h", "situacao": "Não Vencida",
-                     "vencida_em": "", "observacoes": ""},
+                    {
+                        "sigla": "OD501",
+                        "disciplina": "ESTÁGIO SUPERVISIONADO",
+                        "carga_horaria": "360h",
+                        "situacao": "Não Vencida",
+                        "vencida_em": "",
+                        "observacoes": "",
+                    },
                 ],
             ),
         )
@@ -258,9 +270,14 @@ class TestValidateInternshipEligibility:
             integ=_default_integ(
                 nao_vencidas=["ODDA6"],
                 disciplines=[
-                    {"sigla": "ODDA6", "disciplina": "DESIGN APLICADO 6",
-                     "carga_horaria": "120h", "situacao": "Não Vencida",
-                     "vencida_em": "", "observacoes": ""},
+                    {
+                        "sigla": "ODDA6",
+                        "disciplina": "DESIGN APLICADO 6",
+                        "carga_horaria": "120h",
+                        "situacao": "Não Vencida",
+                        "vencida_em": "",
+                        "observacoes": "",
+                    },
                 ],
             ),
         )
@@ -276,8 +293,14 @@ class TestValidateInternshipEligibility:
             integ=_default_integ(
                 nao_vencidas=["OD999"],
                 disciplines=[
-                    {"sigla": "OD999", "disciplina": "X", "carga_horaria": "60h",
-                     "situacao": "Não Vencida", "vencida_em": "", "observacoes": ""},
+                    {
+                        "sigla": "OD999",
+                        "disciplina": "X",
+                        "carga_horaria": "60h",
+                        "situacao": "Não Vencida",
+                        "vencida_em": "",
+                        "observacoes": "",
+                    },
                 ],
             ),
         )
@@ -288,6 +311,7 @@ class TestValidateInternshipEligibility:
 
 
 # --- SIGAClient.get_historico extraction tests ---
+
 
 class TestGetHistorico:
     """Test the data extraction logic against mock page DOM."""

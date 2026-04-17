@@ -12,17 +12,20 @@ import pytest
 class TestLogger:
     def test_logger_is_logging_logger(self):
         from ufpr_automation.utils.logging import logger
+
         assert isinstance(logger, logging.Logger)
         assert logger.name == "ufpr_automation"
 
     def test_logger_has_handlers(self):
         """After _build_logger runs once, handlers must be attached."""
         from ufpr_automation.utils.logging import logger
+
         assert len(logger.handlers) >= 1
 
     def test_logger_reuses_existing_handlers_on_reload(self):
         """Re-importing should not duplicate handlers."""
         from ufpr_automation.utils import logging as logging_mod
+
         before = len(logging_mod.logger.handlers)
         importlib.reload(logging_mod)
         after = len(logging_mod.logger.handlers)
@@ -33,12 +36,11 @@ class TestLogger:
     def test_logger_can_emit_without_raising(self, caplog):
         """Emit a message and ensure no exception is raised from our handlers."""
         from ufpr_automation.utils.logging import logger
+
         with caplog.at_level(logging.INFO, logger="ufpr_automation"):
             logger.info("test message — UTF-8 ok (acento e emoji 🚀)")
         # caplog should capture our message.
-        assert any(
-            "test message" in record.getMessage() for record in caplog.records
-        )
+        assert any("test message" in record.getMessage() for record in caplog.records)
 
     def test_stdout_reconfigure_helper_tolerates_missing_attribute(self, monkeypatch):
         """The UTF-8 reconfigure block should not crash on a stdout without
@@ -74,6 +76,7 @@ class TestLogger:
         # Re-importing the module should NOT raise even though neither
         # stdout nor stderr expose .reconfigure.
         from ufpr_automation.utils import logging as logging_mod
+
         importlib.reload(logging_mod)
 
         # Sanity: logger still exists after reload.
@@ -82,9 +85,7 @@ class TestLogger:
 
 class TestDebugCapture:
     @pytest.mark.asyncio
-    async def test_capture_debug_info_writes_expected_files(
-        self, mock_page, tmp_path
-    ):
+    async def test_capture_debug_info_writes_expected_files(self, mock_page, tmp_path):
         """capture_debug_info should write a screenshot, DOM html, and info json."""
         from ufpr_automation.utils.debug import capture_debug_info
 
@@ -101,9 +102,7 @@ class TestDebugCapture:
         mock_page.screenshot.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_capture_debug_info_writes_page_info_json(
-        self, mock_page, tmp_path
-    ):
+    async def test_capture_debug_info_writes_page_info_json(self, mock_page, tmp_path):
         import json
 
         from ufpr_automation.utils.debug import capture_debug_info

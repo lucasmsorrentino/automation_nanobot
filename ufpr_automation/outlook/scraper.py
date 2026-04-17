@@ -43,9 +43,7 @@ async def wait_for_inbox_load(page: Page) -> bool:
 
         for selector in selectors_to_try:
             try:
-                await page.wait_for_selector(
-                    selector, state="visible", timeout=15_000
-                )
+                await page.wait_for_selector(selector, state="visible", timeout=15_000)
                 logger.info("Inbox carregada (selector: %s)", selector)
                 return True
             except Exception:
@@ -136,15 +134,13 @@ async def _scrape_modern_owa(page: Page) -> list[EmailData]:
             email = EmailData()
 
             sender_el = await item.query_selector(
-                '[class*="sender"], [class*="from"], span[title], '
-                '[data-testid*="sender"]'
+                '[class*="sender"], [class*="from"], span[title], [data-testid*="sender"]'
             )
             if sender_el:
                 email.sender = (await sender_el.inner_text()).strip()
 
             subject_el = await item.query_selector(
-                '[class*="subject"], [class*="Subject"], '
-                '[data-testid*="subject"]'
+                '[class*="subject"], [class*="Subject"], [data-testid*="subject"]'
             )
             if subject_el:
                 email.subject = (await subject_el.inner_text()).strip()
@@ -202,9 +198,7 @@ async def _scrape_generic_owa(page: Page) -> list[EmailData]:
                 if not email.sender and not email.subject:
                     email.subject = label[:100]
 
-                email.is_unread = (
-                    "não lido" in label.lower() or "unread" in label.lower()
-                )
+                email.is_unread = "não lido" in label.lower() or "unread" in label.lower()
 
             if email.sender or email.subject:
                 emails.append(email)

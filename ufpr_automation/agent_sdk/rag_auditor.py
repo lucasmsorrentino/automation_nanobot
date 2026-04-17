@@ -347,7 +347,7 @@ def format_report(report: AuditReport) -> str:
         status = "HIT" if r.is_hit else "MISS"
         lines.append(
             f"- [{status}] `{r.query_id}` (rank={r.found_at_rank}, "
-            f"score={r.top_score:.3f}, {r.latency_ms}ms): \"{r.query[:80]}\""
+            f'score={r.top_score:.3f}, {r.latency_ms}ms): "{r.query[:80]}"'
         )
 
     return "\n".join(lines)
@@ -360,11 +360,14 @@ def main() -> None:
         description="Audit RAG retrieval quality against curated ground truth",
     )
     parser.add_argument(
-        "--ground-truth", type=Path, default=None,
+        "--ground-truth",
+        type=Path,
+        default=None,
         help="Path to ground truth YAML (default: agent_sdk/eval_sets/rag_ground_truth.yaml)",
     )
     parser.add_argument(
-        "--quick", action="store_true",
+        "--quick",
+        action="store_true",
         help="Run only the first 5 queries",
     )
     args = parser.parse_args()

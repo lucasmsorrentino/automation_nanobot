@@ -14,7 +14,7 @@ from ufpr_automation.graph.state import EmailState
 from ufpr_automation.utils.logging import logger
 
 # Confidence thresholds for routing
-CONFIDENCE_HIGH = 0.95   # auto-draft
+CONFIDENCE_HIGH = 0.95  # auto-draft
 CONFIDENCE_MEDIUM = 0.70  # human review
 
 
@@ -118,8 +118,9 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
                 if score > 0:
                     near_miss_scores[email.stable_id] = score
             except Exception as e:
-                logger.debug("Tier 0: could not compute near-miss for %s: %s",
-                             email.stable_id[:8], e)
+                logger.debug(
+                    "Tier 0: could not compute near-miss for %s: %s", email.stable_id[:8], e
+                )
             continue
 
         if playbook.is_stale(match.intent):
@@ -233,6 +234,7 @@ def _get_reflexion_context(emails: list) -> dict[str, str]:
     """Retrieve past error reflections for each email (Reflexion pattern)."""
     try:
         from ufpr_automation.feedback.reflexion import ReflexionMemory
+
         memory = ReflexionMemory()
         if memory.count() == 0:
             return {}
@@ -260,6 +262,7 @@ def _get_reflexion_context_single(email) -> str:
     """
     try:
         from ufpr_automation.feedback.reflexion import ReflexionMemory
+
         memory = ReflexionMemory()
         if memory.count() == 0:
             return ""
@@ -345,7 +348,8 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
         if skipped:
             logger.info(
                 "RAG skip_rag_high_tier0: skipping %d email(s) with near-miss > %.2f",
-                len(skipped), threshold,
+                len(skipped),
+                threshold,
             )
             for e, s in skipped:
                 logger.debug("  skip '%s' (score=%.3f)", e.subject[:40], s)
@@ -411,6 +415,7 @@ def _compiled_prompt_paths() -> list:
     Imports OPTIMIZED_DIR lazily so settings reloads / monkeypatches work in tests.
     """
     from ufpr_automation.dspy_modules.optimize import OPTIMIZED_DIR as _OPT_DIR
+
     return [
         _OPT_DIR / "gepa_optimized.json",
         _OPT_DIR / "mipro_optimized.json",
@@ -460,10 +465,7 @@ def _should_use_dspy() -> bool:
     except ImportError:
         return False
     if not _has_compiled_prompt():
-        logger.info(
-            "DSPy USE_DSPY=auto but no compiled prompts yet; "
-            "falling back to litellm"
-        )
+        logger.info("DSPy USE_DSPY=auto but no compiled prompts yet; falling back to litellm")
         return False
     return True
 
@@ -526,6 +528,7 @@ def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
 
     async def _classify_all():
         import litellm  # noqa: F401
+
         results = {}
         for email in emails:
             try:
@@ -616,7 +619,9 @@ def rotear(state: EmailState) -> dict[str, Any]:
 
     logger.info(
         "Roteamento: %d auto | %d revisao | %d escalacao",
-        len(auto_draft), len(human_review), len(manual_escalation),
+        len(auto_draft),
+        len(human_review),
+        len(manual_escalation),
     )
     return {
         "auto_draft": auto_draft,
@@ -1076,8 +1081,11 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
         siga = state.get("siga_contexts", {}).get(sid, {})
         sei = state.get("sei_contexts", {}).get(sid, {})
         ctx = CheckContext(
-            email=email, intent=intent, vars=vars_,
-            siga_context=siga, sei_context=sei,
+            email=email,
+            intent=intent,
+            vars=vars_,
+            siga_context=siga,
+            sei_context=sei,
         )
 
         # Run blocking checks
@@ -1085,9 +1093,7 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
 
         if summary.hard_blocks:
             # Draft refusal email listing the hard blocks
-            block_lines = "\n".join(
-                f"- {r.check_id}: {r.reason}" for r in summary.hard_blocks
-            )
+            block_lines = "\n".join(f"- {r.check_id}: {r.reason}" for r in summary.hard_blocks)
             cls.sugestao_resposta = (
                 f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
                 f"Não foi possível processar sua solicitação de estágio "
@@ -1095,18 +1101,22 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
                 f"Favor regularizar a situação e reenviar a documentação.\n\n"
                 f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
             )
-            sei_ops.append({
-                "stable_id": sid, "op": "blocked", "reason": "hard_block",
-                "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.hard_blocks],
-            })
-            logger.info("agir_estagios[%s]: HARD BLOCK — %d bloqueio(s)", sid[:8], len(summary.hard_blocks))
+            sei_ops.append(
+                {
+                    "stable_id": sid,
+                    "op": "blocked",
+                    "reason": "hard_block",
+                    "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.hard_blocks],
+                }
+            )
+            logger.info(
+                "agir_estagios[%s]: HARD BLOCK — %d bloqueio(s)", sid[:8], len(summary.hard_blocks)
+            )
             continue
 
         if summary.soft_blocks:
             # Draft email asking for justification
-            soft_lines = "\n".join(
-                f"- {r.check_id}: {r.reason}" for r in summary.soft_blocks
-            )
+            soft_lines = "\n".join(f"- {r.check_id}: {r.reason}" for r in summary.soft_blocks)
             cls.sugestao_resposta = (
                 f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
                 f"Sua solicitação de estágio requer esclarecimentos adicionais:\n\n"
@@ -1115,15 +1125,25 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
                 f"dar prosseguimento ao processo.\n\n"
                 f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
             )
-            sei_ops.append({
-                "stable_id": sid, "op": "blocked", "reason": "soft_block",
-                "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.soft_blocks],
-            })
-            logger.info("agir_estagios[%s]: SOFT BLOCK — %d pendência(s)", sid[:8], len(summary.soft_blocks))
+            sei_ops.append(
+                {
+                    "stable_id": sid,
+                    "op": "blocked",
+                    "reason": "soft_block",
+                    "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.soft_blocks],
+                }
+            )
+            logger.info(
+                "agir_estagios[%s]: SOFT BLOCK — %d pendência(s)", sid[:8], len(summary.soft_blocks)
+            )
             continue
 
         # All checks passed — proceed with SEI operations
-        logger.info("agir_estagios[%s]: checks OK — executando SEI ops (intent: %s)", sid[:8], intent.intent_name)
+        logger.info(
+            "agir_estagios[%s]: checks OK — executando SEI ops (intent: %s)",
+            sid[:8],
+            intent.intent_name,
+        )
 
         try:
             sei_result = asyncio.run(_run_sei_chain(intent, vars_, email, sid))
@@ -1176,7 +1196,9 @@ async def _run_sei_chain(intent, vars_: dict, email, stable_id: str) -> dict:
             interessado=f"{vars_.get('nome_aluno', 'N/A')} - GRR{vars_.get('grr', 'N/A')}",
         )
         result["processo_id"] = create.processo_id
-        result["ops"].append({"op": "create_process", "success": create.success, "dry_run": create.dry_run})
+        result["ops"].append(
+            {"op": "create_process", "success": create.success, "dry_run": create.dry_run}
+        )
         logger.info("  create_process: %s (dry_run=%s)", create.processo_id, create.dry_run)
     else:
         result["processo_id"] = vars_.get("numero_processo_sei", "")
@@ -1199,15 +1221,33 @@ async def _run_sei_chain(intent, vars_: dict, email, stable_id: str) -> dict:
         if email.attachments:
             for att in email.attachments:
                 if att.filename and att.filename.lower().endswith(".pdf"):
-                    att_file = Path(att.local_path) if hasattr(att, "local_path") and att.local_path else None
+                    att_file = (
+                        Path(att.local_path)
+                        if hasattr(att, "local_path") and att.local_path
+                        else None
+                    )
                     break
 
         if att_file and att_file.exists():
             attach = await writer.attach_document(processo_id, att_file, classification)
-            result["ops"].append({"op": "attach", "label": att_label, "success": attach.success, "dry_run": attach.dry_run})
+            result["ops"].append(
+                {
+                    "op": "attach",
+                    "label": att_label,
+                    "success": attach.success,
+                    "dry_run": attach.dry_run,
+                }
+            )
         else:
             # No file available — log as planned but not executed
-            result["ops"].append({"op": "attach", "label": att_label, "skipped": True, "reason": "file_not_available"})
+            result["ops"].append(
+                {
+                    "op": "attach",
+                    "label": att_label,
+                    "skipped": True,
+                    "reason": "file_not_available",
+                }
+            )
 
     # Step 3: save_despacho_draft
     if intent.despacho_template:

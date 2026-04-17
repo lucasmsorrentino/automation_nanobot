@@ -21,12 +21,14 @@ def sample_email():
 
 @pytest.fixture
 def valid_classification_json():
-    return json.dumps({
-        "categoria": "Estágios",
-        "resumo": "Solicitação de aprovação de estágio.",
-        "acao_necessaria": "Redigir Resposta",
-        "sugestao_resposta": "Prezado(a), recebemos sua solicitação...",
-    })
+    return json.dumps(
+        {
+            "categoria": "Estágios",
+            "resumo": "Solicitação de aprovação de estágio.",
+            "acao_necessaria": "Redigir Resposta",
+            "sugestao_resposta": "Prezado(a), recebemos sua solicitação...",
+        }
+    )
 
 
 def _mock_completion_response(text: str) -> MagicMock:

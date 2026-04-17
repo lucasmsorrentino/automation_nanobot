@@ -50,9 +50,7 @@ class TestParseArgs:
         assert args.once is True
 
     def test_langgraph_and_headed(self, monkeypatch):
-        monkeypatch.setattr(
-            sys, "argv", ["ufpr_automation", "--langgraph", "--headed"]
-        )
+        monkeypatch.setattr(sys, "argv", ["ufpr_automation", "--langgraph", "--headed"])
         args = commands.parse_args()
         assert args.langgraph is True
         assert args.headed is True
@@ -98,8 +96,10 @@ class TestMainDispatch:
         # Use a completed future-like coroutine replacement.
         fake_coro = AsyncMock()
 
-        with patch.object(commands, "run_dry_run", fake_coro), \
-             patch.object(commands.asyncio, "run") as mock_run:
+        with (
+            patch.object(commands, "run_dry_run", fake_coro),
+            patch.object(commands.asyncio, "run") as mock_run,
+        ):
             commands.main()
 
         # asyncio.run should be called with the dry-run coroutine.
@@ -107,13 +107,13 @@ class TestMainDispatch:
         # (We don't care about the exact object — just that dispatch happened.)
 
     def test_gmail_channel_dispatches_run_gmail(self, monkeypatch):
-        monkeypatch.setattr(
-            sys, "argv", ["ufpr_automation", "--channel", "gmail"]
-        )
+        monkeypatch.setattr(sys, "argv", ["ufpr_automation", "--channel", "gmail"])
 
-        with patch.object(commands, "run_gmail_channel") as gmail_mock, \
-             patch.object(commands.asyncio, "run") as mock_run, \
-             patch.object(commands, "run_main") as owa_mock:
+        with (
+            patch.object(commands, "run_gmail_channel") as gmail_mock,
+            patch.object(commands.asyncio, "run") as mock_run,
+            patch.object(commands, "run_main") as owa_mock,
+        ):
             commands.main()
 
         mock_run.assert_called_once()
@@ -124,9 +124,11 @@ class TestMainDispatch:
     def test_owa_default_dispatches_run_main(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["ufpr_automation", "--channel", "owa"])
 
-        with patch.object(commands, "run_main") as owa_mock, \
-             patch.object(commands.asyncio, "run") as mock_run, \
-             patch.object(commands, "run_gmail_channel") as gmail_mock:
+        with (
+            patch.object(commands, "run_main") as owa_mock,
+            patch.object(commands.asyncio, "run") as mock_run,
+            patch.object(commands, "run_gmail_channel") as gmail_mock,
+        ):
             commands.main()
 
         mock_run.assert_called_once()

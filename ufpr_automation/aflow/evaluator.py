@@ -4,6 +4,7 @@ Runs each topology against a held-out set of feedback examples and scores
 it via composite_metric (or whatever metric the caller specifies). Returns
 an EvalResult with accuracy, latency stats, cost estimate, and error count.
 """
+
 from __future__ import annotations
 
 import logging

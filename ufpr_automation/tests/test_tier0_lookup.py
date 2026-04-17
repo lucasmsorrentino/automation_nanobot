@@ -68,9 +68,7 @@ def patch_get_playbook(fake_playbook):
     staleness override ``is_stale`` themselves.
     """
     fake_playbook.is_stale = lambda intent, **kw: False  # type: ignore
-    with patch(
-        "ufpr_automation.procedures.playbook.get_playbook", return_value=fake_playbook
-    ):
+    with patch("ufpr_automation.procedures.playbook.get_playbook", return_value=fake_playbook):
         yield fake_playbook
 
 
@@ -157,9 +155,7 @@ class TestTier0Lookup:
     def test_stale_intent_falls_back(self, patch_get_playbook):
         # Force is_stale to always return True
         patch_get_playbook.is_stale = lambda intent, **kw: True  # type: ignore
-        emails = [
-            _make_email("Ana <ana@ufpr.br>", "Quero prorrogar meu estágio")
-        ]
+        emails = [_make_email("Ana <ana@ufpr.br>", "Quero prorrogar meu estágio")]
         result = tier0_lookup({"emails": emails})
         assert result["tier0_hits"] == []
         assert result["classifications"] == {}
@@ -168,7 +164,7 @@ class TestTier0Lookup:
         patch_get_playbook._ensure_embeddings = lambda: False  # type: ignore
         emails = [
             _make_email("Ana <ana@ufpr.br>", "prorrogar meu estágio"),  # hit
-            _make_email("X <x@y.z>", "promoção"),                        # miss
+            _make_email("X <x@y.z>", "promoção"),  # miss
         ]
         result = tier0_lookup({"emails": emails})
         assert len(result["tier0_hits"]) == 1

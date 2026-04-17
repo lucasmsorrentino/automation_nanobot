@@ -43,6 +43,7 @@ def _write_last_run(path: Path, entries: list[dict]) -> None:
 # _load_last_run
 # ---------------------------------------------------------------------------
 
+
 class TestLoadLastRun:
     def test_loads_multiple_entries(self, tmp_path):
         p = tmp_path / "last_run.jsonl"
@@ -57,6 +58,7 @@ class TestLoadLastRun:
 # ---------------------------------------------------------------------------
 # summarize_last_run
 # ---------------------------------------------------------------------------
+
 
 class TestSummarize:
     def test_empty_returns_zero_totals(self):
@@ -101,6 +103,7 @@ class TestSummarize:
 # build_bootstrap_prompt
 # ---------------------------------------------------------------------------
 
+
 class TestBuildBootstrap:
     def test_contains_briefing_and_summary(self):
         entries = [_entry(cat="Estágios")]
@@ -128,6 +131,7 @@ class TestBuildBootstrap:
 # ---------------------------------------------------------------------------
 # prepare_session
 # ---------------------------------------------------------------------------
+
 
 class TestPrepareSession:
     def test_creates_session_dir_with_artifacts(self, tmp_path):
@@ -171,6 +175,7 @@ class TestPrepareSession:
 # Streamlit independence (regression)
 # ---------------------------------------------------------------------------
 
+
 class TestStreamlitIndependence:
     """Ensures feedback/web.py does not import from agent_sdk/."""
 
@@ -188,6 +193,7 @@ class TestStreamlitIndependence:
 # ---------------------------------------------------------------------------
 # launch_claude — fallback behavior
 # ---------------------------------------------------------------------------
+
 
 class TestLaunchClaude:
     def test_unavailable_claude_returns_exit_2(self, tmp_path, capsys):

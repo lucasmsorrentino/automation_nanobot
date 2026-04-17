@@ -5,6 +5,7 @@ side: the loader must fail fast on missing/malformed manifests, must
 validate schema version, and must refuse any manifest that sneaks a
 write-op selector past the read-only policy.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,11 +15,7 @@ import yaml
 
 from ufpr_automation.siga import selectors as sel
 
-FIXTURE = (
-    Path(__file__).resolve().parent
-    / "fixtures"
-    / "siga_selectors.example.yaml"
-)
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "siga_selectors.example.yaml"
 
 
 @pytest.fixture(autouse=True)
@@ -162,9 +159,7 @@ class TestForbiddenSelectorPolicy:
             "button:has-text('Salvar')",  # contains forbidden substring
         ],
     )
-    def test_rejects_forbidden_selector_in_screen(
-        self, tmp_path, monkeypatch, forbidden
-    ):
+    def test_rejects_forbidden_selector_in_screen(self, tmp_path, monkeypatch, forbidden):
         data = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
         data["screens"]["student_search"]["submit_selector"] = forbidden
         bad = tmp_path / "poisoned.yaml"
@@ -184,9 +179,7 @@ class TestForbiddenSelectorPolicy:
         with pytest.raises(sel.SIGASelectorsError, match="read-only policy"):
             sel.get_selectors()
 
-    def test_allows_forbidden_selector_in_documentation_section(
-        self, use_example_manifest
-    ):
+    def test_allows_forbidden_selector_in_documentation_section(self, use_example_manifest):
         """The dedicated ``forbidden_selectors`` section lists them by design
         — listing ≠ using."""
         data = sel.get_selectors()

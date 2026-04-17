@@ -109,19 +109,23 @@ def cluster_tier1_emails(
     fb_records = fb_store.list_all()
     fb_by_hash: dict[str, list[dict[str, Any]]] = {}
     for fb in fb_records:
-        fb_by_hash.setdefault(fb.email_hash, []).append({
-            "original_cat": fb.original.categoria,
-            "corrected_cat": fb.corrected.categoria,
-            "subject": fb.email_subject,
-            "notes": fb.notes,
-        })
+        fb_by_hash.setdefault(fb.email_hash, []).append(
+            {
+                "original_cat": fb.original.categoria,
+                "corrected_cat": fb.corrected.categoria,
+                "subject": fb.email_subject,
+                "notes": fb.notes,
+            }
+        )
 
     clusters: list[EmailCluster] = []
     for (cat, pat), recs in groups.items():
         if len(recs) < min_frequency:
             continue
         subjects = list({r.email_subject for r in recs if r.email_subject})[:5]
-        senders = list({getattr(r, "email_sender", "") for r in recs if getattr(r, "email_sender", "")})[:5]
+        senders = list(
+            {getattr(r, "email_sender", "") for r in recs if getattr(r, "email_sender", "")}
+        )[:5]
         corrections: list[dict[str, Any]] = []
         for r in recs:
             if r.email_hash in fb_by_hash:
@@ -219,7 +223,7 @@ required_fields:
 sources:
   - "SOUL.md §X"
   - "Resolução XX/YY-CEPE"
-last_update: "{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+last_update: "{datetime.now(timezone.utc).strftime("%Y-%m-%d")}"
 confidence: 0.85  # 0.5 se sem fonte confirmada
 template: "Prezado(a) [NOME_ALUNO], ..."
 sei_action: "none"  # ou "create_process" ou "append_to_existing"
@@ -286,8 +290,11 @@ def run_intent_drafter(
     )
 
     if not clusters:
-        logger.info("Intent Drafter: nenhum cluster com >= %d emails nos últimos %d dias",
-                     min_frequency, last_days)
+        logger.info(
+            "Intent Drafter: nenhum cluster com >= %d emails nos últimos %d dias",
+            min_frequency,
+            last_days,
+        )
         return {"clusters": 0, "candidates": 0, "skipped": 0, "expansions": 0}
 
     existing_names = _existing_intent_names(procedures_path)
@@ -296,28 +303,43 @@ def run_intent_drafter(
 
     if not dry_run and not is_claude_available():
         logger.error("Intent Drafter: claude CLI não disponível — rode `claude /login` primeiro")
-        return {"clusters": len(clusters), "candidates": 0, "skipped": 0,
-                "expansions": 0, "error": "claude_unavailable"}
+        return {
+            "clusters": len(clusters),
+            "candidates": 0,
+            "skipped": 0,
+            "expansions": 0,
+            "error": "claude_unavailable",
+        }
 
-    stats: dict[str, int] = {"clusters": len(clusters), "candidates": 0, "skipped": 0, "expansions": 0}
+    stats: dict[str, int] = {
+        "clusters": len(clusters),
+        "candidates": 0,
+        "skipped": 0,
+        "expansions": 0,
+    }
     candidate_blocks: list[str] = []
 
     for cluster in clusters:
         prompt = build_cluster_prompt(cluster, existing_names, soul_excerpt)
-        content_hash = _content_hash(
-            f"{cluster.categoria}|{cluster.pattern}|{cluster.count}"
-        )
+        content_hash = _content_hash(f"{cluster.categoria}|{cluster.pattern}|{cluster.count}")
 
         if content_hash in existing_hashes:
-            logger.info("Intent Drafter: cluster '%s/%s' já processado (hash %s), skip",
-                        cluster.categoria, cluster.pattern, content_hash)
+            logger.info(
+                "Intent Drafter: cluster '%s/%s' já processado (hash %s), skip",
+                cluster.categoria,
+                cluster.pattern,
+                content_hash,
+            )
             stats["skipped"] += 1
             continue
 
         if dry_run:
             logger.info(
                 "Intent Drafter [DRY_RUN]: cluster '%s/%s' (%d emails) — prompt %d chars",
-                cluster.categoria, cluster.pattern, cluster.count, len(prompt),
+                cluster.categoria,
+                cluster.pattern,
+                cluster.count,
+                len(prompt),
             )
             stats["candidates"] += 1
             candidate_blocks.append(
@@ -335,15 +357,22 @@ def run_intent_drafter(
         )
 
         if not result.success:
-            logger.warning("Intent Drafter: claude falhou para cluster '%s/%s': %s",
-                           cluster.categoria, cluster.pattern, result.error or result.stderr)
+            logger.warning(
+                "Intent Drafter: claude falhou para cluster '%s/%s': %s",
+                cluster.categoria,
+                cluster.pattern,
+                result.error or result.stderr,
+            )
             continue
 
         # Extract YAML block from output
         yaml_match = re.search(r"```(?:yaml|intent)?\s*\n(.*?)```", result.output_text, re.DOTALL)
         if not yaml_match:
-            logger.warning("Intent Drafter: nenhum bloco YAML na resposta para '%s/%s'",
-                           cluster.categoria, cluster.pattern)
+            logger.warning(
+                "Intent Drafter: nenhum bloco YAML na resposta para '%s/%s'",
+                cluster.categoria,
+                cluster.pattern,
+            )
             continue
 
         yaml_block = yaml_match.group(1).strip()
@@ -355,8 +384,12 @@ def run_intent_drafter(
             data = _yaml.safe_load(yaml_block)
             Intent.model_validate(data)
         except Exception as e:
-            logger.warning("Intent Drafter: YAML inválido para '%s/%s': %s",
-                           cluster.categoria, cluster.pattern, e)
+            logger.warning(
+                "Intent Drafter: YAML inválido para '%s/%s': %s",
+                cluster.categoria,
+                cluster.pattern,
+                e,
+            )
             continue
 
         is_expansion = "EXPANSÃO DE:" in result.output_text.split("```")[0]
@@ -368,7 +401,7 @@ def run_intent_drafter(
             f"<!-- Candidato gerado por agent_sdk/intent_drafter em {now_str}\n"
             f"     Baseado em {cluster.count} emails Tier 1"
             f" (categoria: {cluster.categoria})\n"
-            f"     Cluster: \"{cluster.pattern}\"\n"
+            f'     Cluster: "{cluster.pattern}"\n'
             f"     Samples: {cluster.sample_subjects[:3]}\n"
             f"     Hash: {content_hash}\n"
             f"     Para promover: revise abaixo e mova o bloco para PROCEDURES.md -->\n"
@@ -382,12 +415,16 @@ def run_intent_drafter(
         _append_candidates(cand_path, candidate_blocks)
         logger.info(
             "Intent Drafter: %d candidato(s) escritos em %s",
-            len(candidate_blocks), cand_path,
+            len(candidate_blocks),
+            cand_path,
         )
 
     logger.info(
         "Intent Drafter concluído: %d clusters, %d candidatos, %d skips, %d expansões",
-        stats["clusters"], stats["candidates"], stats["skipped"], stats["expansions"],
+        stats["clusters"],
+        stats["candidates"],
+        stats["skipped"],
+        stats["expansions"],
     )
     return stats
 
@@ -416,15 +453,20 @@ def main() -> None:
         description="Analyse Tier 1 email clusters and propose Tier 0 playbook intents",
     )
     parser.add_argument(
-        "--last-days", type=int, default=14,
+        "--last-days",
+        type=int,
+        default=14,
         help="Look back window in days (default: 14)",
     )
     parser.add_argument(
-        "--min-frequency", type=int, default=5,
+        "--min-frequency",
+        type=int,
+        default=5,
         help="Minimum cluster size to generate a candidate (default: 5)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Analyse clusters but do not invoke Claude or write candidates",
     )
     args = parser.parse_args()

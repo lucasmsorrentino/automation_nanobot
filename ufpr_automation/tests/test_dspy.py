@@ -45,6 +45,7 @@ from ufpr_automation.dspy_modules.signatures import (  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _pred(**kwargs) -> dspy.Prediction:
     """Create a dspy.Prediction with the given fields."""
     return dspy.Prediction(**kwargs)
@@ -71,11 +72,13 @@ class TestSignatures:
     def test_email_classifier_has_expected_fields(self):
         fields = EmailClassifier.model_fields
         input_names = {
-            k for k, v in fields.items()
+            k
+            for k, v in fields.items()
             if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "input"
         }
         output_names = {
-            k for k, v in fields.items()
+            k
+            for k, v in fields.items()
             if v.json_schema_extra and v.json_schema_extra.get("__dspy_field_type") == "output"
         }
 

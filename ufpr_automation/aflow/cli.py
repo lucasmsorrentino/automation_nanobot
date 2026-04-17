@@ -4,6 +4,7 @@ Usage:
     python -m ufpr_automation.aflow.cli --topologies all --limit 20
     python -m ufpr_automation.aflow.cli --topologies baseline,fleet --limit 10
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,9 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(name)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
     if args.topologies == "all":
         topologies = list_topologies()

@@ -73,7 +73,12 @@ async def is_logged_in(page: Page) -> bool:
         # quando logado. Cobrimos os dois.
         if await page.locator(".usermenu, .userinitials, .logininfo a.menu-action").count() > 0:
             return True
-        if await page.locator("#loginbox, form[action*='login/index.php'] input[name='password']").count() > 0:
+        if (
+            await page.locator(
+                "#loginbox, form[action*='login/index.php'] input[name='password']"
+            ).count()
+            > 0
+        ):
             return False
         # fallback: URL não contém /login/
         return "/login/" not in page.url
@@ -109,6 +114,7 @@ async def auto_login(page: Page) -> bool:
         else:
             # debug: salva screenshot + HTML + mensagem de erro do Moodle
             from ufpr_automation.config.settings import DEBUG_OUTPUT_DIR
+
             DEBUG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             shot = DEBUG_OUTPUT_DIR / "ufpr_aberta_login_fail.png"
             html = DEBUG_OUTPUT_DIR / "ufpr_aberta_login_fail.html"
@@ -123,7 +129,9 @@ async def auto_login(page: Page) -> bool:
                 err_txt = (await err_loc.first.inner_text()).strip()
             logger.warning(
                 "UFPR Aberta: login falhou (URL=%s) | erro='%s' | debug=%s",
-                page.url, err_txt, shot,
+                page.url,
+                err_txt,
+                shot,
             )
         return ok
     except Exception as e:

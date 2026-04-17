@@ -37,7 +37,9 @@ class LLMClient:
         key_map = {"minimax": settings.MINIMAX_API_KEY, "gemini": settings.GEMINI_API_KEY}
         api_key = key_map.get(provider, "")
         if not api_key:
-            raise ValueError(f"No API key found for provider '{provider}'. Set the appropriate env var.")
+            raise ValueError(
+                f"No API key found for provider '{provider}'. Set the appropriate env var."
+            )
 
         self.model_id = settings.LLM_MODEL
         self.system_instruction = system_instruction or self._build_system_instruction()
@@ -74,9 +76,7 @@ class LLMClient:
             soul_content = essentials_file.read_text(encoding="utf-8")
         else:
             soul_file = workspace_dir / "SOUL.md"
-            soul_content = (
-                soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
-            )
+            soul_content = soul_file.read_text(encoding="utf-8") if soul_file.exists() else ""
             if soul_content:
                 logger.warning(
                     "SOUL_ESSENTIALS.md ausente — usando SOUL.md completo "
@@ -84,9 +84,7 @@ class LLMClient:
                 )
 
         if settings.ASSINATURA_EMAIL:
-            soul_content = soul_content.replace(
-                "{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL
-            )
+            soul_content = soul_content.replace("{{ ASSINATURA_EMAIL }}", settings.ASSINATURA_EMAIL)
 
         return (
             f"{agents_content}\n\n"
@@ -107,9 +105,7 @@ class LLMClient:
         m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
         return m.group(1).strip() if m else text.strip()
 
-    def _build_messages(
-        self, email: EmailData, rag_context: str | None = None
-    ) -> list[dict]:
+    def _build_messages(self, email: EmailData, rag_context: str | None = None) -> list[dict]:
         """Build the messages list for litellm completion.
 
         Args:
@@ -147,8 +143,7 @@ class LLMClient:
                     attachment_section += f"\n[Anexo: {att.filename}]\n{truncated}\n"
                 elif att.needs_ocr:
                     attachment_section += (
-                        f"\n[Anexo: {att.filename} — documento escaneado, "
-                        "texto nao disponivel]\n"
+                        f"\n[Anexo: {att.filename} — documento escaneado, texto nao disponivel]\n"
                     )
                 else:
                     attachment_section += (
@@ -290,9 +285,7 @@ class LLMClient:
             f"Rascunho de resposta:\n{classification.sugestao_resposta}\n"
         )
         if rag_context:
-            critique_prompt += (
-                f"\nNormas recuperadas (RAG):\n{rag_context[:1000]}\n"
-            )
+            critique_prompt += f"\nNormas recuperadas (RAG):\n{rag_context[:1000]}\n"
         critique_prompt += (
             "\nAvalie os seguintes critérios:\n"
             "1. A resposta cita a resolução/norma correta?\n"

@@ -174,7 +174,9 @@ class ProcedureStore:
             "total_runs": len(records),
             "by_outcome": by_outcome,
             "by_categoria": by_categoria,
-            "avg_duration_ms": sum(total_durations) // len(total_durations) if total_durations else 0,
+            "avg_duration_ms": sum(total_durations) // len(total_durations)
+            if total_durations
+            else 0,
             "avg_duration_by_step": avg_by_step,
             "sei_consultations": sei_count,
             "siga_consultations": siga_count,

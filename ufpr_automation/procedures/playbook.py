@@ -422,9 +422,7 @@ class Playbook:
             return
         self._intents = parse_procedures_md(self._path)
         self._parsed = True
-        logger.info(
-            "Playbook: %d intent(s) carregado(s) de %s", len(self._intents), self._path
-        )
+        logger.info("Playbook: %d intent(s) carregado(s) de %s", len(self._intents), self._path)
 
     @property
     def intents(self) -> list[Intent]:
@@ -455,9 +453,7 @@ class Playbook:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError:
-            logger.info(
-                "Playbook: sentence-transformers indisponivel — modo keyword-only"
-            )
+            logger.info("Playbook: sentence-transformers indisponivel — modo keyword-only")
             return False
 
         try:
@@ -507,9 +503,7 @@ class Playbook:
 
         import numpy as np
 
-        query_vec = self._model.encode(
-            f"query: {query}", normalize_embeddings=True
-        )
+        query_vec = self._model.encode(f"query: {query}", normalize_embeddings=True)
         query_vec = np.asarray(query_vec, dtype="float32")
         sims = self._embeddings @ query_vec  # cosine since both are L2-normalized
         best_idx = int(np.argmax(sims))
@@ -538,9 +532,7 @@ class Playbook:
 
         import numpy as np
 
-        query_vec = self._model.encode(
-            f"query: {query}", normalize_embeddings=True
-        )
+        query_vec = self._model.encode(f"query: {query}", normalize_embeddings=True)
         query_vec = np.asarray(query_vec, dtype="float32")
         sims = self._embeddings @ query_vec
         return float(np.max(sims))
@@ -569,9 +561,7 @@ class Playbook:
             return None
 
         intent, matched = best
-        return PlaybookMatch(
-            intent=intent, score=1.0, method="keyword", matched_keywords=matched
-        )
+        return PlaybookMatch(intent=intent, score=1.0, method="keyword", matched_keywords=matched)
 
     # -- staleness -------------------------------------------------------
 
