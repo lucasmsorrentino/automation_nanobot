@@ -17,6 +17,8 @@ from ufpr_automation.procedures.checkers import (
     CheckContext,
     CheckResult,
     CheckSummary,
+    _parse_br_date,
+    _working_days_between,
     register,
     registered_checkers,
     run_checks,
@@ -661,3 +663,50 @@ class TestRelatorioFinalAssinadoOrientador:
         )
         r = _invoke("relatorio_final_assinado_orientador", ctx)
         assert r.status == "hard_block"
+
+
+# ---------------------------------------------------------------------------
+# Pure helper functions
+# ---------------------------------------------------------------------------
+
+
+class TestParseBrDate:
+    def test_valid_date(self):
+        assert _parse_br_date("15/04/2026") == date(2026, 4, 15)
+
+    def test_with_whitespace(self):
+        assert _parse_br_date("  01/01/2025  ") == date(2025, 1, 1)
+
+    def test_empty_string(self):
+        assert _parse_br_date("") is None
+
+    def test_invalid_format(self):
+        assert _parse_br_date("2026-04-15") is None
+
+    def test_invalid_date(self):
+        assert _parse_br_date("32/13/2026") is None
+
+
+class TestWorkingDaysBetween:
+    def test_same_day(self):
+        d = date(2026, 4, 15)  # Wednesday
+        assert _working_days_between(d, d) == 0
+
+    def test_end_before_start(self):
+        assert _working_days_between(date(2026, 4, 16), date(2026, 4, 15)) == 0
+
+    def test_one_working_day(self):
+        # Wed to Thu = 1 working day
+        assert _working_days_between(date(2026, 4, 15), date(2026, 4, 16)) == 1
+
+    def test_over_weekend(self):
+        # Fri to Mon = 1 working day (Mon)
+        assert _working_days_between(date(2026, 4, 17), date(2026, 4, 20)) == 1
+
+    def test_full_week(self):
+        # Mon to next Mon = 5 working days
+        assert _working_days_between(date(2026, 4, 13), date(2026, 4, 20)) == 5
+
+    def test_two_weeks(self):
+        # Mon to Mon+14 = 10 working days
+        assert _working_days_between(date(2026, 4, 13), date(2026, 4, 27)) == 10
