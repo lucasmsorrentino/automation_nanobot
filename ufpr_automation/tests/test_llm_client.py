@@ -261,3 +261,124 @@ class TestLLMClientAsync:
             client = LLMClient(system_instruction="test")
             with pytest.raises(RuntimeError, match="API error"):
                 await client.classify_email_async(sample_email)
+
+
+# ---------------------------------------------------------------------------
+# self_refine_async — critique → refine cycle
+# ---------------------------------------------------------------------------
+
+
+class TestSelfRefine:
+    @pytest.mark.asyncio
+    async def test_no_problems_returns_original(self, sample_email):
+        """When critique says 'SEM PROBLEMAS', the original classification is returned."""
+        original = EmailClassification(
+            categoria="Estágios",
+            resumo="Solicitação de estágio",
+            acao_necessaria="Redigir Resposta",
+            sugestao_resposta="Prezado...",
+            confianca=0.9,
+        )
+        critique_resp = _mock_completion_response("SEM PROBLEMAS")
+
+        with (
+            patch("ufpr_automation.llm.client.settings") as mock_settings,
+            patch(
+                "ufpr_automation.llm.client.cascaded_completion",
+                new_callable=AsyncMock,
+                return_value=critique_resp,
+            ),
+        ):
+            mock_settings.MINIMAX_API_KEY = "fake"
+            mock_settings.GEMINI_API_KEY = ""
+            mock_settings.LLM_PROVIDER = "minimax"
+            mock_settings.LLM_MODEL = "minimax/test"
+            mock_settings.PACKAGE_ROOT = MagicMock()
+            mock_settings.ASSINATURA_EMAIL = None
+
+            client = LLMClient(system_instruction="test")
+            result = await client.self_refine_async(sample_email, original)
+
+        assert result is original
+
+    @pytest.mark.asyncio
+    async def test_problems_triggers_refine(self, sample_email):
+        """When critique finds issues, a refined classification is returned."""
+        original = EmailClassification(
+            categoria="Outros",
+            resumo="Classificação errada",
+            acao_necessaria="Redigir Resposta",
+            sugestao_resposta="Draft errado",
+            confianca=0.5,
+        )
+        refined_json = json.dumps({
+            "categoria": "Estágios",
+            "resumo": "Solicitação de estágio corrigida",
+            "acao_necessaria": "Redigir Resposta",
+            "sugestao_resposta": "Prezado, corrigido...",
+            "confianca": 0.85,
+        })
+
+        critique_resp = _mock_completion_response("1. Categoria errada, deveria ser Estágios.")
+        refine_resp = _mock_completion_response(refined_json)
+
+        with (
+            patch("ufpr_automation.llm.client.settings") as mock_settings,
+            patch(
+                "ufpr_automation.llm.client.cascaded_completion",
+                new_callable=AsyncMock,
+                side_effect=[critique_resp, refine_resp],
+            ) as mock_cascade,
+        ):
+            mock_settings.MINIMAX_API_KEY = "fake"
+            mock_settings.GEMINI_API_KEY = ""
+            mock_settings.LLM_PROVIDER = "minimax"
+            mock_settings.LLM_MODEL = "minimax/test"
+            mock_settings.PACKAGE_ROOT = MagicMock()
+            mock_settings.ASSINATURA_EMAIL = None
+
+            client = LLMClient(system_instruction="test")
+            result = await client.self_refine_async(sample_email, original)
+
+        assert result is not original
+        assert result.categoria == "Estágios"
+        assert result.confianca == 0.85
+        # Two calls: critique + refine
+        assert mock_cascade.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_with_rag_context(self, sample_email):
+        """RAG context is included in both critique and refine prompts."""
+        original = EmailClassification(
+            categoria="Estágios",
+            resumo="ok",
+            acao_necessaria="Redigir Resposta",
+            sugestao_resposta="Draft",
+            confianca=0.9,
+        )
+        critique_resp = _mock_completion_response("SEM PROBLEMAS")
+
+        with (
+            patch("ufpr_automation.llm.client.settings") as mock_settings,
+            patch(
+                "ufpr_automation.llm.client.cascaded_completion",
+                new_callable=AsyncMock,
+                return_value=critique_resp,
+            ) as mock_cascade,
+        ):
+            mock_settings.MINIMAX_API_KEY = "fake"
+            mock_settings.GEMINI_API_KEY = ""
+            mock_settings.LLM_PROVIDER = "minimax"
+            mock_settings.LLM_MODEL = "minimax/test"
+            mock_settings.PACKAGE_ROOT = MagicMock()
+            mock_settings.ASSINATURA_EMAIL = None
+
+            client = LLMClient(system_instruction="test")
+            await client.self_refine_async(
+                sample_email, original, rag_context="Resolução 42/2025"
+            )
+
+        # RAG context should appear in the critique prompt
+        critique_call = mock_cascade.call_args_list[0]
+        user_msg = critique_call[1]["messages"][1]["content"]
+        assert "Resolução 42/2025" in user_msg
