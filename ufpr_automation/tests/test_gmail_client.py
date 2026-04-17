@@ -10,7 +10,7 @@ import email
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
