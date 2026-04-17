@@ -311,13 +311,15 @@ class TestSelfRefine:
             sugestao_resposta="Draft errado",
             confianca=0.5,
         )
-        refined_json = json.dumps({
-            "categoria": "Estágios",
-            "resumo": "Solicitação de estágio corrigida",
-            "acao_necessaria": "Redigir Resposta",
-            "sugestao_resposta": "Prezado, corrigido...",
-            "confianca": 0.85,
-        })
+        refined_json = json.dumps(
+            {
+                "categoria": "Estágios",
+                "resumo": "Solicitação de estágio corrigida",
+                "acao_necessaria": "Redigir Resposta",
+                "sugestao_resposta": "Prezado, corrigido...",
+                "confianca": 0.85,
+            }
+        )
 
         critique_resp = _mock_completion_response("1. Categoria errada, deveria ser Estágios.")
         refine_resp = _mock_completion_response(refined_json)
@@ -374,9 +376,7 @@ class TestSelfRefine:
             mock_settings.ASSINATURA_EMAIL = None
 
             client = LLMClient(system_instruction="test")
-            await client.self_refine_async(
-                sample_email, original, rag_context="Resolução 42/2025"
-            )
+            await client.self_refine_async(sample_email, original, rag_context="Resolução 42/2025")
 
         # RAG context should appear in the critique prompt
         critique_call = mock_cascade.call_args_list[0]
