@@ -217,7 +217,6 @@ required_fields:
 required_attachments:
   - "Termo Aditivo"             # PDF do aditivo assinado
 blocking_checks:
-  # TODO: implementar checkers abaixo em procedures/checkers.py
   - "aditivo_antes_vencimento_tce"    # HARD: aditivo deve chegar antes da data de término do TCE vigente
   - "duracao_total_ate_24_meses"      # HARD: duração total (TCE + aditivos) ≤ 24 meses (Lei 11.788/08 Art. 11)
   - "sei_processo_tce_existente"      # HARD: deve existir processo SEI vigente do TCE original do aluno
@@ -289,7 +288,6 @@ required_attachments:
   - "Termo de Rescisão"         # ou "Termo de Conclusão" (conforme caso)
   - "Relatório Final"           # exigência Lei 11.788/08 Art. 9º §1º
 blocking_checks:
-  # TODO: implementar checkers abaixo em procedures/checkers.py
   - "sei_processo_tce_existente"      # HARD: deve existir processo SEI vigente do TCE do aluno
   - "relatorio_final_assinado_orientador"   # HARD: Relatório Final assinado pelo professor orientador
 sources:
