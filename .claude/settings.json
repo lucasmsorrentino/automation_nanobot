@@ -23,7 +23,6 @@
       "Bash(git branch:*)"
     ],
     "deny": [
-      "Bash(python -m ufpr_automation --channel:*)",
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)"
     ]

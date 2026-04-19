@@ -20,12 +20,16 @@ CONFIDENCE_MEDIUM = 0.70  # human review
 
 def perceber_gmail(state: EmailState) -> dict[str, Any]:
     """Read unread emails from Gmail IMAP."""
+    from ufpr_automation.attachments import extract_text_from_attachment
     from ufpr_automation.gmail.client import GmailClient
 
     limit = state.get("limit")
     try:
         client = GmailClient()
         emails = client.list_unread(limit=limit) if limit is not None else client.list_unread()
+        for email in emails:
+            for att in email.attachments:
+                extract_text_from_attachment(att)
         logger.info("Perceber (Gmail): %d e-mail(s) nao lido(s)", len(emails))
         return {"emails": emails, "errors": state.get("errors", [])}
     except Exception as e:

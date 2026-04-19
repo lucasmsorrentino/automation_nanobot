@@ -113,6 +113,31 @@ class TestParser:
         intents = parse_procedures_md(tmp_path / "nonexistent.md")
         assert intents == []
 
+    def test_estagios_intents_do_not_require_numero_tce(self):
+        """Domain rule: nem todo TCE tem número (depende da origem). Intents
+        Tier 0 de Estágios NÃO devem listar numero_tce em required_fields —
+        caso contrário acuse/aditivo/conclusão nunca dão Tier 0 hit quando
+        o documento não tem o número explícito.
+        """
+        from pathlib import Path
+
+        from ufpr_automation.procedures.playbook import parse_procedures_md
+
+        procedures_md = (
+            Path(__file__).resolve().parents[1] / "workspace" / "PROCEDURES.md"
+        )
+        intents = {i.intent_name: i for i in parse_procedures_md(procedures_md)}
+
+        for name in (
+            "estagio_nao_obrig_acuse_inicial",
+            "estagio_nao_obrig_aditivo",
+            "estagio_nao_obrig_conclusao",
+        ):
+            assert name in intents, f"intent {name} ausente em PROCEDURES.md"
+            assert "numero_tce" not in intents[name].required_fields, (
+                f"intent {name} ainda exige numero_tce; torne-o opcional"
+            )
+
     def test_intent_last_update_date(self):
         i = Intent(
             intent_name="x",

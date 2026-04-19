@@ -157,6 +157,35 @@ class TestPerceberGmail:
 
         assert len(result["errors"]) == 2
 
+    def test_extracts_attachment_text(self):
+        """Regression: perceber_gmail must extract text from each attachment so
+        Tier 0 regex (TCE, concedente, dates) can match content that lives in
+        PDFs rather than the email body. Missing this wiring caused the Fleet
+        pipeline to never Tier-0-hit Estágios intents even with attachments.
+        """
+        from ufpr_automation.core.models import AttachmentData
+        from ufpr_automation.graph.nodes import perceber_gmail
+
+        email = _make_email()
+        email.attachments = [
+            AttachmentData(filename="tce.pdf", local_path="/tmp/tce.pdf"),
+            AttachmentData(filename="anexo2.pdf", local_path="/tmp/anexo2.pdf"),
+        ]
+        mock_client = MagicMock()
+        mock_client.list_unread.return_value = [email]
+
+        with (
+            patch("ufpr_automation.gmail.client.GmailClient", return_value=mock_client),
+            patch("ufpr_automation.attachments.extract_text_from_attachment") as mock_extract,
+        ):
+            result = perceber_gmail({"errors": []})
+
+        assert len(result["emails"]) == 1
+        assert mock_extract.call_count == 2
+        called_attachments = [c.args[0] for c in mock_extract.call_args_list]
+        assert called_attachments[0].filename == "tce.pdf"
+        assert called_attachments[1].filename == "anexo2.pdf"
+
 
 # ===========================================================================
 # nodes.py — rag_retrieve

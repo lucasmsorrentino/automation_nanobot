@@ -113,10 +113,12 @@ acompanhamento_especial_grupo: "Estágio não obrigatório"  # POP-38: após cre
 required_fields:
   - nome_aluno
   - grr
-  - numero_tce
   - nome_concedente
   - data_inicio
   - data_fim
+# numero_tce é opcional — nem todo TCE tem número (depende da origem).
+# extract_variables preenche quando encontrar; template deixa [NUMERO_TCE]
+# para revisão humana quando ausente.
 required_attachments:
   - "TCE"                 # Termo de Compromisso de Estágio assinado
                           # (o Plano de Atividades via de regra vem
@@ -204,13 +206,14 @@ categoria: "Estágios"
 action: "Redigir Resposta"
 # Processo SEI já existe (aberto no TCE original) — fluxo é append: anexar
 # o Termo Aditivo + redigir despacho favorável. Não criar processo novo.
-sei_action: "attach_document"
+sei_action: "append_to_existing"
 required_fields:
   - nome_aluno
-  - numero_tce                  # p/ localizar o processo SEI existente
   - numero_aditivo
   - data_termino_novo
   - nome_concedente
+# numero_tce é opcional — quando presente, localiza processo SEI existente;
+# quando ausente, agir_estagios busca processo por nome_aluno + GRR.
 required_attachments:
   - "Termo Aditivo"             # PDF do aditivo assinado
 blocking_checks:
@@ -275,12 +278,13 @@ categoria: "Estágios"
 action: "Redigir Resposta"
 # Processo SEI já existe — append: anexar Termo de Rescisão + Relatório Final
 # + redigir despacho de homologação. Não criar processo novo.
-sei_action: "attach_document"
+sei_action: "append_to_existing"
 required_fields:
   - nome_aluno
-  - numero_tce                  # p/ localizar o processo SEI existente
   - nome_concedente
   - data_termino
+# numero_tce é opcional — quando presente, localiza processo SEI existente;
+# quando ausente, agir_estagios busca processo por nome_aluno + GRR.
 required_attachments:
   - "Termo de Rescisão"         # ou "Termo de Conclusão" (conforme caso)
   - "Relatório Final"           # exigência Lei 11.788/08 Art. 9º §1º
