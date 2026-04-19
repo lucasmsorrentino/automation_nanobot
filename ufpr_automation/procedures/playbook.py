@@ -92,6 +92,12 @@ class Intent(BaseModel):
     blocking_checks: list[str] = Field(default_factory=list)
     despacho_template: str = ""
 
+    # Fields that regex can't extract (free text). When declared, extract_variables
+    # fires a bounded LLM call (no RAG) per missing field using the cheap CLASSIFY
+    # model. Keeps the intent in Tier 0 (zero RAG) while relaxing the "zero LLM"
+    # constraint for fields that genuinely need semantic parsing.
+    llm_extraction_fields: list[str] = Field(default_factory=list)
+
     @field_validator("intent_name")
     @classmethod
     def _non_empty_name(cls, v: str) -> str:
@@ -321,6 +327,63 @@ def _parse_br_date(text: str) -> Optional[str]:
     return None
 
 
+# LLM extraction prompts per field. Each prompt must instruct the model to
+# return either the extracted value verbatim (no explanation) or the literal
+# string "NONE" when the field cannot be found. Keeps parsing trivial.
+_LLM_FIELD_EXTRACTORS: dict[str, str] = {
+    "lista_pendencias": (
+        "Liste as pendências/problemas citados no email (ex: 'falta assinatura "
+        "da concedente', 'CPF ausente', 'plano de atividades não anexado'). "
+        "Uma por linha, cada uma prefixada com '- '. Se não houver pendências "
+        "mencionadas, responda exatamente NONE."
+    ),
+}
+
+
+def _llm_extract_fields(email: EmailData, fields: list[str]) -> dict[str, str]:
+    """Best-effort LLM extraction for fields regex couldn't populate.
+
+    Fires one bounded call per field against the cheap CLASSIFY model (no RAG,
+    no Self-Refine). Failures are swallowed — the field simply stays absent,
+    and the caller falls back to Tier 1 via :func:`missing_required_fields`.
+    """
+    if not fields:
+        return {}
+
+    # Lazy import so `procedures/playbook.py` import-time cost stays flat for
+    # intents that don't declare llm_extraction_fields.
+    from ufpr_automation.llm.router import TaskType, cascaded_completion_sync
+
+    out: dict[str, str] = {}
+    body = email.body or email.preview or ""
+    user_prefix = f"Assunto: {email.subject}\n\n{body}"
+
+    for field in fields:
+        instruction = _LLM_FIELD_EXTRACTORS.get(field)
+        if not instruction:
+            continue
+        try:
+            response = cascaded_completion_sync(
+                TaskType.CLASSIFY,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Você extrai campos de emails. Responda apenas com o valor pedido.",
+                    },
+                    {"role": "user", "content": f"{instruction}\n\n---\n{user_prefix}"},
+                ],
+                temperature=0.0,
+            )
+            content = (response.choices[0].message.content or "").strip()
+        except Exception as e:
+            logger.warning("Tier 0 LLM extraction falhou (%s): %s", field, e)
+            continue
+        if content and content.strip().upper() != "NONE":
+            out[field] = content
+
+    return out
+
+
 def _attachments_text(email: EmailData) -> str:
     """Concatenate extracted text from all attachments.
 
@@ -435,6 +498,13 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
         normalized = _parse_br_date(m.group(1))
         if normalized:
             vars["data_termino_novo"] = normalized
+
+    # Tier 0 LLM extraction pass — only for fields the intent explicitly
+    # declared as requiring LLM parsing (free text that no regex covers).
+    # Runs only on what regex missed; stays within Tier 0 (no RAG).
+    pending_llm = [f for f in intent.llm_extraction_fields if f not in vars]
+    if pending_llm:
+        vars.update(_llm_extract_fields(email, pending_llm))
 
     return vars
 

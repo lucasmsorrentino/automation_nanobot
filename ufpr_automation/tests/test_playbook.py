@@ -166,6 +166,7 @@ class TestParser:
         assert i.required_attachments == []
         assert i.blocking_checks == []
         assert i.despacho_template == ""
+        assert i.llm_extraction_fields == []
 
     def test_intent_extended_fields_parse_from_yaml(self, tmp_path):
         """All 5 new SEI workflow fields round-trip through the YAML parser."""
@@ -494,6 +495,138 @@ class TestParseBrDate:
 
         assert _parse_br_date("") is None
         assert _parse_br_date("no date here") is None
+
+
+# ---------------------------------------------------------------------------
+# LLM extraction (Tier 0 staying Tier 0 via bounded LLM, no RAG)
+# ---------------------------------------------------------------------------
+
+
+class TestLLMExtractionFields:
+    """Intents that declare `llm_extraction_fields` trigger bounded LLM calls
+    from inside extract_variables (still Tier 0 — no RAG is consulted)."""
+
+    def _mock_llm(self, monkeypatch, content: str):
+        """Patch cascaded_completion_sync to return a canned response.
+
+        Uses SimpleNamespace to mimic the LiteLLM response shape
+        (response.choices[0].message.content).
+        """
+        from types import SimpleNamespace
+
+        fake = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+        )
+
+        def _fake_call(*args, **kwargs):
+            return fake
+
+        import ufpr_automation.procedures.playbook as pb
+
+        # The function imports cascaded_completion_sync lazily *inside*
+        # _llm_extract_fields, so we patch the source module, not playbook.
+        monkeypatch.setattr(
+            "ufpr_automation.llm.router.cascaded_completion_sync", _fake_call
+        )
+        return pb
+
+    def test_llm_fills_missing_field_when_declared(self, monkeypatch):
+        pb = self._mock_llm(
+            monkeypatch, "- falta assinatura da concedente\n- CPF ausente"
+        )
+        intent = Intent(
+            intent_name="pendencia",
+            categoria="Estágios",
+            keywords=["pendência"],
+            required_fields=["nome_aluno", "lista_pendencias"],
+            llm_extraction_fields=["lista_pendencias"],
+        )
+        email = EmailData(
+            sender="Maria <maria@ufpr.br>",
+            subject="pendência TCE",
+            body="O TCE veio sem assinatura e sem CPF.",
+        )
+        vars = pb.extract_variables(email, intent)
+        assert "- falta assinatura" in vars["lista_pendencias"]
+        assert "CPF ausente" in vars["lista_pendencias"]
+
+    def test_llm_none_response_leaves_field_absent(self, monkeypatch):
+        pb = self._mock_llm(monkeypatch, "NONE")
+        intent = Intent(
+            intent_name="pendencia",
+            categoria="Estágios",
+            keywords=["x"],
+            llm_extraction_fields=["lista_pendencias"],
+        )
+        email = EmailData(sender="x@y.z", subject="x", body="")
+        vars = pb.extract_variables(email, intent)
+        assert "lista_pendencias" not in vars
+
+    def test_no_llm_call_when_field_not_declared(self, monkeypatch):
+        """Intents without llm_extraction_fields must not trigger any LLM call,
+        even when required_fields reference unextractable fields."""
+        calls: list[int] = []
+
+        def _boom(*args, **kwargs):
+            calls.append(1)
+            raise AssertionError("LLM must not be called for intents without llm_extraction_fields")
+
+        monkeypatch.setattr(
+            "ufpr_automation.llm.router.cascaded_completion_sync", _boom
+        )
+        intent = Intent(
+            intent_name="regex_only",
+            categoria="Outros",
+            keywords=["x"],
+            required_fields=["lista_pendencias"],
+        )
+        email = EmailData(sender="x@y.z", subject="x", body="")
+        vars = extract_variables(email, intent)
+        assert calls == []
+        assert "lista_pendencias" not in vars
+
+    def test_regex_wins_over_llm(self, monkeypatch):
+        """Fields populated by regex must NOT trigger an LLM call."""
+        calls: list[int] = []
+
+        def _boom(*args, **kwargs):
+            calls.append(1)
+            raise AssertionError("LLM must not be called when regex already filled the field")
+
+        monkeypatch.setattr(
+            "ufpr_automation.llm.router.cascaded_completion_sync", _boom
+        )
+        # grr is regex-covered; declaring it in llm_extraction_fields should be a no-op.
+        intent = Intent(
+            intent_name="x",
+            categoria="Outros",
+            keywords=["x"],
+            llm_extraction_fields=["grr"],
+        )
+        email = EmailData(sender="x@y.z", subject="GRR20231234", body="")
+        vars = extract_variables(email, intent)
+        assert vars["grr"] == "20231234"
+        assert calls == []
+
+    def test_llm_exception_swallowed(self, monkeypatch):
+        """If the LLM call raises, the field stays absent and execution continues."""
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("simulated LLM failure")
+
+        monkeypatch.setattr(
+            "ufpr_automation.llm.router.cascaded_completion_sync", _raise
+        )
+        intent = Intent(
+            intent_name="pendencia",
+            categoria="Estágios",
+            keywords=["x"],
+            llm_extraction_fields=["lista_pendencias"],
+        )
+        email = EmailData(sender="x@y.z", subject="x", body="")
+        vars = extract_variables(email, intent)
+        # Failure must not propagate; field simply stays absent.
+        assert "lista_pendencias" not in vars
 
 
 # ---------------------------------------------------------------------------

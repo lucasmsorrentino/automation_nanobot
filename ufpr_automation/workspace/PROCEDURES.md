@@ -350,10 +350,12 @@ action: "Redigir Resposta"
 required_fields:
   - nome_aluno
   - lista_pendencias              # extraída do email/attachments pelo classificador
+llm_extraction_fields:
+  - lista_pendencias              # texto livre — regex não cobre, usa LLM bounded (sem RAG) ainda dentro do Tier 0
 sources:
   - "Resolução 46/10-CEPE"
   - "SOUL.md §15.5"
-last_update: "2026-04-09"
+last_update: "2026-04-19"
 confidence: 0.82
 template: |
   Prezado(a) [NOME_ALUNO],
