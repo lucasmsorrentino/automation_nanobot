@@ -177,5 +177,6 @@ Carrega lazily, valida contra `_FORBIDDEN_SELECTORS` no load, consumido por `sig
 
 - **Vue.js SPA**: abas carregam conteudo via AJAX. Usar `_wait_tab_content(page, pane_id)` antes de ler DOM.
 - **Sessao**: `_session_browser.py` persiste `storage_state` em `session_data/siga_state.json`. Em steady-state, logins sao reaproveitados.
+- **Pre-warm (opt-in)**: o no `prewarm_sessions` (em `graph/nodes.py`) warma SEI e SIGA em paralelo via `asyncio.gather` antes do fan-out do Fleet. Se `siga_state.json` estiver mais velho que `PREWARM_SESSIONS_MAX_AGE_H` (default 6h), re-loga sequencialmente — evita race de N sub-agentes simultaneos sobrescrevendo o `state.json`. Ativar com `PREWARM_SESSIONS_ENABLED=true`.
 - **IDs internos**: o SIGA usa IDs internos para discentes (ex: `d=71277`), diferentes do GRR. Sempre buscar por GRR/nome.
 - **Periodos PROGRAD**: varias funcionalidades (Ofertar Turmas, Analise de Abandono) ficam bloqueadas fora dos periodos definidos pelo calendario da PROGRAD.

@@ -138,3 +138,59 @@ queries:
     expected_in_top_k: 5
     subset: cepe
     notes: "Distingue extensão curricular (ACE) de atividades formativas (AFC)"
+
+  # -- Expansion round 2 (2026-04-19): subset gap fill + manuais ---------------
+
+  - id: concur_resolucao_fundacao
+    query: "resolução CONCUR fundação de apoio"
+    expected_doc_substring: "concur"
+    expected_in_top_k: 5
+    subset: concur
+    notes: "Conselho de Curadores — primeira query do subset (antes zero cobertura)"
+
+  - id: concur_prestacao_contas
+    query: "prestação de contas Conselho de Curadores UFPR"
+    expected_doc_substring: "concur"
+    expected_in_top_k: 5
+    subset: concur
+
+  - id: coplad_dotacao_orcamentaria
+    query: "dotação orçamentária servidores UFPR"
+    expected_doc_substring: "coplad"
+    expected_in_top_k: 5
+    subset: coplad
+    notes: "Segunda query COPLAD pra reduzir variância do recall do subset"
+
+  - id: manual_sei_assinatura_documento
+    query: "como assinar documento no SEI"
+    expected_doc_substring: "SEI"
+    expected_in_top_k: 5
+    subset: ""
+    notes: "POP de assinatura — busca global sem filtro de conselho"
+
+  - id: manual_siga_consulta_curriculo
+    query: "consultar currículo do aluno SIGA graduação"
+    expected_doc_substring: "siga"
+    expected_in_top_k: 5
+    subset: ""
+
+  - id: estagio_seguro_estagiario
+    query: "seguro obrigatório estagiário cobertura acidentes"
+    expected_doc_substring: "seguro"
+    expected_in_top_k: 5
+    subset: estagio
+    notes: "Lei 11.788 art 9º §1 — campo comum em TCE"
+
+  - id: cepe_estagio_curricular_obrigatorio
+    query: "resolução CEPE estágio curricular obrigatório"
+    expected_doc_substring: "estag"
+    expected_in_top_k: 5
+    subset: cepe
+    notes: "Intersecção CEPE × estágio obrigatório (norma interna UFPR)"
+
+  - id: estagio_jornada_maxima
+    query: "jornada máxima estagiário ensino superior horas semana"
+    expected_doc_substring: "jornada"
+    expected_in_top_k: 5
+    subset: estagio
+    notes: "Lei 11.788 art 10 — 6h/30h obrig ou 8h/40h não-obrig"

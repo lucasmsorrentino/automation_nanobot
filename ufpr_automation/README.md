@@ -123,6 +123,17 @@ python -m ufpr_automation --channel gmail --limit 10
 
 # Pool de Playwright pages compartilhado entre sub-agents
 FLEET_BROWSER_POOL_SIZE=5 python -m ufpr_automation --channel gmail
+
+# Pre-warm de sessões SEI/SIGA antes do fan-out
+#   Roda uma vez, sequencial, entre tier0_lookup e dispatch_tier1. Se o
+#   storage_state.json de SEI ou SIGA estiver mais velho que MAX_AGE_H,
+#   faz auto_login agora — assim os N sub-agentes paralelos que rodam
+#   depois encontram sessão fresca e ninguém precisa logar. Evita race
+#   de N logins simultâneos sobrescrevendo o mesmo storage_state.
+#   Default OFF: ligar só quando batch grande em prod mostrar a race.
+#   Skip automático se nenhum email menciona SEI/GRR/23075.
+PREWARM_SESSIONS_ENABLED=true python -m ufpr_automation --channel gmail
+PREWARM_SESSIONS_MAX_AGE_H=4 python -m ufpr_automation --channel gmail
 ```
 
 ### AFlow — topology evaluator (Marco III)

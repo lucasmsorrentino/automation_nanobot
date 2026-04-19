@@ -164,6 +164,7 @@ Carrega lazily, valida contra `_FORBIDDEN_SELECTORS` no load, consumido por `sei
 - **Framesets**: o SEI usa iframes. Navegacao Playwright precisa `frame_locator("#ifrVisualizacao")` para acessar o conteudo.
 - **CKEditor**: o editor de despachos e um CKEditor dentro de um iframe. O `save_despacho_draft` limpa com Ctrl+A+Delete antes de colar.
 - **Sessao**: `_session_browser.py` persiste `storage_state` em `session_data/state.json`.
+- **Pre-warm (opt-in)**: o no `prewarm_sessions` em `graph/nodes.py` roda uma vez antes do fan-out do Fleet e, se `storage_state` do SEI estiver mais velho que `PREWARM_SESSIONS_MAX_AGE_H` (default 6h), dispara `auto_login` sequencial. Desliga a race de N logins paralelos pelo mesmo `state.json`. Ativar com `PREWARM_SESSIONS_ENABLED=true` quando batch grande em prod expuser a race; skip automatico se nenhum email menciona SEI/GRR/23075.
 - **Audit trail**: toda operacao do `SEIWriter` gera screenshot + DOM dump + JSONL em `SEI_WRITE_ARTIFACTS_DIR`.
 - **`SEI_WRITE_MODE`**: `dry_run` (default, seguro — loga intencao sem clicar) ou `live` (Playwright completo). Sprint 3 validado em 2026-04-16 (processo fictício `23075.022027/2026-22`); produção continua em `dry_run` até Fleet smoke em batch real.
 - **POPs**: 60 tutoriais oficiais em `base_conhecimento/SEI-tutotiais/`. Triagem A/B/C em `SEI-tutotiais/README.md`.
