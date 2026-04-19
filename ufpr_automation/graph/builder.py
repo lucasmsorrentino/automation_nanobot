@@ -16,6 +16,7 @@ from ufpr_automation.graph.nodes import (
     agir_gmail,
     perceber_gmail,
     perceber_owa,
+    prewarm_sessions,
     registrar_feedback,
     registrar_procedimento,
     rotear,
@@ -106,6 +107,12 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
 
     graph.add_node("tier0_lookup", tier0_lookup)
 
+    # Optional sync node between tier0_lookup and the Fleet fan-out that
+    # warms SEI/SIGA sessions when needed, avoiding concurrent login races
+    # across parallel sub-agents. Gated by PREWARM_SESSIONS_ENABLED env var;
+    # when disabled, the node is a cheap no-op.
+    graph.add_node("prewarm_sessions", prewarm_sessions)
+
     # Fleet sub-agent — runs the full Tier 1 pipeline (rag_retrieve +
     # classificar + optional SEI/SIGA consult) for ONE email. Invoked in
     # parallel via Send fan-out from `dispatch_tier1`.
@@ -123,8 +130,9 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     graph.add_conditional_edges(
         "perceber", _has_emails, {"tier0_lookup": "tier0_lookup", "end": END}
     )
+    graph.add_edge("tier0_lookup", "prewarm_sessions")
     graph.add_conditional_edges(
-        "tier0_lookup",
+        "prewarm_sessions",
         dispatch_tier1,
         ["process_one_email", "rotear"],
     )

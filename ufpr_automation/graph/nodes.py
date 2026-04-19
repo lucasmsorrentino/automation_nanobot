@@ -194,6 +194,121 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Pre-warm SEI/SIGA sessions — optional node that runs 1 sync login before
+# the Fleet fan-out when email content suggests Tier 1 will need SEI or SIGA
+# and the saved session is missing/stale. Gated by env var (default OFF) so
+# production turns it on only when the login race proves painful.
+# ---------------------------------------------------------------------------
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Interpret env var as boolean. Accepts 1/true/yes (case-insensitive)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _email_mentions_sei_or_grr(email) -> bool:
+    """True if email body/subject contains an SEI process nº or GRR id."""
+    from ufpr_automation.procedures.playbook import _GRR_RE, _SEI_RE
+
+    text = f"{email.subject}\n{email.body or email.preview or ''}"
+    return bool(_SEI_RE.search(text) or _GRR_RE.search(text))
+
+
+def prewarm_sessions(state: EmailState) -> dict[str, Any]:
+    """Warm SEI/SIGA Playwright sessions once before Fleet fan-out.
+
+    Addresses the race where N parallel sub-agents each call ``auto_login``
+    and clobber each other's ``storage_state`` writes. When enabled via
+    ``PREWARM_SESSIONS_ENABLED=true``, scans emails for SEI/GRR patterns
+    and, if the saved session file is missing or older than
+    ``PREWARM_SESSIONS_MAX_AGE_H`` (default 6 h), performs a single sync
+    login to refresh the cookie jar. Failures are non-fatal — sub-agents
+    fall back to their own ``auto_login``.
+    """
+    if not _env_flag("PREWARM_SESSIONS_ENABLED", default=False):
+        return {}
+
+    emails = state.get("emails", [])
+    if not emails:
+        return {}
+
+    # Skip entirely when no email even hints at SEI/SIGA — the vast
+    # majority of non-Estágios emails fall here.
+    if not any(_email_mentions_sei_or_grr(e) for e in emails):
+        logger.debug("prewarm: nenhum email menciona SEI/GRR — skip")
+        return {}
+
+    max_age_h = float(os.environ.get("PREWARM_SESSIONS_MAX_AGE_H", "6"))
+
+    try:
+        asyncio.run(_prewarm_sessions_async(max_age_h))
+    except Exception as e:
+        # Never fail the pipeline on prewarm errors — Fleet sub-agents
+        # will just do their own logins.
+        logger.warning("prewarm: erro não-fatal (%s)", e)
+
+    return {}
+
+
+async def _prewarm_sessions_async(max_age_h: float) -> None:
+    """Warm SEI and SIGA sessions in parallel (independent systems)."""
+    import time
+
+    from ufpr_automation.sei import browser as sei_browser
+    from ufpr_automation.siga import browser as siga_browser
+
+    now = time.time()
+
+    async def _warm_one(label: str, session_file, module) -> None:
+        if session_file.exists():
+            age_h = (now - session_file.stat().st_mtime) / 3600.0
+            if age_h < max_age_h:
+                logger.debug("prewarm %s: sessão fresca (%.1fh) — skip", label, age_h)
+                return
+            logger.info("prewarm %s: sessão stale (%.1fh) — re-login", label, age_h)
+        else:
+            logger.info("prewarm %s: sem sessão salva — login", label)
+
+        if not module.has_credentials():
+            logger.warning("prewarm %s: credenciais ausentes — skip", label)
+            return
+
+        pw = browser = None
+        try:
+            pw, browser = await module.launch_browser(headless=True)
+            context = await module.create_browser_context(browser)
+            page = await context.new_page()
+            ok = await module.auto_login(page)
+            if ok:
+                await module.save_session_state(context)
+                logger.info("prewarm %s: sessão aquecida", label)
+            else:
+                logger.warning("prewarm %s: login falhou", label)
+        except Exception as e:
+            logger.warning("prewarm %s: exceção no login (%s)", label, e)
+        finally:
+            try:
+                if browser is not None:
+                    await browser.close()
+            except Exception:
+                pass
+            try:
+                if pw is not None:
+                    await pw.stop()
+            except Exception:
+                pass
+
+    # Run in parallel — SEI and SIGA are independent systems.
+    await asyncio.gather(
+        _warm_one("SEI", sei_browser.SEI_SESSION_FILE, sei_browser),
+        _warm_one("SIGA", siga_browser.SIGA_SESSION_FILE, siga_browser),
+    )
+
+
 async def _perceber_owa_async() -> list:
     """Internal async implementation for OWA scraping with full browser lifecycle."""
     from ufpr_automation.agents.perceber import PerceberAgent

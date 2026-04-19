@@ -241,6 +241,12 @@ USE_DSPY=auto                    # auto | on | off
 # Fleet pool de browsers (Marco III)
 FLEET_BROWSER_POOL_SIZE=3
 
+# Pre-warm SEI/SIGA sessions antes do Fleet fan-out (Marco III refinamento)
+# Evita race quando N sub-agentes paralelos tentam auto_login simultaneamente.
+# Default OFF. Ativar quando race de login for dor real em produção.
+PREWARM_SESSIONS_ENABLED=false   # true|1|yes|on para habilitar
+PREWARM_SESSIONS_MAX_AGE_H=6     # idade máxima (horas) da session file antes de re-login
+
 # AFlow topology dispatcher (Marco III)
 AFLOW_TOPOLOGY=fleet             # fleet | baseline | skip_rag_high_tier0 | no_self_refine | fleet_no_siga
 AFLOW_METRIC=composite
