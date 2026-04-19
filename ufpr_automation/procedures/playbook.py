@@ -344,12 +344,14 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
 
     Fields handled:
         - nome_aluno               (from sender header)
+        - nome_aluno_maiusculas    (uppercase variant for despacho templates)
         - assinatura_email         (from settings.ASSINATURA_EMAIL)
         - numero_tce               (regex in subject+body+attachments)
         - numero_processo_sei      (idem)
         - grr                      (idem)
         - data_inicio / data_fim   (first/last date found in body OR attachments)
         - nome_concedente          (TCE attachment text)
+        - nome_concedente_maiusculas (uppercase variant for despacho templates)
         - horas_diarias            (TCE attachment text)
         - horas_semanais           (TCE attachment text)
         - jornada_horario_inicio   (TCE attachment text; HH:MM)
@@ -361,6 +363,7 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     sender_name = _extract_sender_name(email.sender)
     if sender_name:
         vars["nome_aluno"] = sender_name
+        vars["nome_aluno_maiusculas"] = sender_name.upper()
 
     if settings.ASSINATURA_EMAIL:
         vars["assinatura_email"] = settings.ASSINATURA_EMAIL
@@ -402,7 +405,9 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     if attach_text:
         m = _CONCEDENTE_RE.search(attach_text)
         if m:
-            vars["nome_concedente"] = m.group(1).strip().rstrip(".;,")
+            concedente = m.group(1).strip().rstrip(".;,")
+            vars["nome_concedente"] = concedente
+            vars["nome_concedente_maiusculas"] = concedente.upper()
 
         m = _JORNADA_DIARIA_RE.search(attach_text)
         if m:

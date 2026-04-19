@@ -365,6 +365,31 @@ class TestExtractVariables:
         assert vars["data_inicio"] == "01/02/2026"
         assert vars["data_termino"] == "31/12/2026"
 
+    def test_nome_aluno_maiusculas_variant(self):
+        intent = Intent(intent_name="x", categoria="Outros", keywords=["x"])
+        email = EmailData(sender="João Silva <joao@ufpr.br>", subject="x", body="")
+        vars = extract_variables(email, intent)
+        assert vars["nome_aluno"] == "João Silva"
+        assert vars["nome_aluno_maiusculas"] == "JOÃO SILVA"
+
+    def test_nome_concedente_maiusculas_variant(self):
+        from ufpr_automation.core.models import AttachmentData
+
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        attach = AttachmentData(
+            filename="tce.pdf",
+            extracted_text="Parte Concedente: Acme Studios Ltda.",
+        )
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="segue",
+            attachments=[attach],
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_concedente"] == "Acme Studios Ltda"
+        assert vars["nome_concedente_maiusculas"] == "ACME STUDIOS LTDA"
+
 
 # ---------------------------------------------------------------------------
 # Aditivo extraction — numero_aditivo + data_termino_novo (numeric / extenso)
