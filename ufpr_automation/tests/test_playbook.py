@@ -367,6 +367,111 @@ class TestExtractVariables:
 
 
 # ---------------------------------------------------------------------------
+# Aditivo extraction — numero_aditivo + data_termino_novo (numeric / extenso)
+# ---------------------------------------------------------------------------
+
+
+class TestAditivoExtraction:
+    def _make_attach(self, text: str):
+        from ufpr_automation.core.models import AttachmentData
+
+        return AttachmentData(filename="aditivo.pdf", extracted_text=text)
+
+    def test_extracts_numero_aditivo_from_body(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(
+            sender="x@y.z",
+            subject="Encaminho Termo Aditivo nº 1",
+            body="segue em anexo",
+        )
+        vars = extract_variables(email, intent)
+        assert vars["numero_aditivo"] == "1"
+
+    def test_extracts_numero_aditivo_from_attachment(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(sender="x@y.z", subject="aditivo", body="")
+        email.attachments = [
+            self._make_attach(
+                "TERMO ADITIVO Nº 02 AO TERMO DE COMPROMISSO DE ESTÁGIO Nº 12345\n"
+                "Pelo presente termo, fica prorrogada a vigência..."
+            )
+        ]
+        vars = extract_variables(email, intent)
+        assert vars["numero_aditivo"] == "02"
+        # _TCE_RE should still pick up the 12345 correctly
+        assert vars.get("numero_tce") == "12345"
+
+    def test_aditivo_lookahead_skips_ao_termo(self):
+        """'ADITIVO AO TERMO DE COMPROMISSO Nº 12345' must NOT capture 12345
+        as numero_aditivo — the 12345 is the TCE, not the aditivo."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(
+            sender="x@y.z",
+            subject="aditivo",
+            body="ADITIVO AO TERMO DE COMPROMISSO DE ESTÁGIO Nº 12345",
+        )
+        vars = extract_variables(email, intent)
+        assert "numero_aditivo" not in vars
+        assert vars["numero_tce"] == "12345"
+
+    def test_extracts_data_termino_novo_numeric(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(sender="x@y.z", subject="aditivo", body="")
+        email.attachments = [
+            self._make_attach("Fica prorrogada a vigência até 30/06/2027.")
+        ]
+        vars = extract_variables(email, intent)
+        assert vars["data_termino_novo"] == "30/06/2027"
+
+    def test_extracts_data_termino_novo_extenso(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(sender="x@y.z", subject="aditivo", body="")
+        email.attachments = [
+            self._make_attach(
+                "Pelo presente Termo Aditivo nº 1, fica prorrogado até "
+                "1 de junho de 2027, preservadas as demais condições."
+            )
+        ]
+        vars = extract_variables(email, intent)
+        assert vars["numero_aditivo"] == "1"
+        assert vars["data_termino_novo"] == "01/06/2027"
+
+    def test_extracts_data_termino_novo_extenso_marco(self):
+        """Accent in 'março' must normalize — keyed as 'marco' internally."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(sender="x@y.z", subject="aditivo", body="")
+        email.attachments = [
+            self._make_attach("Nova vigência até 15 de março de 2027.")
+        ]
+        vars = extract_variables(email, intent)
+        assert vars["data_termino_novo"] == "15/03/2027"
+
+
+class TestParseBrDate:
+    def test_numeric(self):
+        from ufpr_automation.procedures.playbook import _parse_br_date
+
+        assert _parse_br_date("em 30/06/2026") == "30/06/2026"
+
+    def test_extenso(self):
+        from ufpr_automation.procedures.playbook import _parse_br_date
+
+        assert _parse_br_date("1 de junho de 2027") == "01/06/2027"
+
+    def test_extenso_com_acento(self):
+        from ufpr_automation.procedures.playbook import _parse_br_date
+
+        assert _parse_br_date("10 de março de 2027") == "10/03/2027"
+        assert _parse_br_date("10 de marco de 2027") == "10/03/2027"
+
+    def test_empty_and_no_match(self):
+        from ufpr_automation.procedures.playbook import _parse_br_date
+
+        assert _parse_br_date("") is None
+        assert _parse_br_date("no date here") is None
+
+
+# ---------------------------------------------------------------------------
 # Template filling
 # ---------------------------------------------------------------------------
 

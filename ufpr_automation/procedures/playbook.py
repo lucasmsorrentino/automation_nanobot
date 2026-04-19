@@ -246,6 +246,80 @@ _HORARIO_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Aditivo-specific regex — operate on attachment text (PDF do Termo Aditivo).
+# Matches "Termo Aditivo nº 1", "ADITIVO Nº 02", "Aditivo 3".
+# The negative lookahead `(?!\s+AO\s)` prevents capturing the TCE number in
+# "ADITIVO AO TERMO DE COMPROMISSO Nº 12345" — in that phrasing the aditivo
+# itself has no number yet, so we fall through and let _TCE_RE grab the 12345.
+_ADITIVO_RE = re.compile(
+    r"(?:TERMO\s+)?ADITIVO(?!\s+AO\s)"
+    r"\s*(?:n[º°o]\.?|num\.?|nr?\.?)?\s*[:\-]?\s*"
+    r"(\d{1,4}(?:[/\-]\d{2,6})?)",
+    re.IGNORECASE,
+)
+
+# Portuguese-language month names → numeric. Keys are lowercased and have
+# accents stripped so lookup from the regex capture normalizes cleanly.
+_MESES_PT: dict[str, int] = {
+    "janeiro": 1,
+    "fevereiro": 2,
+    "marco": 3,
+    "abril": 4,
+    "maio": 5,
+    "junho": 6,
+    "julho": 7,
+    "agosto": 8,
+    "setembro": 9,
+    "outubro": 10,
+    "novembro": 11,
+    "dezembro": 12,
+}
+
+_DATE_EXTENSO_RE = re.compile(
+    r"\b(\d{1,2})\s+de\s+"
+    r"(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|"
+    r"agosto|setembro|outubro|novembro|dezembro)"
+    r"\s+de\s+(\d{4})\b",
+    re.IGNORECASE,
+)
+
+# Matches phrases that introduce the *new* end date in an aditivo — e.g.
+# "nova vigência até DD/MM/YYYY", "fica prorrogado até 30 de junho de 2026".
+# The capture is a raw date string that must be normalized via _parse_br_date.
+_DATA_TERMINO_NOVO_RE = re.compile(
+    r"(?:nova\s+vig[êe]ncia"
+    r"|prorroga(?:[çc][ãa]o|do|da|r|-se)"
+    r"|fica\s+prorrogad[oa]"
+    r"|novo\s+t[ée]rmino"
+    r"|nova\s+data\s+(?:de\s+)?t[ée]rmino"
+    r"|nova\s+data\s+final)"
+    r"[^\n]{0,80}?"
+    r"(\d{1,2}/\d{1,2}/\d{4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})",
+    re.IGNORECASE,
+)
+
+
+def _parse_br_date(text: str) -> Optional[str]:
+    """Normalize a Brazilian date (numeric or extenso) to ``DD/MM/YYYY``.
+
+    Returns ``None`` if no recognizable date is found. Used when extracting
+    ``data_termino_novo`` from aditivo PDFs that sometimes spell dates out
+    ("30 de junho de 2026") rather than use DD/MM/YYYY.
+    """
+    if not text:
+        return None
+    m = _DATE_RE.search(text)
+    if m:
+        return m.group(1)
+    m = _DATE_EXTENSO_RE.search(text)
+    if m:
+        day = int(m.group(1))
+        mes_key = m.group(2).lower().replace("ç", "c")
+        mes = _MESES_PT.get(mes_key)
+        if mes:
+            return f"{day:02d}/{mes:02d}/{int(m.group(3))}"
+    return None
+
 
 def _attachments_text(email: EmailData) -> str:
     """Concatenate extracted text from all attachments.
@@ -279,6 +353,8 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
         - horas_diarias            (TCE attachment text)
         - horas_semanais           (TCE attachment text)
         - jornada_horario_inicio   (TCE attachment text; HH:MM)
+        - numero_aditivo           (Termo Aditivo PDF)
+        - data_termino_novo        (new end date, normalized DD/MM/YYYY)
     """
     vars: dict[str, str] = {}
 
@@ -341,6 +417,19 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
             hh = int(m.group(1))
             mm = int(m.group(2) or 0)
             vars["jornada_horario_inicio"] = f"{hh:02d}:{mm:02d}"
+
+    # Aditivo fields — numero_aditivo and data_termino_novo appear in the
+    # Termo Aditivo PDF, sometimes echoed in the email body. Body wins when
+    # present (student edits override PDF boilerplate).
+    m = _ADITIVO_RE.search(combined)
+    if m:
+        vars["numero_aditivo"] = m.group(1)
+
+    m = _DATA_TERMINO_NOVO_RE.search(attach_text) or _DATA_TERMINO_NOVO_RE.search(body_text)
+    if m:
+        normalized = _parse_br_date(m.group(1))
+        if normalized:
+            vars["data_termino_novo"] = normalized
 
     return vars
 
