@@ -61,9 +61,10 @@ class AcompanhamentoEspecialResult:
     """Result of adding a SEI process to an Acompanhamento Especial group.
 
     POP-38. ``grupo`` is the free-text group name (e.g. ``"Estágio não
-    obrigatório"``). In Marco IV this is persisted as dry_run only —
-    live flow is blocked on a fresh selector capture (see
-    ``sei/SELECTOR_AUDIT.md §1``).
+    obrigatório"``). If the group does not yet exist in the unit, the live
+    path opens the "Novo Grupo de Acompanhamento" modal and creates it
+    before selecting. Selectors documented in ``sei/SELECTOR_AUDIT.md §1``
+    (captured 2026-04-21).
     """
 
     success: bool

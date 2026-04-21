@@ -473,7 +473,7 @@ class TestClearEditorBodyHelper:
 
 
 class TestAddToAcompanhamentoEspecial:
-    """POP-38 skeleton — dry_run path only until new selector capture lands."""
+    """POP-38 — dry_run path. Live-path coverage in test_sei_writer_acompanhamento_live.py."""
 
     @pytest.mark.asyncio
     async def test_dry_run_returns_success_without_click(self, writer):
@@ -506,15 +506,30 @@ class TestAddToAcompanhamentoEspecial:
         assert last["mode"] == "dry_run"
 
     @pytest.mark.asyncio
-    async def test_live_mode_raises_not_implemented(self, mock_page, tmp_path, monkeypatch):
+    async def test_live_mode_no_longer_raises_not_implemented(
+        self, mock_page, tmp_path, monkeypatch
+    ):
+        """Regression: before 2026-04-21 the live path was `NotImplementedError`.
+        After the POP-38 wire-up it must go past that stub — any failure now is
+        a Playwright-mock artefact, not the architectural stub.
+        Deeper live-path coverage lives in test_sei_writer_acompanhamento_live.py."""
         from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
         live_writer = SEIWriter(mock_page, run_id="live-test", dry_run=False)
-        with pytest.raises(NotImplementedError, match="acompanhamento_especial"):
+        # The call may still return a failure result because mock_page does
+        # not fully simulate Playwright, but it must NOT raise NotImplementedError.
+        try:
             await live_writer.add_to_acompanhamento_especial(
                 "23075.000123/2026-01",
                 grupo="Estágio não obrigatório",
             )
-        # no click ever happens — guard against accidental live wiring
-        mock_page.click.assert_not_called()
+        except NotImplementedError:
+            pytest.fail(
+                "add_to_acompanhamento_especial still raising NotImplementedError — "
+                "live wire-up regressed to stub."
+            )
+        except Exception:
+            # Expected — the mock_page is too shallow; live-path tests use a
+            # richer fake (see test_sei_writer_acompanhamento_live.py).
+            pass

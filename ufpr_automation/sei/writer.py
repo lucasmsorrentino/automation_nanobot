@@ -157,6 +157,14 @@ class SEIWriter:
         self._assert_not_forbidden(selector)
         await self._page.click(selector)
 
+    async def _safe_frame_click(self, frame: Any, selector: str) -> None:
+        """Click a selector inside a specific frame after verifying it is
+        not forbidden. Same guard as ``_safe_click`` but targets a frame
+        instead of the main page — required for SEI iframes
+        (``ifrVisualizacao``, ``ifrConteudoVisualizacao``)."""
+        self._assert_not_forbidden(selector)
+        await frame.locator(selector).click()
+
     async def _screenshot(self, label: str) -> Path:
         """Capture a screenshot artifact."""
         safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", label)[:50]
@@ -1082,14 +1090,22 @@ class SEIWriter:
         TCE processes into the "Estágio não obrigatório" group so the
         secretariat can monitor them as a cohort.
 
-        In ``dry_run`` mode: audits the intent, captures a screenshot,
-        and returns ``success=True, dry_run=True`` without clicking.
+        Flow (mirrors ``sei/SELECTOR_AUDIT.md §1``):
+            1. Navigate to the process (via #txtPesquisaRapida if needed)
+            2. Click the toolbar "Acompanhamento Especial" icon →
+               either ``acompanhamento_gerenciar`` (list) or
+               ``acompanhamento_cadastrar`` (form) depending on whether
+               the process already has any group
+            3. If gerenciar: click ``#btnAdicionar`` to reach cadastrar
+            4. On cadastrar: select ``grupo`` from ``#selGrupoAcompanhamento``;
+               if not present, click ``#imgNovoGrupoAcompanhamento`` to open
+               the modal, fill ``#txtNome`` with ``grupo``, submit the modal,
+               and re-select
+            5. Fill ``#txaObservacao`` if ``observacao`` provided
+            6. Submit ``button[name="sbmCadastrarAcompanhamento"]``
 
-        In ``live`` mode: currently raises :class:`NotImplementedError`.
-        The form ``acompanhamento_especial`` is absent from the current
-        ``sei_selectors.yaml`` capture (SEI 5.0.3, CCDG). Wiring the live
-        path is blocked on a fresh capture — see
-        ``sei/SELECTOR_AUDIT.md §1`` for the expected selector spec.
+        In ``dry_run`` mode: audits the intent, captures a screenshot,
+        and returns ``success=True, dry_run=True`` without touching SEI.
         """
         artifacts: list[Path] = []
 
@@ -1120,8 +1136,304 @@ class SEIWriter:
                 dry_run=True,
             )
 
-        raise NotImplementedError(
-            "add_to_acompanhamento_especial live flow is not wired — "
-            "form 'acompanhamento_especial' absent from sei_selectors.yaml. "
-            "See sei/SELECTOR_AUDIT.md §1 for the capture spec."
-        )
+        # --- LIVE MODE ---
+        from urllib.parse import urljoin
+
+        from ufpr_automation.sei.writer_selectors import get_acompanhamento_form
+
+        spec = get_acompanhamento_form()
+        page = self._page
+        dialog_texts: list[str] = []
+
+        async def _on_dialog(d):
+            dialog_texts.append(d.message)
+            logger.warning("add_to_acompesp dialog[%s]: %s", d.type, d.message)
+            await d.accept()
+
+        page.on("dialog", _on_dialog)
+        try:
+            # Step 1: navigate to the process if not already there.
+            cur_title = await page.title()
+            if processo_id and processo_id not in (cur_title or ""):
+                logger.info(
+                    "add_to_acompesp: navigating to process %s via search",
+                    processo_id,
+                )
+                search = page.locator("#txtPesquisaRapida")
+                await search.click()
+                await search.fill("")
+                await search.press_sequentially(processo_id, delay=20)
+                await search.press("Enter")
+                await page.wait_for_load_state("networkidle", timeout=20000)
+
+            # Step 2: find the toolbar icon and extract its href.
+            toolbar_sel = spec["toolbar_icon"]["selector"]
+            toolbar_frame_name = spec["toolbar_icon"].get("frame")
+            toolbar_a = None
+            frames_to_try = (
+                [page.main_frame, *page.frames]
+                if not toolbar_frame_name
+                else [
+                    f
+                    for f in [
+                        next((fr for fr in page.frames if fr.name == toolbar_frame_name), None),
+                        page.main_frame,
+                        *page.frames,
+                    ]
+                    if f is not None
+                ]
+            )
+            for frame in frames_to_try:
+                try:
+                    loc = frame.locator(toolbar_sel).first
+                    if await loc.count() > 0:
+                        toolbar_a = loc
+                        break
+                except Exception:
+                    pass
+            if toolbar_a is None:
+                raise RuntimeError(
+                    "add_to_acompanhamento_especial: toolbar icon "
+                    "'Acompanhamento Especial' not found on process view."
+                )
+            href = await toolbar_a.get_attribute("href")
+            if not href:
+                raise RuntimeError(
+                    "add_to_acompanhamento_especial: toolbar icon has no href."
+                )
+            absolute = urljoin(page.url, href)
+
+            # Step 3: navigate the form frame (ifrVisualizacao) there.
+            vis_name = spec["cadastrar"].get("frame", "ifrVisualizacao")
+            vis_frame = next((f for f in page.frames if f.name == vis_name), None)
+            if vis_frame is None:
+                await page.goto(absolute, wait_until="networkidle")
+            else:
+                await vis_frame.goto(absolute, wait_until="networkidle")
+            vis_frame = next((f for f in page.frames if f.name == vis_name), None)
+            target = vis_frame or page.main_frame
+
+            artifacts.append(await self._screenshot(f"acompesp_after_toolbar_{processo_id}"))
+
+            # Step 4: if we landed on gerenciar (list page), click Adicionar.
+            cur_url = target.url or ""
+            gerenciar_marker = spec["gerenciar_processo"].get(
+                "action_marker", "acompanhamento_gerenciar"
+            )
+            cadastrar_marker = spec["cadastrar"].get(
+                "action_marker", "acompanhamento_cadastrar"
+            )
+            if gerenciar_marker in cur_url and cadastrar_marker not in cur_url:
+                adicionar_sel = spec["gerenciar_processo"]["buttons"]["adicionar"]["selector"]
+                adicionar_href = await target.evaluate(
+                    r"""(sel) => {
+                      const b = document.querySelector(sel);
+                      if (!b) return null;
+                      const m = (b.getAttribute('onclick') || '').match(/location\.href='([^']+)'/);
+                      return m ? m[1] : null;
+                    }""",
+                    adicionar_sel,
+                )
+                if not adicionar_href:
+                    raise RuntimeError(
+                        f"add_to_acompanhamento_especial: #btnAdicionar onclick did not "
+                        f"yield a location.href URL. adicionar_sel={adicionar_sel}"
+                    )
+                absolute_add = urljoin(target.url or page.url, adicionar_href)
+                logger.info(
+                    "add_to_acompesp: list page → navigating to cadastrar form"
+                )
+                vis_frame2 = next((f for f in page.frames if f.name == vis_name), None)
+                if vis_frame2 is None:
+                    await page.goto(absolute_add, wait_until="networkidle")
+                else:
+                    await vis_frame2.goto(absolute_add, wait_until="networkidle")
+                vis_frame = next((f for f in page.frames if f.name == vis_name), None)
+                target = vis_frame or page.main_frame
+
+            # Now we should be on the cadastrar form.
+            fields = spec["cadastrar"]["fields"]
+            grupo_sel = fields["grupo"]["selector"]
+            await target.wait_for_selector(grupo_sel, state="visible", timeout=10000)
+
+            # Step 5: try to select the group by visible text.
+            selected_value = await target.evaluate(
+                r"""({sel, label}) => {
+                  const s = document.querySelector(sel);
+                  if (!s) return null;
+                  for (const o of s.options) {
+                    if ((o.textContent || '').trim() === label) {
+                      s.value = o.value;
+                      s.dispatchEvent(new Event('change', {bubbles: true}));
+                      return o.value;
+                    }
+                  }
+                  return null;
+                }""",
+                {"sel": grupo_sel, "label": grupo},
+            )
+
+            if not selected_value:
+                # Group does not exist — open modal and create it.
+                logger.info(
+                    "add_to_acompesp: grupo %r not in dropdown — opening 'Novo Grupo' modal",
+                    grupo,
+                )
+                novo_grupo_sel = fields["novo_grupo_icon"]["selector"]
+                await self._safe_frame_click(target, novo_grupo_sel)
+
+                # Wait for the modal iframe to appear (URL contains the marker).
+                modal_marker = fields["novo_grupo_icon"].get(
+                    "modal_action_marker", "grupo_acompanhamento_cadastrar"
+                )
+
+                async def _find_modal_frame():
+                    return next(
+                        (f for f in page.frames if modal_marker in (f.url or "")),
+                        None,
+                    )
+
+                modal_frame = None
+                for _ in range(30):  # up to ~6s at 200ms intervals
+                    modal_frame = await _find_modal_frame()
+                    if modal_frame is not None:
+                        break
+                    await page.wait_for_timeout(200)
+                if modal_frame is None:
+                    raise RuntimeError(
+                        "add_to_acompanhamento_especial: Novo Grupo modal iframe "
+                        f"with URL marker '{modal_marker}' did not appear after click."
+                    )
+
+                # Fill the group name + submit.
+                modal_spec = spec["novo_grupo_modal"]
+                nome_sel = modal_spec["fields"]["nome"]["selector"]
+                await modal_frame.wait_for_selector(nome_sel, state="visible", timeout=5000)
+                await modal_frame.locator(nome_sel).fill(grupo)
+                artifacts.append(
+                    await self._screenshot(f"acompesp_modal_filled_{processo_id}")
+                )
+                modal_submit_sel = modal_spec["submit"]["selector"]
+                await self._safe_frame_click(modal_frame, modal_submit_sel)
+
+                # Modal closes after successful save. Wait for it to disappear.
+                for _ in range(30):
+                    if await _find_modal_frame() is None:
+                        break
+                    await page.wait_for_timeout(200)
+
+                # Refresh target frame (underlying page may have refreshed its
+                # select options to include the new group).
+                vis_frame = next((f for f in page.frames if f.name == vis_name), None)
+                target = vis_frame or page.main_frame
+
+                # Re-select the new group. Newly-created groups typically become
+                # the selected option automatically, but we validate explicitly.
+                selected_value = await target.evaluate(
+                    r"""({sel, label}) => {
+                      const s = document.querySelector(sel);
+                      if (!s) return null;
+                      for (const o of s.options) {
+                        if ((o.textContent || '').trim() === label) {
+                          s.value = o.value;
+                          s.dispatchEvent(new Event('change', {bubbles: true}));
+                          return o.value;
+                        }
+                      }
+                      return null;
+                    }""",
+                    {"sel": grupo_sel, "label": grupo},
+                )
+                if not selected_value:
+                    raise RuntimeError(
+                        f"add_to_acompanhamento_especial: after creating grupo {grupo!r}, "
+                        "the option still not present in the dropdown."
+                    )
+
+            # Step 6: fill observação if provided.
+            if observacao:
+                obs_sel = fields["observacao"]["selector"]
+                await target.locator(obs_sel).fill(observacao)
+
+            artifacts.append(await self._screenshot(f"acompesp_pre_submit_{processo_id}"))
+
+            # Step 7: submit the cadastrar form.
+            submit_sel = spec["cadastrar"]["submit"]["selector"]
+            await self._safe_frame_click(target, submit_sel)
+            await page.wait_for_load_state("networkidle", timeout=20000)
+
+            if dialog_texts:
+                artifacts.append(await self._screenshot(f"acompesp_dialog_{processo_id}"))
+                self._audit(
+                    "add_to_acompanhamento_especial",
+                    processo_id,
+                    mode="live",
+                    grupo=grupo,
+                    observacao=observacao,
+                    success=False,
+                    error=f"SEI dialogs: {dialog_texts}",
+                    artifacts=[str(p) for p in artifacts],
+                )
+                return AcompanhamentoEspecialResult(
+                    success=False,
+                    processo_id=processo_id,
+                    grupo=grupo,
+                    observacao=observacao,
+                    artifacts=artifacts,
+                    dry_run=False,
+                    error=f"SEI dialogs blocked save: {dialog_texts}",
+                )
+
+            artifacts.append(await self._screenshot(f"acompesp_post_submit_{processo_id}"))
+
+            self._audit(
+                "add_to_acompanhamento_especial",
+                processo_id,
+                mode="live",
+                grupo=grupo,
+                observacao=observacao,
+                success=True,
+                final_url=page.url,
+                artifacts=[str(p) for p in artifacts],
+            )
+            logger.info(
+                "SEIWriter[live]: added %s to Acompanhamento Especial grupo=%r",
+                processo_id,
+                grupo,
+            )
+            return AcompanhamentoEspecialResult(
+                success=True,
+                processo_id=processo_id,
+                grupo=grupo,
+                observacao=observacao,
+                artifacts=artifacts,
+                dry_run=False,
+            )
+        except PermissionError:
+            raise
+        except Exception as e:
+            logger.error("add_to_acompanhamento_especial failed: %s", e)
+            self._audit(
+                "add_to_acompanhamento_especial",
+                processo_id,
+                mode="live",
+                grupo=grupo,
+                observacao=observacao,
+                success=False,
+                error=str(e),
+                artifacts=[str(p) for p in artifacts],
+            )
+            return AcompanhamentoEspecialResult(
+                success=False,
+                processo_id=processo_id,
+                grupo=grupo,
+                observacao=observacao,
+                artifacts=artifacts,
+                dry_run=False,
+                error=str(e),
+            )
+        finally:
+            try:
+                page.remove_listener("dialog", _on_dialog)
+            except Exception:
+                pass
