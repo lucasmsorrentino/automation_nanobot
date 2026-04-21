@@ -216,6 +216,7 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 ## Windows notes
 
 - **RAG store on Google Drive**: `RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store`. Requires Google Drive for Desktop installed and running (mounts at `G:` by default). First access to a file may trigger on-demand download.
+- **RAG ingest workaround — não rodar `ingest.py` direto em G:**. LanceDB faz commit atômico renomeando `_versions/*.manifest`, e o Google Drive Desktop retorna `Função incorreta (os error 1)` nessa operação, abortando o ingest depois que todos os chunks já foram embedados. Fluxo correto validado em 2026-04-20: (1) copiar `G:\...\store\ufpr.lance` → `C:\Users\<user>\rag_store_local\` com `cp -r`; (2) rodar ingest com `RAG_STORE_DIR=C:/Users/<user>/rag_store_local` (env override); (3) ao terminar, espelhar de volta com `robocopy "<local>\ufpr.lance" "G:\...\store\ufpr.lance" /E /COPY:DAT /R:3 /W:5` (bash MSYS: prefixar `MSYS_NO_PATHCONV=1` para não quebrar flags com `/`). Robocopy lida com Drive sync; LanceDB não.
 - **HuggingFace offline mode**: the `multilingual-e5-large` model is cached at `~/.cache/huggingface/hub/`. To avoid 429 rate-limit errors from HuggingFace on repeated RAG queries, set before running any `ufpr_automation.rag.*` command:
   ```bash
   export HF_HUB_OFFLINE=1
