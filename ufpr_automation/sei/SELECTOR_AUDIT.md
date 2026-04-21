@@ -110,11 +110,29 @@ acompanhamento_especial:
   # Modal: criar novo grupo (inline no form cadastrar)
   # ──────────────────────────────────────────────────────────────
   novo_grupo_modal:
+    # Capturado 2026-04-21 (target acompanhamento_novo_grupo_modal).
+    # infraAbrirJanelaModal injeta um iframe com a URL abaixo dentro da
+    # mesma página DOM (vira um frame extra — 6 frames após click vs 4 antes).
     action: "grupo_acompanhamento_cadastrar"
-    # Ainda não capturado ao vivo — próxima iteração clica no
-    # `#imgNovoGrupoAcompanhamento` e dumpa o modal. Esperado (pelo padrão
-    # do POP-38 e outros forms admin SEI): input de nome do grupo + Salvar.
-    status: "uncaptured"
+    status: "captured"
+    page_title: "SEI - Novo Grupo de Acompanhamento"
+    form_id: "#frmGrupoAcompanhamentoCadastro"
+    fields:
+      nome:
+        type: "text"
+        selector: "#txtNome"
+        maxlength: 150
+    hidden:
+      # vazio = create; preenchido = edit (mesmo form atende ambos).
+      id_grupo: "#hdnIdGrupoAcompanhamento"
+    submit:
+      selector: 'button[name="sbmCadastrarGrupoAcompanhamento"]'
+      value: "Salvar"
+    cancel:
+      # Modal NÃO tem botão Cancelar. Fechar via:
+      strategies:
+        - "page.keyboard.press('Escape')"
+        - "click fora do modal (overlay)"
 ```
 
 **Correções vs. inferência anterior (pre-captura, v0):**
@@ -125,13 +143,14 @@ acompanhamento_especial:
 5. ⚠️ v1 (primeira passada desta sessão) dizia "não existe Novo Grupo no form" — **errado**. O `<img>` com onclick me escapou porque a query JS não pegava `img[onclick]`. Query do driver atualizada; re-runs futuros capturam.
 
 **Próximos passos para wire-up:**
-- [ ] Capturar o modal `grupo_acompanhamento_cadastrar` (target novo ou manual click no `+`)
+- [x] Capturar modal `grupo_acompanhamento_cadastrar` (rodado 2026-04-21)
 - [ ] Adicionar entrada `acompanhamento_especial` no `sei_selectors.yaml` do Drive
 - [ ] Implementar live path em `sei/writer.py:add_to_acompanhamento_especial`:
   1. Navegar toolbar → se cair em `gerenciar_processo`, clicar `#btnAdicionar`; se cair em `cadastrar` direto, prosseguir
-  2. Selecionar grupo por texto; se não existir, clicar `#imgNovoGrupoAcompanhamento` + preencher modal
-  3. Preencher `#txaObservacao` (opcional)
-  4. Submit `button[name="sbmCadastrarAcompanhamento"]` (modo live) ou Cancelar (dry-run)
+  2. Selecionar grupo por texto via `#selGrupoAcompanhamento`
+  3. Se grupo não existir: clicar `#imgNovoGrupoAcompanhamento` → esperar o iframe com URL `grupo_acompanhamento_cadastrar` aparecer → preencher `#txtNome` → submit `button[name="sbmCadastrarGrupoAcompanhamento"]` → aguardar modal fechar e o novo grupo aparecer selecionado no `#selGrupoAcompanhamento` do form pai
+  4. Preencher `#txaObservacao` (opcional)
+  5. Submit `button[name="sbmCadastrarAcompanhamento"]` (modo live) ou Cancelar (dry-run)
 - [ ] Testar em dry-run + live contra processo de smoke
 
 ### 2. POP-5 — `grau_sigilo` ausente

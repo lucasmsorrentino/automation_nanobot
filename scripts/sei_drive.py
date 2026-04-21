@@ -886,6 +886,198 @@ async def target_acompanhamento_especial_processo(page, out_dir: Path, context) 
         logger.warning("cancel failed: %s", e)
 
 
+async def target_acompanhamento_novo_grupo_modal(page, out_dir: Path, context) -> None:
+    """Reach the cadastrar form, click the '+' icon (#imgNovoGrupoAcompanhamento)
+    to open the 'Novo Grupo de Acompanhamento' modal, then snapshot the modal
+    DOM (fields + buttons). CLOSES without saving — never creates a real group.
+
+    The modal opens via infraAbrirJanelaModal(url, 700, 300) — it's a
+    dialog inside the same page DOM, not a popup window.
+    """
+    await _ensure_logged_in(page, context)
+    await _open_process(page, MODEL_PROCESS)
+
+    # Reach the cadastrar form (re-use the same nav pattern).
+    vis_frame = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
+    cv_frame = next((f for f in page.frames if f.name == "ifrConteudoVisualizacao"), None)
+    if cv_frame is None:
+        raise RuntimeError("ifrConteudoVisualizacao not found")
+    toolbar_a = cv_frame.locator(
+        'xpath=//a[.//img[@title="Acompanhamento Especial"]]'
+    ).first
+    await toolbar_a.wait_for(state="visible", timeout=10000)
+    toolbar_href = await toolbar_a.get_attribute("href")
+    if not toolbar_href:
+        raise RuntimeError("toolbar icon has no href")
+    from urllib.parse import urljoin
+
+    absolute = urljoin(page.url, toolbar_href)
+    logger.info("novo_grupo_modal: navigating to gerenciar → %s", absolute[:120])
+    if vis_frame is None:
+        await page.goto(absolute, wait_until="networkidle")
+    else:
+        await vis_frame.goto(absolute, wait_until="networkidle")
+
+    # Now we're on gerenciar (list page). Extract Adicionar href and navigate
+    # to cadastrar.
+    vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None) or page.main_frame
+    adicionar_href = await vf.evaluate(
+        r"""() => {
+          const b = document.getElementById('btnAdicionar');
+          if (!b) return null;
+          const m = (b.getAttribute('onclick') || '').match(/location\.href='([^']+)'/);
+          return m ? m[1] : null;
+        }"""
+    )
+    if not adicionar_href:
+        raise RuntimeError("btnAdicionar not found on gerenciar page")
+    absolute_add = urljoin(page.url, adicionar_href)
+    vis_frame2 = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
+    if vis_frame2 is None:
+        await page.goto(absolute_add, wait_until="networkidle")
+    else:
+        await vis_frame2.goto(absolute_add, wait_until="networkidle")
+    await snapshot(page, out_dir, "cadastrar_form_before_modal", also_frames=True)
+
+    # Click the '+' icon. cadastrarGrupoAcompanhamento() calls
+    # infraAbrirJanelaModal — the modal is injected into the SAME page DOM
+    # (no new window). Capture DOM state after click.
+    vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None) or page.main_frame
+    logger.info("novo_grupo_modal: clicking #imgNovoGrupoAcompanhamento")
+    try:
+        await vf.locator("#imgNovoGrupoAcompanhamento").click()
+    except Exception as e:
+        logger.error("click failed: %s", e)
+        await snapshot(page, out_dir, "modal_click_failed", also_frames=True)
+        raise
+
+    # The modal may open in an iframe within the page, or as a div overlay.
+    # Wait a bit for it to render, then snapshot + dump all new frames.
+    await page.wait_for_timeout(2000)
+    await snapshot(page, out_dir, "after_novo_grupo_click", also_frames=True)
+
+    # Try to find the modal content. SEI's infraAbrirJanelaModal typically
+    # injects an iframe (e.g. id="modal-body" or similar) inside a dialog.
+    # Enumerate all frames and their URLs — the new one should have
+    # acao=grupo_acompanhamento_cadastrar.
+    frame_info = []
+    for frame in page.frames:
+        frame_info.append(
+            {
+                "name": frame.name,
+                "url": frame.url,
+                "is_main": frame is page.main_frame,
+            }
+        )
+    (out_dir / "raw" / "all_frames_after_modal.json").write_text(
+        json.dumps(frame_info, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    logger.info("novo_grupo_modal: %d total frames after click", len(frame_info))
+
+    # Find the modal frame — URL contains grupo_acompanhamento_cadastrar.
+    modal_frame = next(
+        (f for f in page.frames if "grupo_acompanhamento_cadastrar" in (f.url or "")),
+        None,
+    )
+    if modal_frame is None:
+        # Maybe the modal is not a frame but an overlay div in the same page —
+        # search the DOM for elements with `grupo_acompanhamento` in any attr.
+        logger.warning(
+            "novo_grupo_modal: no frame matched grupo_acompanhamento_cadastrar; "
+            "the modal may be inline. Dumping ifrVisualizacao + main_frame for inspection."
+        )
+        # Dump affordances from whatever is currently visible in vf.
+        modal_frame = vf
+
+    try:
+        modal_form = await modal_frame.evaluate(
+            r"""() => {
+              const out = {
+                url: location.href,
+                title: document.title,
+                inputs: [],
+                textareas: [],
+                selects: [],
+                buttons: [],
+                all_named_ids: [],
+              };
+              for (const i of document.querySelectorAll('input')) {
+                out.inputs.push({
+                  id: i.id || null,
+                  name: i.name || null,
+                  type: i.type,
+                  value: i.value || null,
+                  placeholder: i.placeholder || null,
+                  maxlength: i.maxLength > 0 ? i.maxLength : null,
+                });
+              }
+              for (const t of document.querySelectorAll('textarea')) {
+                out.textareas.push({
+                  id: t.id || null,
+                  name: t.name || null,
+                  rows: t.rows,
+                });
+              }
+              for (const s of document.querySelectorAll('select')) {
+                out.selects.push({ id: s.id, name: s.name, options: s.options.length });
+              }
+              for (const b of document.querySelectorAll(
+                'input[type="button"], input[type="submit"], button'
+              )) {
+                out.buttons.push({
+                  id: b.id || null,
+                  name: b.name || null,
+                  value: b.value || null,
+                  text: (b.innerText || b.textContent || '').trim().slice(0, 60),
+                  onclick: b.getAttribute('onclick'),
+                  type: b.type || null,
+                });
+              }
+              // Any element whose id includes 'rupo' (Grupo) for debug.
+              for (const el of document.querySelectorAll('[id*="rupo"], [name*="rupo"]')) {
+                out.all_named_ids.push({
+                  tag: el.tagName,
+                  id: el.id || null,
+                  name: el.name || null,
+                });
+              }
+              return out;
+            }"""
+        )
+        (out_dir / "raw" / "novo_grupo_modal_form.json").write_text(
+            json.dumps(modal_form, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info(
+            "novo_grupo_modal: modal url=%s inputs=%d textareas=%d buttons=%d",
+            modal_form["url"][:80],
+            len(modal_form["inputs"]),
+            len(modal_form["textareas"]),
+            len(modal_form["buttons"]),
+        )
+    except Exception as e:
+        logger.warning("modal form dump failed: %s", e)
+
+    # Try to close the modal without saving. Common SEI patterns:
+    #   - button "Cancelar" inside the modal
+    #   - 'X' close icon on the dialog
+    # Fall back to navigating away (go_back) which discards the modal.
+    try:
+        cancel_btn = modal_frame.locator(
+            '#btnCancelar, [name="btnCancelar"], button:has-text("Cancelar")'
+        ).first
+        if await cancel_btn.count() > 0:
+            logger.info("novo_grupo_modal: clicking modal Cancelar")
+            await cancel_btn.click()
+            await page.wait_for_timeout(800)
+        else:
+            logger.info("novo_grupo_modal: no Cancelar — pressing Escape")
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+    except Exception as e:
+        logger.warning("modal close failed: %s", e)
+    await snapshot(page, out_dir, "after_modal_close", also_frames=True)
+
+
 TARGETS = {
     "login": target_login,
     "iniciar_processo": target_iniciar_processo,
@@ -896,6 +1088,7 @@ TARGETS = {
     "despacho_editor": None,  # set below after defining the fn
     "acompanhamento_especial_menu": target_acompanhamento_especial_menu,
     "acompanhamento_especial_processo": target_acompanhamento_especial_processo,
+    "acompanhamento_novo_grupo_modal": target_acompanhamento_novo_grupo_modal,
 }
 
 
