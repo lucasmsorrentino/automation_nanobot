@@ -10,7 +10,7 @@ Manifesto auditado: `G:/Meu Drive/ufpr_automation_files/sei_selectors.yaml` (cap
 | POP-25 Incluir Doc Externo | `incluir_documento_externo` | ✅ Completo |
 | POP-19 Criar Doc Interno (Despacho) | `incluir_documento_despacho` | ✅ Suficiente (só cobre Texto Inicial=Nenhum) |
 | POP-20 Editar Doc Interno | `incluir_documento_despacho.editor` | ✅ Para draft inicial; gap pra re-edit |
-| POP-38 Acompanhamento Especial | `acompanhamento_listar` / `acompanhamento_gerenciar` / `acompanhamento_cadastrar` | ✅ **Capturado 2026-04-21** (ainda não wired no manifesto — ver §1) |
+| POP-38 Acompanhamento Especial | `acompanhamento_listar` / `acompanhamento_gerenciar` / `acompanhamento_cadastrar` / `novo_grupo_modal` | ✅ **Capturado 2026-04-21**, **consumido em código 2026-04-21** via `writer_selectors.get_acompanhamento_form` (in-source defaults, fallback para YAML manifest se presente). Live path em `writer.py` implementado e testado. |
 
 ## Gaps detalhados
 
@@ -144,14 +144,15 @@ acompanhamento_especial:
 
 **Próximos passos para wire-up:**
 - [x] Capturar modal `grupo_acompanhamento_cadastrar` (rodado 2026-04-21)
-- [ ] Adicionar entrada `acompanhamento_especial` no `sei_selectors.yaml` do Drive
-- [ ] Implementar live path em `sei/writer.py:add_to_acompanhamento_especial`:
-  1. Navegar toolbar → se cair em `gerenciar_processo`, clicar `#btnAdicionar`; se cair em `cadastrar` direto, prosseguir
-  2. Selecionar grupo por texto via `#selGrupoAcompanhamento`
-  3. Se grupo não existir: clicar `#imgNovoGrupoAcompanhamento` → esperar o iframe com URL `grupo_acompanhamento_cadastrar` aparecer → preencher `#txtNome` → submit `button[name="sbmCadastrarGrupoAcompanhamento"]` → aguardar modal fechar e o novo grupo aparecer selecionado no `#selGrupoAcompanhamento` do form pai
-  4. Preencher `#txaObservacao` (opcional)
-  5. Submit `button[name="sbmCadastrarAcompanhamento"]` (modo live) ou Cancelar (dry-run)
-- [ ] Testar em dry-run + live contra processo de smoke
+- [x] Expor os selectors para o writer — feito via `writer_selectors.get_acompanhamento_form()` com defaults in-source (`_ACOMPANHAMENTO_ESPECIAL_DEFAULTS` em `writer_selectors.py`) + fallback opcional para `forms.acompanhamento_especial` no YAML manifest. Defaults in-source evitam write em `G:/Meu Drive/...` enquanto mantêm o contrato do manifesto compatível com futura captura.
+- [x] Implementar live path em `sei/writer.py:add_to_acompanhamento_especial` (2026-04-21):
+  1. Navegar toolbar → trata os 2 casos (URL contém `acompanhamento_gerenciar` → extrai href de `#btnAdicionar` e navega; URL direto em `acompanhamento_cadastrar` → prossegue)
+  2. Seleciona grupo por texto via `#selGrupoAcompanhamento` (JS evaluate + dispatch `change` event)
+  3. Se grupo não existir: clica `#imgNovoGrupoAcompanhamento` → poll `page.frames` até achar iframe com URL `grupo_acompanhamento_cadastrar` → preenche `#txtNome` → submit `button[name="sbmCadastrarGrupoAcompanhamento"]` → poll até modal desaparecer → re-seleciona no select pai
+  4. Preenche `#txaObservacao` (opcional)
+  5. Submit `button[name="sbmCadastrarAcompanhamento"]` (modo live) ou skipa submit + dispara screenshot (modo dry-run)
+- [x] Cobertura de testes — `test_sei_writer.py` (dry-run, audit, live mode ≠ NotImplementedError) + `test_sei_writer_acompanhamento_live.py` (8 testes: existing/new group, forbidden selectors). Todos passam com fake Playwright (sem rede).
+- [ ] Smoke ao vivo contra processo real — bloqueado em supervisão humana + email de aluno 100% ok nos checkers (ver TASKS.md "Validação manual em produção").
 
 ### 2. POP-5 — `grau_sigilo` ausente
 
@@ -196,6 +197,6 @@ Nenhum selector novo foi adicionado — o manifesto já tinha `#optNenhum` como 
 
 Ao rodar próxima captura via `scripts/sei_drive.py`:
 
-1. Incluir form `acompanhamento_especial` (ver seção 1 acima) — desbloqueia task #7.
+1. ~~Incluir form `acompanhamento_especial`~~ — capturado em 2026-04-21 (targets `acompanhamento_especial_menu`, `acompanhamento_especial_processo`, `acompanhamento_novo_grupo_modal`) e consumido via `writer_selectors.get_acompanhamento_form`. Se quiser promover os defaults in-source para o YAML do Drive, adicione um bloco `forms.acompanhamento_especial` em `sei_selectors.yaml` — `get_acompanhamento_form()` prefere o manifest quando presente.
 2. Opcional: `grau_sigilo` dropdown (seção 2).
 3. Opcional: re-edit path de Despacho (seção 4).
