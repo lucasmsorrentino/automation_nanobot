@@ -10,35 +10,129 @@ Manifesto auditado: `G:/Meu Drive/ufpr_automation_files/sei_selectors.yaml` (cap
 | POP-25 Incluir Doc Externo | `incluir_documento_externo` | ✅ Completo |
 | POP-19 Criar Doc Interno (Despacho) | `incluir_documento_despacho` | ✅ Suficiente (só cobre Texto Inicial=Nenhum) |
 | POP-20 Editar Doc Interno | `incluir_documento_despacho.editor` | ✅ Para draft inicial; gap pra re-edit |
-| POP-38 Acompanhamento Especial | — | ❌ **Completamente ausente** |
+| POP-38 Acompanhamento Especial | `acompanhamento_listar` / `acompanhamento_gerenciar` / `acompanhamento_cadastrar` | ✅ **Capturado 2026-04-21** (ainda não wired no manifesto — ver §1) |
 
 ## Gaps detalhados
 
-### 1. POP-38 Acompanhamento Especial — BLOCKER pro task #7
+### 1. POP-38 Acompanhamento Especial — selectors capturados 2026-04-21
 
-Nenhum form `acompanhamento_especial` no manifesto. Precisa captura nova via `scripts/sei_drive.py`. Selectors esperados (inferidos do POP):
+Capturas rodadas via `scripts/sei_drive.py --target acompanhamento_especial_menu` + `--target acompanhamento_especial_processo` (outputs: `procedures_data/sei_capture/20260421_005928/` + `20260421_010216/`). Cross-check na raw HTML confirma o layout completo (v1 da análise ignorou o `<img onclick>`, corrigido).
+
+**Nav paths — 3 telas, 2 entradas:**
 
 ```yaml
 acompanhamento_especial:
-  nav_path:
-    - {action: "open_process"}
-    - {action: "click", selector: '<ícone estrela/Acompanhamento Especial na toolbar>'}
-  fields:
-    grupo:
-      type: "select_or_create"
-      selector: "#selGrupoAcompanhamento"          # TODO: confirmar
-      new_group_button: "<botão Novo Grupo>"       # TODO: confirmar
-      new_group_name_input: "#txtNomeGrupo"        # TODO: confirmar
-      default_for_estagio_nao_obrig: "Estágio não obrigatório"
-    descricao:
-      type: "textarea"
-      selector: "#txaDescricao"                    # TODO: confirmar
-  submit:
-    selector: "#btnSalvar"
-  constraint: "1 processo = 1 grupo (POP-38 Atenção)"
+  # ──────────────────────────────────────────────────────────────
+  # Entrada A: Menu lateral → visão unidade-wide
+  # ──────────────────────────────────────────────────────────────
+  menu_unidade:
+    action: "acompanhamento_listar"
+    selector_menu: 'a:has-text("Acompanhamento Especial")'   # main frame
+    frame: null
+    # Tela lista TODOS os processos da unidade organizados por grupo.
+    # Affordances relevantes:
+    buttons:
+      listar_grupos:
+        # Admin dos grupos — criar/editar/excluir grupos da unidade.
+        selector: "#btnGrupoAcompanhamentoListar"
+        target_action: "grupo_acompanhamento_listar"
+        accesskey: "L"
+
+  # ──────────────────────────────────────────────────────────────
+  # Entrada B: Processo aberto → ícone na toolbar
+  # ──────────────────────────────────────────────────────────────
+  toolbar_icon:
+    selector: 'xpath=//a[.//img[@title="Acompanhamento Especial"]]'
+    frame: "ifrConteudoVisualizacao"
+    # Comportamento condicional:
+    #   - Se processo JÁ tem acompanhamento → vai pra gerenciar_processo (list page)
+    #   - Se processo NUNCA teve acompanhamento → vai direto pra cadastrar (form)
+
+  # ──────────────────────────────────────────────────────────────
+  # Tela: lista dos acompanhamentos deste processo
+  # ──────────────────────────────────────────────────────────────
+  gerenciar_processo:
+    action: "acompanhamento_gerenciar"
+    landing_frame: "ifrVisualizacao"
+    page_title: "Acompanhamentos Especiais do Processo <NUMERO>"
+    buttons:
+      adicionar:
+        selector: "#btnAdicionar"
+        # onclick = location.href='...acao=acompanhamento_cadastrar...'
+        target_action: "acompanhamento_cadastrar"
+      excluir:
+        selector: "#btnExcluir"
+        onclick: "acaoExclusaoMultipla()"
+    # Cada linha da lista tem link de editar (navega pro mesmo form cadastrar
+    # com #hdnIdAcompanhamento pré-preenchido).
+
+  # ──────────────────────────────────────────────────────────────
+  # Tela: form create/edit de Acompanhamento
+  # ──────────────────────────────────────────────────────────────
+  cadastrar:
+    action: "acompanhamento_cadastrar"
+    frame: "ifrVisualizacao"
+    # Mesmo form atende create + edit. Diferenciado apenas por:
+    #   #hdnIdAcompanhamento vazio = create, preenchido = edit
+    # Título da tela: "Novo Acompanhamento Especial" (create) vs.
+    #                 "Alterar Acompanhamento Especial" (edit)
+    fields:
+      grupo:
+        type: "select"
+        selector: "#selGrupoAcompanhamento"
+        match_by: "text"   # preferir option text exato
+        default_for_estagio_nao_obrig: "Estágio não obrigatório"
+      novo_grupo:
+        # Ícone "+" ao lado do select. Abre MODAL via infraAbrirJanelaModal.
+        # Usado quando o grupo desejado ainda não existe.
+        type: "image_modal_trigger"
+        selector: "#imgNovoGrupoAcompanhamento"
+        onclick: "cadastrarGrupoAcompanhamento()"
+        modal_action: "grupo_acompanhamento_cadastrar"
+        modal_size: "700x300"
+      observacao:
+        type: "textarea"
+        selector: "#txaObservacao"
+        rows: 4
+    hidden:
+      id_acompanhamento: "#hdnIdAcompanhamento"   # vazio=create, preenchido=edit
+      id_protocolo: "#hdnIdProtocolo"
+    submit:
+      # Atenção: NÃO é #btnSalvar (é <button type="submit" name="sbm...">).
+      selector: 'button[name="sbmCadastrarAcompanhamento"]'
+      value: "Salvar"
+      accesskey: "S"
+    cancel:
+      selector: "#btnCancelar"
+      accesskey: "C"
+
+  # ──────────────────────────────────────────────────────────────
+  # Modal: criar novo grupo (inline no form cadastrar)
+  # ──────────────────────────────────────────────────────────────
+  novo_grupo_modal:
+    action: "grupo_acompanhamento_cadastrar"
+    # Ainda não capturado ao vivo — próxima iteração clica no
+    # `#imgNovoGrupoAcompanhamento` e dumpa o modal. Esperado (pelo padrão
+    # do POP-38 e outros forms admin SEI): input de nome do grupo + Salvar.
+    status: "uncaptured"
 ```
 
-**Ação**: quando próxima captura rodar, incluir este form. Task #7 depende.
+**Correções vs. inferência anterior (pre-captura, v0):**
+1. ❌ v0 dizia `#txtNomeGrupo` era no form cadastrar → ✅ está no MODAL separado (acao `grupo_acompanhamento_cadastrar`), aberto via ícone `#imgNovoGrupoAcompanhamento`.
+2. ❌ `#txaDescricao` → ✅ `#txaObservacao`.
+3. ❌ `#btnSalvar` → ✅ `button[name="sbmCadastrarAcompanhamento"]` (atributo `name`, não `id`).
+4. ❌ "1 processo = 1 grupo" → ✅ processo pode ficar em N grupos; gerenciar_processo tem multi-seleção (Excluir via checkbox).
+5. ⚠️ v1 (primeira passada desta sessão) dizia "não existe Novo Grupo no form" — **errado**. O `<img>` com onclick me escapou porque a query JS não pegava `img[onclick]`. Query do driver atualizada; re-runs futuros capturam.
+
+**Próximos passos para wire-up:**
+- [ ] Capturar o modal `grupo_acompanhamento_cadastrar` (target novo ou manual click no `+`)
+- [ ] Adicionar entrada `acompanhamento_especial` no `sei_selectors.yaml` do Drive
+- [ ] Implementar live path em `sei/writer.py:add_to_acompanhamento_especial`:
+  1. Navegar toolbar → se cair em `gerenciar_processo`, clicar `#btnAdicionar`; se cair em `cadastrar` direto, prosseguir
+  2. Selecionar grupo por texto; se não existir, clicar `#imgNovoGrupoAcompanhamento` + preencher modal
+  3. Preencher `#txaObservacao` (opcional)
+  4. Submit `button[name="sbmCadastrarAcompanhamento"]` (modo live) ou Cancelar (dry-run)
+- [ ] Testar em dry-run + live contra processo de smoke
 
 ### 2. POP-5 — `grau_sigilo` ausente
 

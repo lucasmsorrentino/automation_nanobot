@@ -558,6 +558,334 @@ async def target_incluir_despacho(page, out_dir: Path, context) -> None:
         logger.warning("cancel failed: %s", e)
 
 
+async def target_acompanhamento_especial_menu(page, out_dir: Path, context) -> None:
+    """Home → left sidebar → 'Acompanhamento Especial' entry.
+
+    Documents where the menu link lives (selector + href) and snapshots the
+    list page (all groups + processes under Acompanhamento Especial for the
+    current unit). READ-ONLY — just clicks the menu, no form submission.
+    """
+    await _ensure_logged_in(page, context)
+    await snapshot(page, out_dir, "home_sidebar", also_frames=True)
+
+    # Try a few candidate selectors for the sidebar link. SEI's main menu
+    # typically renders as <a title="..." href="controlador.php?...">.
+    menu_candidates = [
+        'a[title="Acompanhamento Especial"]',
+        'a:has-text("Acompanhamento Especial")',
+        'a[href*="acompanhamento_especial_listar"]',
+    ]
+    chosen_sel: str | None = None
+    chosen_href: str | None = None
+    chosen_frame_name: str | None = None
+    for frame in [page.main_frame, *page.frames]:
+        for sel in menu_candidates:
+            try:
+                loc = frame.locator(sel).first
+                if await loc.count() > 0:
+                    chosen_sel = sel
+                    chosen_href = await loc.get_attribute("href")
+                    chosen_frame_name = frame.name or "(main)"
+                    logger.info(
+                        "acompanhamento_menu: found sel=%s frame=%s href=%s",
+                        sel,
+                        chosen_frame_name,
+                        (chosen_href or "")[:120],
+                    )
+                    break
+            except Exception as e:
+                logger.debug("sel %s in %s: %s", sel, frame.name, e)
+        if chosen_sel is not None:
+            break
+
+    if chosen_sel is None:
+        await snapshot(page, out_dir, "menu_link_not_found", also_frames=True)
+        raise RuntimeError("'Acompanhamento Especial' menu link not found")
+
+    # Persist discovered menu entry for future reference.
+    (out_dir / "raw" / "menu_entry.json").write_text(
+        json.dumps(
+            {
+                "selector": chosen_sel,
+                "href": chosen_href,
+                "frame": chosen_frame_name,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    # Click it and snapshot the list page.
+    logger.info("acompanhamento_menu: clicking the link")
+    # The link is in a frame — click via locator on the matching frame.
+    target_frame = next(
+        (f for f in page.frames if (f.name or "(main)") == chosen_frame_name),
+        page.main_frame,
+    )
+    await target_frame.locator(chosen_sel).first.click()
+    await page.wait_for_load_state("networkidle", timeout=15000)
+    await snapshot(page, out_dir, "acompanhamento_especial_lista", also_frames=True)
+
+    # If the list page has a "Novo" / "Listar Grupos" toolbar, capture those
+    # affordances for documentation (no click).
+    try:
+        btns = await page.evaluate(
+            r"""() => {
+              const targets = document.querySelectorAll(
+                'input[type="button"], button, a[onclick], a[href*="acompanhamento"]'
+              );
+              return Array.from(targets).slice(0, 40).map(el => ({
+                tag: el.tagName,
+                id: el.id || null,
+                name: el.name || null,
+                value: el.value || null,
+                text: (el.innerText || el.textContent || '').trim().slice(0, 80),
+                href: el.getAttribute('href'),
+                onclick: el.getAttribute('onclick'),
+                title: el.getAttribute('title'),
+              }));
+            }"""
+        )
+        (out_dir / "raw" / "lista_affordances.json").write_text(
+            json.dumps(btns, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("acompanhamento_menu: %d affordances on list page", len(btns))
+    except Exception as e:
+        logger.warning("affordance dump failed: %s", e)
+
+
+async def target_acompanhamento_especial_processo(page, out_dir: Path, context) -> None:
+    """Open MODEL_PROCESS → process toolbar 'Acompanhamento Especial' button →
+    snapshot the create/edit form → click CANCEL (never Salvar).
+
+    The toolbar icon in SEI typically has title='Acompanhamento Especial' and
+    lives in ifrConteudoVisualizacao; it opens a form in ifrVisualizacao.
+    """
+    await _ensure_logged_in(page, context)
+    await _open_process(page, MODEL_PROCESS)
+    await snapshot(page, out_dir, "process_before_acompanhamento", also_frames=True)
+
+    # Find the toolbar icon. SEI icons are <a> wrapping <img title="...">.
+    candidates_xpath = [
+        'xpath=//a[.//img[@title="Acompanhamento Especial"]]',
+        'xpath=//a[contains(@href, "acompanhamento_especial_cadastrar")]',
+        'xpath=//a[contains(@onclick, "acompanhamento_especial")]',
+    ]
+    found_frame = None
+    found_sel = None
+    found_href = None
+    for frame in [page.main_frame, *page.frames]:
+        for sel in candidates_xpath:
+            try:
+                loc = frame.locator(sel).first
+                if await loc.count() > 0:
+                    found_frame = frame
+                    found_sel = sel
+                    found_href = await loc.get_attribute("href")
+                    logger.info(
+                        "acompanhamento_processo: toolbar icon sel=%s frame=%s href=%s",
+                        sel,
+                        frame.name or "(main)",
+                        (found_href or "")[:120],
+                    )
+                    break
+            except Exception as e:
+                logger.debug("sel %s frame %s: %s", sel, frame.name, e)
+        if found_sel is not None:
+            break
+
+    if found_sel is None:
+        await snapshot(page, out_dir, "toolbar_icon_not_found", also_frames=True)
+        raise RuntimeError("'Acompanhamento Especial' toolbar icon not found on process")
+
+    # Persist discovered toolbar entry.
+    (out_dir / "raw" / "toolbar_entry.json").write_text(
+        json.dumps(
+            {
+                "selector": found_sel,
+                "href": found_href,
+                "frame": (found_frame.name or "(main)") if found_frame else None,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    # Navigate target frame (ifrVisualizacao) directly to href, same pattern as
+    # target_incluir_externo — avoids click side-effects on the container frame.
+    from urllib.parse import urljoin
+
+    if found_href is None:
+        # Fallback: click the icon (some icons use JS-only navigation)
+        await found_frame.locator(found_sel).first.click()
+        await page.wait_for_timeout(1500)
+    else:
+        absolute = urljoin(page.url, found_href)
+        vis_frame = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
+        if vis_frame is None:
+            await page.goto(absolute, wait_until="networkidle")
+        else:
+            logger.info(
+                "acompanhamento_processo: navigating ifrVisualizacao → %s", absolute[:120]
+            )
+            await vis_frame.goto(absolute, wait_until="networkidle")
+    await snapshot(page, out_dir, "acompanhamento_especial_form", also_frames=True)
+
+    # The icon opens `acompanhamento_gerenciar` — a LIST page for this process
+    # (existing entries + Adicionar/Excluir buttons). To reach the actual
+    # create/edit form, we need to click Adicionar → `acompanhamento_cadastrar`.
+    vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None) or page.main_frame
+    try:
+        list_info = await vf.evaluate(
+            r"""() => {
+              const btns = document.querySelectorAll('input[type="button"], button');
+              return Array.from(btns).map(b => ({
+                id: b.id || null,
+                value: b.value || null,
+                text: (b.innerText || b.textContent || '').trim().slice(0, 60),
+                onclick: b.getAttribute('onclick'),
+              }));
+            }"""
+        )
+        (out_dir / "raw" / "list_buttons.json").write_text(
+            json.dumps(list_info, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    except Exception as e:
+        logger.warning("list dump failed: %s", e)
+
+    # Click Adicionar — its onclick does `location.href=...acompanhamento_cadastrar...`.
+    # Grab the href from onclick attribute and navigate directly (avoid
+    # relying on click-triggered navigation timing).
+    adicionar_href = None
+    try:
+        adicionar_href = await vf.evaluate(
+            r"""() => {
+              const b = document.getElementById('btnAdicionar');
+              if (!b) return null;
+              const m = (b.getAttribute('onclick') || '').match(/location\.href='([^']+)'/);
+              return m ? m[1] : null;
+            }"""
+        )
+    except Exception as e:
+        logger.warning("adicionar href extract failed: %s", e)
+
+    if adicionar_href:
+        from urllib.parse import urljoin
+
+        absolute_add = urljoin(page.url, adicionar_href)
+        logger.info("acompanhamento_processo: navigating to form → %s", absolute_add[:120])
+        vis_frame2 = next((f for f in page.frames if f.name == "ifrVisualizacao"), None)
+        if vis_frame2 is None:
+            await page.goto(absolute_add, wait_until="networkidle")
+        else:
+            await vis_frame2.goto(absolute_add, wait_until="networkidle")
+        await snapshot(page, out_dir, "acompanhamento_especial_cadastrar_form", also_frames=True)
+    else:
+        logger.warning("acompanhamento_processo: Adicionar href not found — skipping form capture")
+
+    # Now dump form affordances. Look for: grupo dropdown, new-group button,
+    # descrição textarea, and Salvar/Cancelar buttons.
+    vf = next((f for f in page.frames if f.name == "ifrVisualizacao"), None) or page.main_frame
+    try:
+        form_info = await vf.evaluate(
+            r"""() => {
+              const out = { selects: [], textareas: [], buttons: [], inputs: [] };
+              for (const s of document.querySelectorAll('select')) {
+                out.selects.push({
+                  id: s.id || null,
+                  name: s.name || null,
+                  options: Array.from(s.options).slice(0, 50).map(o => ({
+                    value: o.value,
+                    text: (o.textContent || '').trim().slice(0, 80),
+                  })),
+                });
+              }
+              for (const t of document.querySelectorAll('textarea')) {
+                out.textareas.push({
+                  id: t.id || null,
+                  name: t.name || null,
+                  rows: t.rows,
+                  placeholder: t.placeholder || null,
+                });
+              }
+              for (const b of document.querySelectorAll(
+                'input[type="button"], input[type="submit"], button'
+              )) {
+                out.buttons.push({
+                  id: b.id || null,
+                  name: b.name || null,
+                  value: b.value || null,
+                  text: (b.innerText || b.textContent || '').trim().slice(0, 60),
+                  onclick: b.getAttribute('onclick'),
+                });
+              }
+              for (const i of document.querySelectorAll(
+                'input[type="text"], input[type="hidden"]'
+              )) {
+                out.inputs.push({
+                  id: i.id || null,
+                  name: i.name || null,
+                  type: i.type,
+                  placeholder: i.placeholder || null,
+                });
+              }
+              // Images/anchors with onclick — SEI often uses <img onclick=...>
+              // for modal triggers (e.g. Novo Grupo de Acompanhamento).
+              out.image_actions = [];
+              for (const img of document.querySelectorAll('img[onclick]')) {
+                out.image_actions.push({
+                  id: img.id || null,
+                  title: img.title || null,
+                  alt: img.alt || null,
+                  onclick: img.getAttribute('onclick'),
+                  src: img.getAttribute('src'),
+                });
+              }
+              out.anchor_actions = [];
+              for (const a of document.querySelectorAll('a[onclick]')) {
+                out.anchor_actions.push({
+                  id: a.id || null,
+                  title: a.title || null,
+                  text: (a.innerText || a.textContent || '').trim().slice(0, 60),
+                  onclick: a.getAttribute('onclick'),
+                  href: a.getAttribute('href'),
+                });
+              }
+              return out;
+            }"""
+        )
+        (out_dir / "raw" / "form_affordances.json").write_text(
+            json.dumps(form_info, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info(
+            "acompanhamento_processo: form — selects=%d textareas=%d buttons=%d inputs=%d",
+            len(form_info["selects"]),
+            len(form_info["textareas"]),
+            len(form_info["buttons"]),
+            len(form_info["inputs"]),
+        )
+    except Exception as e:
+        logger.warning("form dump failed: %s", e)
+
+    # Cancel the form — NEVER Salvar (that would create a real Acompanhamento
+    # Especial entry on this process).
+    logger.info("acompanhamento_processo: clicking CANCEL (never Salvar)")
+    try:
+        cancel_loc = vf.locator('[name="btnCancelar"], #btnCancelar, button:has-text("Cancelar")').first
+        if await cancel_loc.count() > 0:
+            await cancel_loc.click()
+            await page.wait_for_timeout(800)
+            await snapshot(page, out_dir, "after_cancel", also_frames=True)
+        else:
+            logger.warning("cancel button not found — closing via navigation back")
+            await page.go_back()
+            await page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception as e:
+        logger.warning("cancel failed: %s", e)
+
+
 TARGETS = {
     "login": target_login,
     "iniciar_processo": target_iniciar_processo,
@@ -566,6 +894,8 @@ TARGETS = {
     "incluir_externo": target_incluir_externo,
     "incluir_despacho": target_incluir_despacho,
     "despacho_editor": None,  # set below after defining the fn
+    "acompanhamento_especial_menu": target_acompanhamento_especial_menu,
+    "acompanhamento_especial_processo": target_acompanhamento_especial_processo,
 }
 
 
