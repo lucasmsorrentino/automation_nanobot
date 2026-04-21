@@ -136,7 +136,10 @@ def check_intent(
             result.issues.append(f"last_update '{intent.last_update}' is not a valid ISO date")
 
     # 4. SEI action consistency
-    if intent.sei_action != "none":
+    # Only create_process needs sei_process_type — append_to_existing and
+    # add_to_acompanhamento_especial operate on a process that already exists,
+    # so the type was set when the original create_process ran.
+    if intent.sei_action == "create_process":
         if not intent.sei_process_type:
             result.issues.append(f"sei_action='{intent.sei_action}' but sei_process_type is empty")
         elif catalog_types and intent.sei_process_type not in catalog_types:

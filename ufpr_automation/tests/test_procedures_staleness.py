@@ -222,6 +222,19 @@ class TestCheckIntentSEI:
         )
         assert result.status == "ok"
 
+    def test_sei_action_append_to_existing_no_type_required(self):
+        # append_to_existing operates on a process created by an earlier
+        # create_process intent — the type was already set there.
+        intent = _make_intent(sei_action="append_to_existing", sei_process_type="")
+        result = check_intent(
+            intent,
+            registered_checks=set(),
+            soul_sections=set(),
+            catalog_types=set(),
+        )
+        assert result.status == "ok"
+        assert not any("sei_process_type is empty" in i for i in result.issues)
+
 
 # ---------------------------------------------------------------------------
 # run_staleness_check (integration with real PROCEDURES.md)
