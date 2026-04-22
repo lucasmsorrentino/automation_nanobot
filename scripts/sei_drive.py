@@ -1078,6 +1078,210 @@ async def target_acompanhamento_novo_grupo_modal(page, out_dir: Path, context) -
     await snapshot(page, out_dir, "after_modal_close", also_frames=True)
 
 
+async def target_ae_keyword_search(page, out_dir: Path, context) -> None:
+    """Navigate to Acompanhamento Especial list → locate 'Palavras-chave para
+    pesquisa:' input → submit a real search (default keyword `GRR20223876`,
+    override via env `AE_SEARCH_KEYWORD`) → snapshot the results table and
+    dump its row/cell structure.
+
+    Purpose: capture the selectors needed by
+    ``SEIClient.find_in_acompanhamento_especial`` so the cascade in
+    ``graph/nodes.py:consultar_sei`` can try AE before the generic pesquisa
+    rápida. READ-ONLY — a search does not mutate state.
+    """
+    import os
+
+    keyword = os.getenv("AE_SEARCH_KEYWORD", "GRR20223876").strip()
+    logger.info("ae_keyword_search: keyword=%s", keyword)
+
+    await _ensure_logged_in(page, context)
+
+    # Reuse the menu-navigation logic: find the 'Acompanhamento Especial' link
+    # in any frame, save its selector metadata, then click it.
+    menu_candidates = [
+        'a[title="Acompanhamento Especial"]',
+        'a:has-text("Acompanhamento Especial")',
+        'a[href*="acompanhamento_especial_listar"]',
+    ]
+    chosen_sel = None
+    chosen_frame = None
+    for frame in [page.main_frame, *page.frames]:
+        for sel in menu_candidates:
+            try:
+                loc = frame.locator(sel).first
+                if await loc.count() > 0:
+                    chosen_sel = sel
+                    chosen_frame = frame
+                    break
+            except Exception:
+                pass
+        if chosen_sel is not None:
+            break
+    if chosen_sel is None:
+        await snapshot(page, out_dir, "ae_menu_not_found", also_frames=True)
+        raise RuntimeError("'Acompanhamento Especial' menu link not found")
+
+    logger.info(
+        "ae_keyword_search: clicking menu sel=%s frame=%s",
+        chosen_sel,
+        chosen_frame.name or "(main)",
+    )
+    await chosen_frame.locator(chosen_sel).first.click()
+    await page.wait_for_load_state("networkidle", timeout=15000)
+    await snapshot(page, out_dir, "ae_lista_before_search", also_frames=True)
+
+    # Find the frame that actually holds the list page. SEI typically renders
+    # it inside ifrVisualizacao (or ifrConteudoVisualizacao). We look for the
+    # input whose label includes "Palavras-chave" or a name matching `txtPalavra`.
+    search_frame = None
+    search_input_sel = None
+    for frame in [page.main_frame, *page.frames]:
+        try:
+            probe = await frame.evaluate(
+                r"""() => {
+                  // Find an input whose <label> or adjacent text mentions 'Palavra'.
+                  const inputs = Array.from(document.querySelectorAll(
+                    'input[type="text"], input:not([type])'
+                  ));
+                  for (const inp of inputs) {
+                    let lbl = '';
+                    if (inp.id) {
+                      const l = document.querySelector(`label[for="${inp.id.replace(/"/g,'\\"')}"]`);
+                      if (l) lbl = (l.innerText || l.textContent || '').trim();
+                    }
+                    if (!lbl) {
+                      let p = inp.parentElement;
+                      while (p && p.tagName !== 'LABEL' && p !== document.body) p = p.parentElement;
+                      if (p && p.tagName === 'LABEL') lbl = (p.innerText || '').trim();
+                    }
+                    const name = inp.name || '';
+                    const id = inp.id || '';
+                    const hit = (
+                      /palavra/i.test(lbl) ||
+                      /palavra/i.test(name) ||
+                      /palavra/i.test(id)
+                    );
+                    if (hit) {
+                      return {
+                        id: id || null,
+                        name: name || null,
+                        placeholder: inp.getAttribute('placeholder') || null,
+                        label: lbl || null,
+                      };
+                    }
+                  }
+                  return null;
+                }"""
+            )
+        except Exception as e:
+            logger.debug("frame %s probe: %s", frame.name, e)
+            continue
+        if probe:
+            search_frame = frame
+            # Prefer #id, fallback to [name=...].
+            if probe.get("id"):
+                search_input_sel = f'#{probe["id"]}'
+            elif probe.get("name"):
+                search_input_sel = f'input[name="{probe["name"]}"]'
+            logger.info(
+                "ae_keyword_search: found input in frame=%s label=%r sel=%s",
+                frame.name or "(main)",
+                probe.get("label"),
+                search_input_sel,
+            )
+            # Persist the probe for debugging.
+            (out_dir / "raw" / "ae_palavras_input.json").write_text(
+                json.dumps(probe, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            break
+
+    if search_frame is None or search_input_sel is None:
+        await snapshot(page, out_dir, "ae_input_not_found", also_frames=True)
+        raise RuntimeError("'Palavras-chave para pesquisa:' input not found")
+
+    # Fill and submit. Common SEI patterns for submit: Enter keypress, or a
+    # sibling <input type="button"/button> with value/text "Pesquisar".
+    logger.info("ae_keyword_search: filling %s with %r", search_input_sel, keyword)
+    await search_frame.locator(search_input_sel).first.click()
+    await search_frame.locator(search_input_sel).first.fill("")
+    await search_frame.locator(search_input_sel).first.press_sequentially(keyword, delay=20)
+    await snapshot(page, out_dir, "ae_lista_after_fill", also_frames=True)
+
+    # Look for a Pesquisar button nearby first; fall back to Enter.
+    submit_sel = None
+    for cand in [
+        'input[name="btnPesquisar"]',
+        'button[name="btnPesquisar"]',
+        '#btnPesquisar',
+        'input[value="Pesquisar"]',
+        'button:has-text("Pesquisar")',
+    ]:
+        try:
+            if await search_frame.locator(cand).first.count() > 0:
+                submit_sel = cand
+                break
+        except Exception:
+            pass
+
+    if submit_sel:
+        logger.info("ae_keyword_search: clicking submit sel=%s", submit_sel)
+        await search_frame.locator(submit_sel).first.click()
+    else:
+        logger.info("ae_keyword_search: no Pesquisar button found — pressing Enter")
+        await search_frame.locator(search_input_sel).first.press("Enter")
+
+    await page.wait_for_load_state("networkidle", timeout=15000)
+    await snapshot(page, out_dir, "ae_lista_results", also_frames=True)
+
+    # Dump the results table structure: table.infraTable rows + cells.
+    try:
+        table_info = await search_frame.evaluate(
+            r"""() => {
+              const tables = Array.from(document.querySelectorAll('table'));
+              const picked = tables
+                .map(t => ({
+                  className: t.className || '',
+                  id: t.id || '',
+                  rowCount: t.rows.length,
+                  headers: t.rows[0]
+                    ? Array.from(t.rows[0].cells).map(c => (c.innerText || '').trim().slice(0, 40))
+                    : [],
+                  sampleRow: t.rows[1]
+                    ? Array.from(t.rows[1].cells).map(c => (c.innerText || '').trim().slice(0, 60))
+                    : null,
+                }))
+                .filter(x => x.rowCount > 0);
+              return picked;
+            }"""
+        )
+        (out_dir / "raw" / "ae_results_tables.json").write_text(
+            json.dumps(table_info, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("ae_keyword_search: %d tables on results page", len(table_info))
+    except Exception as e:
+        logger.warning("results table dump failed: %s", e)
+
+    # Also dump any anchors inside tables — process links are typically
+    # <a href="controlador.php?acao=...&id_procedimento=...">NUM</a>.
+    try:
+        anchors = await search_frame.evaluate(
+            r"""() => {
+              const anchors = Array.from(document.querySelectorAll('table a[href]'));
+              return anchors.slice(0, 30).map(a => ({
+                text: (a.innerText || '').trim().slice(0, 80),
+                href: a.getAttribute('href'),
+                onclick: a.getAttribute('onclick'),
+              }));
+            }"""
+        )
+        (out_dir / "raw" / "ae_results_anchors.json").write_text(
+            json.dumps(anchors, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("ae_keyword_search: %d anchors dumped", len(anchors))
+    except Exception as e:
+        logger.warning("anchor dump failed: %s", e)
+
+
 TARGETS = {
     "login": target_login,
     "iniciar_processo": target_iniciar_processo,
@@ -1089,6 +1293,7 @@ TARGETS = {
     "acompanhamento_especial_menu": target_acompanhamento_especial_menu,
     "acompanhamento_especial_processo": target_acompanhamento_especial_processo,
     "acompanhamento_novo_grupo_modal": target_acompanhamento_novo_grupo_modal,
+    "ae_keyword_search": target_ae_keyword_search,
 }
 
 

@@ -136,6 +136,129 @@ class SEIClient:
             logger.error("SEI: find_processes_by_grr(%s) falhou: %s", numero_busca, e)
             return []
 
+    async def find_in_acompanhamento_especial(
+        self, keyword: str, *, max_results: int = 20
+    ) -> list[ProcessoSEI]:
+        """Search Acompanhamento Especial via 'Palavras-chave para pesquisa:'.
+
+        Preferred over generic Pesquisa Rápida for Estágios because AE is
+        curated per-unit (Secretaria DG): only processes that someone on
+        the team tagged with a grupo — no IFPR/MEC contamination, no
+        archived processes from other units.
+
+        Selectors validated live 2026-04-22 via ``scripts/sei_drive.py
+        --target ae_keyword_search``:
+
+        - menu link: ``a:has-text("Acompanhamento Especial")`` (main frame)
+        - input: ``#txtPalavrasPesquisaAcompanhamento``
+        - submit: ``button:has-text("Pesquisar")``
+        - table: ``#tblAcompanhamentos`` (class ``infraTableResponsiva infraTable``)
+        - columns (8): checkbox, sort-toggle, Processo, Usuário, Data, Grupo,
+          Observação, Ações
+
+        Args:
+            keyword: search term (GRR recommended for exact-match; also accepts
+                nome, nº processo, ou qualquer texto que tenha sido colocado
+                na observação do AE).
+            max_results: cap on parsed rows.
+
+        Returns:
+            List of ``ProcessoSEI`` (empty if no match or on error).
+        """
+        keyword = keyword.strip()
+        if not keyword:
+            return []
+        try:
+            logger.info("SEI: busca AE por palavra-chave %r", keyword)
+            menu = self._page.locator(
+                'a[title="Acompanhamento Especial"], '
+                'a:has-text("Acompanhamento Especial")'
+            )
+            if await menu.count() == 0:
+                logger.warning("SEI: menu Acompanhamento Especial nao encontrado")
+                return []
+            await menu.first.click()
+            await self._page.wait_for_load_state("networkidle", timeout=15000)
+
+            search_input = self._page.locator("#txtPalavrasPesquisaAcompanhamento")
+            if await search_input.count() == 0:
+                logger.warning("SEI: input de palavras-chave AE nao encontrado")
+                return []
+            await search_input.first.fill(keyword)
+
+            submit = self._page.locator(
+                'button:has-text("Pesquisar"), input[value="Pesquisar"]'
+            )
+            if await submit.count() > 0:
+                await submit.first.click()
+            else:
+                await search_input.first.press("Enter")
+            await self._page.wait_for_load_state("networkidle", timeout=15000)
+
+            results = await self._parse_ae_results_table(max_results=max_results)
+            logger.info(
+                "SEI: %d processo(s) em AE para palavra-chave %r",
+                len(results),
+                keyword,
+            )
+            return results
+        except Exception as e:
+            logger.error(
+                "SEI: find_in_acompanhamento_especial(%s) falhou: %s", keyword, e
+            )
+            return []
+
+    async def _parse_ae_results_table(
+        self, *, max_results: int = 20
+    ) -> list[ProcessoSEI]:
+        """Parse ``#tblAcompanhamentos`` rows. Columns (from live capture):
+        ``[checkbox, sort, Processo, Usuário, Data, Grupo, Observação, Ações]``.
+        """
+        results: list[ProcessoSEI] = []
+        rows = self._page.locator("#tblAcompanhamentos tbody tr")
+        count = await rows.count()
+        for i in range(min(count, max_results)):
+            try:
+                row = rows.nth(i)
+                cells = row.locator("td")
+                n_cells = await cells.count()
+                if n_cells < 7:
+                    continue  # header or malformed
+                cell_texts = [
+                    ((await cells.nth(c).text_content()) or "").strip()
+                    for c in range(n_cells)
+                ]
+                numero = ""
+                for ct in cell_texts:
+                    m = re.search(r"23075\.\d{6}/\d{4}-\d{2}", ct)
+                    if m:
+                        numero = m.group(0)
+                        break
+                if not numero:
+                    continue
+                processo = ProcessoSEI(numero=numero)
+                if n_cells >= 8:
+                    # Positional mapping validated 2026-04-22.
+                    processo.ultima_movimentacao = cell_texts[4]
+                    processo.tipo = cell_texts[5]
+                    obs = cell_texts[6]
+                    if obs:
+                        processo.interessados = [obs]
+                else:
+                    for ct in cell_texts:
+                        if not processo.tipo and "estágio" in ct.lower():
+                            processo.tipo = ct
+                        if not processo.ultima_movimentacao and re.search(
+                            r"\d{2}/\d{2}/\d{4}", ct
+                        ):
+                            processo.ultima_movimentacao = ct
+                        if not processo.interessados and "GRR" in ct.upper():
+                            processo.interessados = [ct]
+                results.append(processo)
+            except Exception:
+                continue
+        return results
+
     async def _extract_numero_from_detail(self) -> str | None:
         """Extract the process number from the current detail page.
 

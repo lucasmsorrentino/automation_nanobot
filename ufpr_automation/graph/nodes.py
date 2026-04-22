@@ -854,10 +854,11 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
 
     Cascata por custo/precisão crescente:
     1. Nº SEI explícito no texto (raríssimo — usuário confirmou 2026-04-22)
-    2. GRR extraído → ``find_processes_by_grr`` + ``select_best_processo``
-       (disambiguação por ano do número + data + tipo)
-    3. (Futuro) Palavra-chave no Acompanhamento Especial do grupo
-       "Estágios não Obrig" → resultados pré-filtrados por tipo
+    2. GRR em ``find_in_acompanhamento_especial`` (AE do unit — curado,
+       descarta IFPR/MEC/arquivados)
+    3. GRR em ``find_processes_by_grr`` (Pesquisa Rápida geral) — fallback
+       quando AE não tem o processo + ``select_best_processo`` (desambig
+       por ano/status/tipo/data)
     4. (Futuro) Nome do aluno → pesquisa rápida geral
 
     READ-ONLY. Failures são não-fatais (retorna dict vazio para o email).
@@ -943,13 +944,28 @@ async def _consult_sei_async(
                 if mode == "numero":
                     processo = await client.search_process(value)
                 elif mode == "grr":
-                    all_candidates = await client.find_processes_by_grr(value)
-                    if len(all_candidates) == 1:
-                        processo = all_candidates[0]
-                    elif all_candidates:
-                        processo, confidence = select_best_processo(
-                            all_candidates, grr_hint=value
-                        )
+                    # Path #2: Acompanhamento Especial (curado por unit).
+                    ae_candidates = await client.find_in_acompanhamento_especial(
+                        value
+                    )
+                    if ae_candidates:
+                        all_candidates = ae_candidates
+                        mode = "ae"  # record which path resolved it
+                        if len(ae_candidates) == 1:
+                            processo = ae_candidates[0]
+                        else:
+                            processo, confidence = select_best_processo(
+                                ae_candidates, grr_hint=value
+                            )
+                    else:
+                        # Path #3: Pesquisa Rápida geral (fallback).
+                        all_candidates = await client.find_processes_by_grr(value)
+                        if len(all_candidates) == 1:
+                            processo = all_candidates[0]
+                        elif all_candidates:
+                            processo, confidence = select_best_processo(
+                                all_candidates, grr_hint=value
+                            )
             except Exception as e:
                 logger.warning(
                     "SEI: consulta falhou para stable_id=%s mode=%s: %s",
@@ -1084,22 +1100,35 @@ async def _consult_siga_async(candidates: dict[str, str]) -> dict[str, Any]:
 def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
     """Single-email SEI consultation used by Fleet sub-agents.
 
-    Extracts the process number from the email, spins up a SEI Playwright
-    session, and returns the data dict that would have been stored under
+    Runs the same cascade as :func:`consultar_sei`:
+    1. Explicit UFPR process number (``23075.*``) in email text/anexos
+    2. GRR → ``find_in_acompanhamento_especial`` (AE curado)
+    3. GRR → ``find_processes_by_grr`` (Pesquisa Rápida geral) + disambig
+
+    Returns the data dict that would have been stored under
     ``state["sei_contexts"][email.stable_id]`` by the batch
     :func:`consultar_sei` node. Returns ``None`` if the classification is
-    not Estágios, no process number is present, Playwright / credentials
+    not Estágios, no numero/GRR can be extracted, Playwright / credentials
     are missing, or the consultation fails.
     """
     if classification is None or classification.categoria != "Estágios":
         return None
 
-    from ufpr_automation.sei.client import extract_sei_process_number
+    from ufpr_automation.sei.client import extract_grr, extract_sei_process_number
 
     text = f"{email.subject} {email.body or email.preview}"
+    for att in email.attachments:
+        if att.extracted_text:
+            text += f"\n{att.extracted_text[:4000]}"
+
     proc_num = extract_sei_process_number(text)
-    if not proc_num:
-        return None
+    if proc_num:
+        info = {"mode": "numero", "value": proc_num}
+    else:
+        grr = extract_grr(text)
+        if not grr:
+            return None
+        info = {"mode": "grr", "value": grr}
 
     try:
         from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
@@ -1112,7 +1141,7 @@ def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
         return None
 
     try:
-        results = asyncio.run(_consult_sei_async({email.stable_id: proc_num}))
+        results = asyncio.run(_consult_sei_async({email.stable_id: info}))
     except Exception as e:
         logger.warning("SEI (single) consulta falhou para '%s': %s", email.subject[:40], e)
         return None

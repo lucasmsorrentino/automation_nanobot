@@ -287,3 +287,182 @@ class TestParseSearchResultsTable:
         assert procs[1].numero == "23075.047102/2024-04"
         assert "Estágio" in procs[0].tipo
         assert "06/03/2026" in procs[0].ultima_movimentacao
+
+
+# ---------------------------------------------------------------------------
+# Acompanhamento Especial keyword search (2026-04-22, live capture confirmed)
+# ---------------------------------------------------------------------------
+
+
+class TestParseAEResultsTable:
+    """Parser da tabela #tblAcompanhamentos. 8 colunas:
+    [checkbox, sort, Processo, Usuário, Data, Grupo, Observação, Ações].
+    """
+
+    def _row(self, cells: list[str]) -> MagicMock:
+        row = MagicMock()
+        td = MagicMock()
+        td.count = AsyncMock(return_value=len(cells))
+
+        def nth(i):
+            cell = MagicMock()
+            cell.text_content = AsyncMock(return_value=cells[i])
+            return cell
+
+        td.nth = MagicMock(side_effect=nth)
+        row.locator = MagicMock(return_value=td)
+        return row
+
+    @pytest.mark.asyncio
+    async def test_parses_real_ae_row(self):
+        """Linha real capturada 2026-04-22: GRR20223876 → 23075.011886/2026-96."""
+        page = MagicMock()
+        rows_loc = MagicMock()
+        rows_loc.count = AsyncMock(return_value=1)
+        row = self._row(
+            [
+                "",  # checkbox
+                "",  # sort toggle
+                "23075.011886/2026-96",
+                "lucas.sorrentino",
+                "06/03/2026 13:54:55",
+                "Estágio não obrigatório",
+                "MARLON HENRIQUE GOMES FERNANDES - GRR20223876",
+                "",  # ações
+            ]
+        )
+        rows_loc.nth = MagicMock(side_effect=lambda i: row)
+        page.locator = MagicMock(return_value=rows_loc)
+
+        client = SEIClient(page)
+        procs = await client._parse_ae_results_table()
+        assert len(procs) == 1
+        assert procs[0].numero == "23075.011886/2026-96"
+        assert procs[0].tipo == "Estágio não obrigatório"
+        assert procs[0].ultima_movimentacao == "06/03/2026 13:54:55"
+        assert "GRR20223876" in procs[0].interessados[0]
+
+    @pytest.mark.asyncio
+    async def test_rejects_ifpr_in_same_table(self):
+        """Se por acaso a tabela tiver uma linha de IFPR (23411.*), regex
+        restrito a 23075 descarta a linha inteira."""
+        page = MagicMock()
+        rows_loc = MagicMock()
+        rows_loc.count = AsyncMock(return_value=1)
+        row = self._row(["", "", "23411.005778/2026-16", "x", "y", "z", "obs", ""])
+        rows_loc.nth = MagicMock(side_effect=lambda i: row)
+        page.locator = MagicMock(return_value=rows_loc)
+        client = SEIClient(page)
+        procs = await client._parse_ae_results_table()
+        assert procs == []
+
+    @pytest.mark.asyncio
+    async def test_skips_short_header_rows(self):
+        """Linhas com <7 células (cabeçalho mal-formado) são puladas sem erro."""
+        page = MagicMock()
+        rows_loc = MagicMock()
+        rows_loc.count = AsyncMock(return_value=2)
+        header = self._row(["", "", ""])  # 3 cells only
+        data = self._row(
+            [
+                "",
+                "",
+                "23075.011886/2026-96",
+                "u",
+                "06/03/2026 13:54",
+                "Est",
+                "obs",
+                "",
+            ]
+        )
+        rows_loc.nth = MagicMock(side_effect=lambda i: [header, data][i])
+        page.locator = MagicMock(return_value=rows_loc)
+        client = SEIClient(page)
+        procs = await client._parse_ae_results_table()
+        assert len(procs) == 1
+        assert procs[0].numero == "23075.011886/2026-96"
+
+
+class TestFindInAcompanhamentoEspecial:
+    """End-to-end da busca AE (com page mockada). Cobre menu-click → fill →
+    submit → parse; e os retornos vazios quando menu/input some."""
+
+    @pytest.mark.asyncio
+    async def test_empty_keyword_returns_empty(self):
+        page = MagicMock()
+        client = SEIClient(page)
+        assert await client.find_in_acompanhamento_especial("") == []
+        assert await client.find_in_acompanhamento_especial("   ") == []
+
+    @pytest.mark.asyncio
+    async def test_missing_menu_returns_empty(self):
+        """Se o menu 'Acompanhamento Especial' não estiver na página (sessão
+        expirada, etc.), a função faz log warning e retorna [] sem crashear."""
+        page = MagicMock()
+        menu = MagicMock()
+        menu.count = AsyncMock(return_value=0)
+        page.locator = MagicMock(return_value=menu)
+        client = SEIClient(page)
+        result = await client.find_in_acompanhamento_especial("GRR20223876")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_full_flow_returns_processo(self):
+        """Simula o fluxo completo: menu tem 1 link, input existe, submit
+        existe, tabela tem 1 linha válida."""
+        page = MagicMock()
+        page.wait_for_load_state = AsyncMock()
+
+        # Mock a single row as cells
+        row = MagicMock()
+        td = MagicMock()
+        td.count = AsyncMock(return_value=8)
+        cells = [
+            "",
+            "",
+            "23075.011886/2026-96",
+            "lucas.sorrentino",
+            "06/03/2026 13:54:55",
+            "Estágio não obrigatório",
+            "MARLON HENRIQUE GOMES FERNANDES - GRR20223876",
+            "",
+        ]
+
+        def nth_cell(i):
+            c = MagicMock()
+            c.text_content = AsyncMock(return_value=cells[i])
+            return c
+
+        td.nth = MagicMock(side_effect=nth_cell)
+        row.locator = MagicMock(return_value=td)
+
+        rows_loc = MagicMock()
+        rows_loc.count = AsyncMock(return_value=1)
+        rows_loc.nth = MagicMock(side_effect=lambda i: row)
+
+        def locator_dispatch(selector, *args, **kwargs):
+            loc = MagicMock()
+            first = MagicMock()
+            first.click = AsyncMock()
+            first.fill = AsyncMock()
+            first.press = AsyncMock()
+            loc.first = first
+            if "Acompanhamento Especial" in selector or "title=" in selector:
+                loc.count = AsyncMock(return_value=1)
+            elif "#txtPalavrasPesquisaAcompanhamento" in selector:
+                loc.count = AsyncMock(return_value=1)
+            elif "Pesquisar" in selector:
+                loc.count = AsyncMock(return_value=1)
+            elif "#tblAcompanhamentos" in selector:
+                return rows_loc
+            else:
+                loc.count = AsyncMock(return_value=0)
+            return loc
+
+        page.locator = MagicMock(side_effect=locator_dispatch)
+
+        client = SEIClient(page)
+        procs = await client.find_in_acompanhamento_especial("GRR20223876")
+        assert len(procs) == 1
+        assert procs[0].numero == "23075.011886/2026-96"
+        assert procs[0].tipo == "Estágio não obrigatório"
