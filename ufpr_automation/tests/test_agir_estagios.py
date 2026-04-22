@@ -87,11 +87,13 @@ class TestAgirEstagiosHardBlock:
         ops = result["sei_operations"]
         assert len(ops) == 1
         assert ops[0]["reason"] == "hard_block"
-        # Classification response should explain the block
-        assert (
-            "impedimentos" in cls.sugestao_resposta.lower()
-            or "bloqueio" in cls.sugestao_resposta.lower()
-        )
+        # Draft mentions the ajuste obrigatório and brings Lucas's signature
+        # (merged hard+soft format from 2026-04-22).
+        body = cls.sugestao_resposta
+        assert "Ajustes obrigatórios" in body
+        assert "Lucas Martins Sorrentino" in body
+        # And reassures the aluno that the Secretaria handles the SEI side.
+        assert "você não precisa abrir processo" in body.lower()
 
 
 class TestAgirEstagiosAllPass:

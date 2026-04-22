@@ -775,10 +775,26 @@ class TestSupervisorFormacaoCompativel:
         )
         assert r.status == "soft_block"
 
-    def test_pass_when_formacao_missing(self):
-        """Sem dado extraído, não bloqueia — outros checkers cuidam."""
+    def test_soft_block_when_formacao_missing(self):
+        """Sem formação extraída do TCE, soft-block pedindo informação OU
+        já a Declaração de Experiência. (Mudança 2026-04-22: antes passava
+        silencioso; feedback do usuário foi que gerava retrabalho — preferível
+        listar todas as pendências no mesmo draft).
+        """
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"nome_supervisor": "Camila Klidzio"}),
+        )
+        assert r.status == "soft_block"
+        assert "Camila Klidzio" in r.reason
+        assert "Declaração de Experiência" in r.reason
+        assert "prograd.ufpr.br" in r.reason
+
+    def test_soft_block_when_no_vars_at_all(self):
         r = _invoke("supervisor_formacao_compativel", _make_ctx(vars={}))
-        assert r.status == "pass"
+        assert r.status == "soft_block"
+        # Fallback nome
+        assert "supervisor" in r.reason.lower()
 
     def test_pass_when_ux_design(self):
         r = _invoke(

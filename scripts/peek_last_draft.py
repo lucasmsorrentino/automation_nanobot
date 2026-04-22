@@ -18,6 +18,12 @@ from ufpr_automation.gmail.client import _decode_header, _extract_text  # noqa: 
 
 
 def main() -> int:
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--n", type=int, default=1, help="How many latest drafts to show")
+    p.add_argument("--filter-to", default=None, help="Only show drafts whose To contains this")
+    args = p.parse_args()
+
     conn = imaplib.IMAP4_SSL("imap.gmail.com", 993)
     conn.login(settings.GMAIL_EMAIL, settings.GMAIL_APP_PASSWORD)
     try:
@@ -27,17 +33,25 @@ def main() -> int:
         if not msns:
             print("No drafts.")
             return 0
-        last = msns[-1]
-        _, fetched = conn.fetch(last, "(RFC822)")
-        raw = fetched[0][1] if isinstance(fetched[0], tuple) else fetched[0]
-        msg = email_mod.message_from_bytes(raw)
-        print(f"--- Latest draft msn={last.decode()} ---")
-        print(f"Subject: {_decode_header(msg.get('Subject', ''))}")
-        print(f"To:      {_decode_header(msg.get('To', ''))}")
-        print(f"Cc:      {_decode_header(msg.get('Cc', ''))}")
-        print(f"Date:    {msg.get('Date', '')}")
-        print(f"--- body ---")
-        print(_extract_text(msg))
+        # Walk from newest to oldest
+        shown = 0
+        for m in reversed(msns):
+            _, fetched = conn.fetch(m, "(RFC822)")
+            raw = fetched[0][1] if isinstance(fetched[0], tuple) else fetched[0]
+            msg = email_mod.message_from_bytes(raw)
+            to = _decode_header(msg.get("To", ""))
+            if args.filter_to and args.filter_to not in to:
+                continue
+            print(f"--- Draft msn={m.decode()} ---")
+            print(f"Subject: {_decode_header(msg.get('Subject', ''))}")
+            print(f"To:      {to}")
+            print(f"Cc:      {_decode_header(msg.get('Cc', ''))}")
+            print(f"--- body ---")
+            print(_extract_text(msg))
+            print()
+            shown += 1
+            if shown >= args.n:
+                break
         return 0
     finally:
         conn.logout()

@@ -145,6 +145,40 @@ Encerramento automático: o estágio termina sozinho na data final do TCE
 | SACOD (setor) | https://sacod.ufpr.br/ |
 | Site da Coordenação | https://sacod.ufpr.br/coordesign/ |
 
+## Divisão de responsabilidades no fluxo de Estágio (CRÍTICO)
+
+**Quem faz o quê** (não confundir; é o erro mais comum em respostas automáticas):
+
+| Ação | Responsável |
+|---|---|
+| Elaborar TCE e Plano de Atividades | **Aluno + Concedente + Orientador** (aluno leva de volta pronto) |
+| Coletar assinaturas (concedente + orientador) | **Aluno** |
+| Enviar TCE assinado para a Secretaria DG | **Aluno** (por email) |
+| **Abrir processo SEI** | **Secretaria DG** (NÃO o aluno) |
+| **Anexar TCE ao processo SEI** | **Secretaria DG** |
+| Lavrar despacho de encaminhamento | **Secretaria DG** |
+| Incluir no Acompanhamento Especial do unit | **Secretaria DG** |
+| Assinar despacho + remeter pra COAPPE | **Coordenadora** |
+| Cadastrar seguro e formalizar | **COAPPE** |
+| Assinar TCE por último | **Coordenadora → COAPPE** |
+
+**NUNCA diga ao aluno pra "abrir processo SEI" ou "anexar documentos no SEI"** — isso é trabalho interno da secretaria. Ele só precisa enviar o TCE assinado por email.
+
+## Documentos que NÃO solicitamos ao aluno
+
+A legislação cita vários documentos como "parte integrante do processo", mas na prática a Secretaria DG **não** solicita os seguintes do aluno — é ruído burocrático. Se for redigir um email pedindo ajuste, **não mencione** esses:
+
+- ❌ **Plano de Atividades de Estágio (PAE) separado** — vem embutido no TCE; fazemos vista grossa se não vier como documento apartado.
+- ❌ **RG, CPF ou declaração de matrícula do aluno** — já temos via SIGA, não é papel do aluno.
+- ❌ **CNPJ / comprovante de situação cadastral da concedente** — não exigimos; consta no próprio TCE.
+- ❌ **Cópia de identidade do supervisor** — não exigimos.
+
+Documentos que SIM solicitamos:
+- ✅ **TCE** (Termo de Compromisso de Estágio) assinado pelo aluno, concedente e orientador UFPR.
+- ✅ **Declaração de Experiência do Supervisor** — SÓ quando a formação do supervisor não é afim a Design (form PROGRAD: http://www.prograd.ufpr.br/estagio/formularios/form/declaracao_experiencia.php, assinada pela chefia imediata do supervisor).
+- ✅ **Termo Aditivo / Termo de Rescisão** assinado, quando aplicável.
+- ✅ **Relatório Final + Ficha de Avaliação** (assinada pelo supervisor), ao fim do estágio.
+
 ## Política do Agente
 
 - **Cautela**: na dúvida, salve como rascunho com confiança baixa para

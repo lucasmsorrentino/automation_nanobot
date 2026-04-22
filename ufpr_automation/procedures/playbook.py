@@ -252,20 +252,21 @@ _HORARIO_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Supervisor-specific regex — operate on TCE attachment text. The TCE PDF
-# from PROGRAD's form has a block with "Supervisor:" then separate fields
-# for name and "Formação:" / "Cargo:" / "Graduação:". Captures the text up
-# to the next label or newline.
+# Supervisor-specific regex — operate on TCE attachment text. Require an
+# explicit ':' after the label so we don't match the same word in running
+# prose. TCE CIEE typical layout: "SUPERVISOR: CAMILA DOS SANTOS KLIDZIO\n
+# TEL: ...\nFORMAÇÃO: BACHAREL EM ADMINISTRAÇÃO DE EMPRESAS". Validated
+# 2026-04-22 against Marlon's TCE (GRR20223876).
 _SUPERVISOR_NOME_RE = re.compile(
-    r"(?:Supervisor(?:\s*\(?\s*a\s*\)?)?(?:\s+no\s+local\s+de\s+est[aá]gio)?)"
-    r"\s*[:\-]?\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç\s\.]{4,80}?)"
-    r"(?=\s*(?:\n|Forma[çc][aã]o|Cargo|Gradua[çc][aã]o|CPF|RG|Matr[ií]cula|$))",
+    r"\bSupervisor(?:\s*\(?\s*a\s*\)?)?(?:\s+no\s+local\s+de\s+est[aá]gio)?"
+    r"\s*:\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç\s\.]{4,80}?)"
+    r"(?=\s*(?:\n|TEL|Forma[çc][aã]o|Cargo|Gradua[çc][aã]o|CPF|RG|Matr[ií]cula|$))",
     re.IGNORECASE,
 )
 _SUPERVISOR_FORMACAO_RE = re.compile(
-    r"(?:Forma[çc][aã]o(?:\s+do\s+Supervisor)?|Gradua[çc][aã]o(?:\s+do\s+Supervisor)?"
+    r"\b(?:Forma[çc][aã]o(?:\s+do\s+Supervisor)?|Gradua[çc][aã]o(?:\s+do\s+Supervisor)?"
     r"|Cargo(?:\s+do\s+Supervisor)?|Profiss[aã]o)"
-    r"\s*[:\-]?\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç][^\n\r]{3,100}?)"
+    r"\s*:\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç][^\n\r]{3,100}?)"
     r"(?=\s*(?:\n|CPF|RG|Matr[ií]cula|CREA|CAU|E-?mail|$))",
     re.IGNORECASE,
 )

@@ -1368,50 +1368,123 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
         # Run blocking checks
         summary = run_checks(intent, ctx)
 
-        if summary.hard_blocks:
-            # Draft refusal email listing the hard blocks
-            block_lines = "\n".join(f"- {r.check_id}: {r.reason}" for r in summary.hard_blocks)
-            cls.sugestao_resposta = (
-                f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
-                f"Não foi possível processar sua solicitação de estágio "
-                f"devido aos seguintes impedimentos:\n\n{block_lines}\n\n"
-                f"Favor regularizar a situação e reenviar a documentação.\n\n"
-                f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
-            )
-            sei_ops.append(
-                {
-                    "stable_id": sid,
-                    "op": "blocked",
-                    "reason": "hard_block",
-                    "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.hard_blocks],
-                }
-            )
-            logger.info(
-                "agir_estagios[%s]: HARD BLOCK — %d bloqueio(s)", sid[:8], len(summary.hard_blocks)
-            )
-            continue
+        # Combined hard + soft: draft a SINGLE email listing all issues at
+        # once. Regra do usuário 2026-04-22: "é muito importante apontar
+        # tudo que deve ajustar ao mesmo tempo, caso contrário causa
+        # retrabalho irritante". Early-returning separado antes gerava
+        # 2 drafts pedindo pendências em rodadas diferentes.
+        #
+        # Blocks com ``internal_only=True`` (ex.: SIGA/SEI não consultados —
+        # estado interno da pipeline, não algo que o aluno possa corrigir)
+        # são filtrados do draft ao aluno mas continuam contando para gatekeeping
+        # das ops SEI e aparecem no log.
+        if summary.hard_blocks or summary.soft_blocks:
+            from ufpr_automation.config import settings
 
-        if summary.soft_blocks:
-            # Draft email asking for justification
-            soft_lines = "\n".join(f"- {r.check_id}: {r.reason}" for r in summary.soft_blocks)
-            cls.sugestao_resposta = (
-                f"Prezado(a) {vars_.get('nome_aluno', 'estudante')},\n\n"
-                f"Sua solicitação de estágio requer esclarecimentos adicionais:\n\n"
-                f"{soft_lines}\n\n"
-                f"Favor enviar justificativa formal por e-mail para que possamos "
-                f"dar prosseguimento ao processo.\n\n"
-                f"Atenciosamente,\nCoordenação do Curso de Design Gráfico"
+            student_hard = [r for r in summary.hard_blocks if not r.internal_only]
+            student_soft = [r for r in summary.soft_blocks if not r.internal_only]
+            internal_count = (
+                len(summary.hard_blocks) + len(summary.soft_blocks)
+                - len(student_hard) - len(student_soft)
             )
+
+            # Primeiro nome em title-case; remove pronomes "Sr./Sra./Prof." se
+            # o sender traz isso. "marlon gomes" -> "Marlon".
+            raw_nome = vars_.get("nome_aluno", "").strip()
+            first_name = raw_nome.split()[0] if raw_nome else ""
+            first_name = first_name.capitalize() if first_name else "estudante"
+            greeting = f"Prezado(a) {first_name}," if first_name == "estudante" else f"Prezado(a) {first_name},"
+
+            parts: list[str] = [f"{greeting}\n"]
+
+            if student_hard and student_soft:
+                parts.append(
+                    "Identificamos pontos que precisam ser ajustados antes "
+                    "de podermos dar prosseguimento ao seu processo de "
+                    "estágio:\n"
+                )
+            elif student_hard:
+                parts.append(
+                    "Para prosseguirmos com sua solicitação de estágio, "
+                    "precisamos de alguns ajustes:\n"
+                )
+            elif student_soft:
+                parts.append(
+                    "Sua solicitação de estágio está quase pronta; só "
+                    "precisamos de alguns esclarecimentos:\n"
+                )
+            else:
+                # Só blocks internos — não temos nada acionável pra pedir ao
+                # aluno. Rascunho genérico de "recebemos, vamos analisar" e a
+                # pipeline para o SEI write por causa dos blocks internos.
+                parts.append(
+                    "Recebemos seu email e estamos analisando internamente "
+                    "a documentação. Retornamos em breve com os próximos "
+                    "passos.\n"
+                )
+
+            if student_hard:
+                parts.append("Ajustes obrigatórios:")
+                for r in student_hard:
+                    parts.append(f"- {r.reason}")
+                parts.append("")
+
+            if student_soft:
+                parts.append("Verificações adicionais / justificativa:")
+                for r in student_soft:
+                    parts.append(f"- {r.reason}")
+                parts.append("")
+
+            if student_hard or student_soft:
+                parts.append(
+                    "Assim que a documentação estiver ajustada, basta "
+                    "responder este email com os arquivos atualizados que "
+                    "seguimos com o processo internamente no SEI — você não "
+                    "precisa abrir processo nenhum.\n"
+                )
+
+            # Signature — fallback institucional se ASSINATURA_EMAIL não
+            # estiver configurada (test envs).
+            signature = settings.ASSINATURA_EMAIL or (
+                "Att,\nLucas Martins Sorrentino\n"
+                "_______________________________________________________\n"
+                "Secretaria da Coordenação de Design Gráfico\n"
+                "Setor de Artes Comunicação e Design / UFPR\n"
+                "design.grafico@ufpr.br\n"
+                "https://sacod.ufpr.br/coordesign/\n"
+                "41 | 3360.5360"
+            )
+            parts.append(signature)
+            cls.sugestao_resposta = "\n".join(parts)
+
+            all_blocks = [
+                {
+                    "id": r.check_id,
+                    "reason": r.reason,
+                    "severity": r.status,
+                    "internal_only": r.internal_only,
+                }
+                for r in (summary.hard_blocks + summary.soft_blocks)
+            ]
+            reason = "hard_block" if summary.hard_blocks else "soft_block"
             sei_ops.append(
                 {
                     "stable_id": sid,
                     "op": "blocked",
-                    "reason": "soft_block",
-                    "blocks": [{"id": r.check_id, "reason": r.reason} for r in summary.soft_blocks],
+                    "reason": reason,
+                    "blocks": all_blocks,
+                    "internal_blocks_count": internal_count,
                 }
             )
             logger.info(
-                "agir_estagios[%s]: SOFT BLOCK — %d pendência(s)", sid[:8], len(summary.soft_blocks)
+                "agir_estagios[%s]: %s — %d hard + %d soft → draft unificado "
+                "(%d acionáveis pelo aluno, %d internos)",
+                sid[:8],
+                "HARD BLOCK" if summary.hard_blocks else "SOFT BLOCK",
+                len(summary.hard_blocks),
+                len(summary.soft_blocks),
+                len(student_hard) + len(student_soft),
+                internal_count,
             )
             continue
 

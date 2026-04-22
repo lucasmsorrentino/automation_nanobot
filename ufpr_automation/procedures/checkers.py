@@ -50,6 +50,11 @@ class CheckResult:
     check_id: str
     status: CheckStatus
     reason: str = ""  # populated when not ``pass``; shown in replies
+    # When True, this block is an internal pipeline concern (e.g. SIGA not
+    # consulted yet, SEI context missing) — gate SEI write ops, but do NOT
+    # surface it in the email draft to the aluno since they can't fix it.
+    # The agir_estagios node logs it + routes to human review instead.
+    internal_only: bool = False
 
 
 @dataclass
@@ -202,12 +207,26 @@ def _siga_missing_result(check_id: str) -> CheckResult:
     """Standard soft-block when SIGA data is required but unavailable.
 
     The checker can't verify the rule without SIGA, so the pipeline must
-    escalate to human review instead of assuming pass/fail.
+    gate the SEI write ops. But the aluno can't fix "SIGA not consulted"
+    — that's an internal pipeline state — so mark ``internal_only=True``
+    to keep it out of the email draft (still logged, still routes to
+    human review).
     """
     return CheckResult(
         check_id=check_id,
         status="soft_block",
         reason="SIGA não consultado — requer verificação manual",
+        internal_only=True,
+    )
+
+
+def _sei_missing_result(check_id: str) -> CheckResult:
+    """Same pattern as ``_siga_missing_result`` for SEI-dependent checkers."""
+    return CheckResult(
+        check_id=check_id,
+        status="soft_block",
+        reason="SEI não consultado — requer verificação manual",
+        internal_only=True,
     )
 
 
@@ -431,9 +450,9 @@ def tce_jornada_sem_horario(ctx: CheckContext) -> CheckResult:
             check_id="tce_jornada_sem_horario",
             status="hard_block",
             reason=(
-                "TCE não especifica o horário da jornada de estágio. "
-                "Peça ao aluno para corrigir o TCE incluindo o horário "
-                "(ex.: 'das 13h00 às 19h00, de segunda a sexta')."
+                "O TCE precisa especificar o horário da jornada de estágio. "
+                "Por favor, ajuste o documento incluindo o horário "
+                "(ex.: 'das 13h00 às 19h00, de segunda a sexta') e reenvie."
             ),
         )
     return CheckResult(check_id="tce_jornada_sem_horario", status="pass")
@@ -499,11 +518,7 @@ def sei_processo_vigente_duplicado(ctx: CheckContext) -> CheckResult:
     that one (aditivo, rescisão, relatório) and was misclassified.
     """
     if not ctx.sei_context:
-        return CheckResult(
-            check_id="sei_processo_vigente_duplicado",
-            status="soft_block",
-            reason="SEI não consultado — requer verificação manual",
-        )
+        return _sei_missing_result("sei_processo_vigente_duplicado")
     processos_vigentes = ctx.sei_context.get("processos_vigentes", []) or []
     tipo_alvo = ctx.intent.sei_process_type.strip().lower()
     for proc in processos_vigentes:
@@ -531,11 +546,7 @@ def sei_processo_tce_existente(ctx: CheckContext) -> CheckResult:
     new TCE, not an aditivo) or the student is in another unit.
     """
     if not ctx.sei_context:
-        return CheckResult(
-            check_id="sei_processo_tce_existente",
-            status="soft_block",
-            reason="SEI não consultado — requer verificação manual",
-        )
+        return _sei_missing_result("sei_processo_tce_existente")
     processos_vigentes = ctx.sei_context.get("processos_vigentes", []) or []
     tipo_alvo = "estágios não obrigatórios"  # aditivo/conclusão só aplicam a este tipo
     for proc in processos_vigentes:
@@ -572,6 +583,7 @@ def aditivo_antes_vencimento_tce(ctx: CheckContext) -> CheckResult:
                 "Data de término do TCE vigente não disponível no contexto "
                 "SEI — requer verificação manual."
             ),
+            internal_only=True,
         )
     data_fim = _parse_br_date(str(tce_data_fim_raw))
     if data_fim is None:
@@ -768,9 +780,29 @@ def supervisor_formacao_compativel(ctx: CheckContext) -> CheckResult:
     outros checkers (ou revisão humana) pegam esse caso.
     """
     formacao = ctx.vars.get("formacao_supervisor", "")
+    nome_sup = ctx.vars.get("nome_supervisor", "o(a) supervisor(a)")
+
     if not formacao:
-        # Dado ausente — não bloqueia; outros checkers cuidam de TCE incompleto.
-        return CheckResult(check_id="supervisor_formacao_compativel", status="pass")
+        # Dado ausente: TCE padrão CIEE traz só "SUPERVISOR: NOME" sem
+        # campo de formação. Em vez de passar silencioso (que esconde a
+        # exigência legal), soft-block pedindo pra aluno trazer a formação
+        # do supervisor ou a Declaração de Experiência já. É 1 checker a
+        # mais no draft combinado, mas preferível ao retrabalho de pedir
+        # depois que o resto foi ajustado.
+        return CheckResult(
+            check_id="supervisor_formacao_compativel",
+            status="soft_block",
+            reason=(
+                f"Formação/cargo de {nome_sup} não consta no TCE. "
+                f"Art. 9 Lei 11.788/2008 + Art. 10 Res. CEPE 46/10 "
+                f"exigem formação ou experiência comprovada na área do "
+                f"curso. Por favor, informe a formação do supervisor na "
+                f"resposta OU já providencie a Declaração de Experiência "
+                f"do Supervisor (form PROGRAD: "
+                f"http://www.prograd.ufpr.br/estagio/formularios/form/declaracao_experiencia.php, "
+                f"assinada pela chefia imediata)."
+            ),
+        )
 
     norm = _strip_accents_lower(formacao)
     for keyword in _SUPERVISOR_AREAS_AFINS_DESIGN:
@@ -778,7 +810,6 @@ def supervisor_formacao_compativel(ctx: CheckContext) -> CheckResult:
             return CheckResult(check_id="supervisor_formacao_compativel", status="pass")
 
     # Nenhuma palavra-chave de área afim casou — exigir declaração.
-    nome_sup = ctx.vars.get("nome_supervisor", "o(a) supervisor(a)")
     return CheckResult(
         check_id="supervisor_formacao_compativel",
         status="soft_block",
