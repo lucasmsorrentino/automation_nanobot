@@ -113,6 +113,12 @@ class EmailData:
     # Attachments
     attachments: list[AttachmentData] = field(default_factory=list)
     has_attachments: bool = False
+    # True when the most recent message in this Gmail thread was sent by the
+    # human coordinator (see ``INSTITUTIONAL_EMAIL`` in settings). Set by
+    # ``perceber_gmail``; consumed downstream to skip drafting and to route
+    # the thread into the learning corpus label.
+    already_replied_by_us: bool = False
+    thread_id: str = ""
 
     def compute_stable_id(self) -> str:
         """Generate a stable hash from sender + subject + timestamp.
@@ -153,4 +159,6 @@ class EmailData:
                 }
                 for a in self.attachments
             ],
+            "already_replied_by_us": self.already_replied_by_us,
+            "thread_id": self.thread_id,
         }

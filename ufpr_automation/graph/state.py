@@ -75,6 +75,13 @@ class EmailState(TypedDict, total=False):
 
     # Agir output
     drafts_saved: list[str]  # stable_ids of successfully saved drafts
+    # stable_ids skipped because the human coordinator already replied in the
+    # Gmail thread (EmailData.already_replied_by_us == True).
+    drafts_skipped_already_replied: list[str]
+
+    # Corpus de aprendizado — JSONL entries written for threads captured by
+    # ``capturar_corpus_humano`` in this run. See ``feedback_data/learning_corpus.jsonl``.
+    corpus_captured: list[dict]
 
     # Error tracking — list concatenation reducer so sub-agents may append.
     errors: Annotated[list[dict], operator.add]

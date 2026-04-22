@@ -118,6 +118,18 @@ ASSINATURA_EMAIL = _assinatura_raw.replace("\\n", "\n") if _assinatura_raw else 
 # in the institutional inbox automatically.
 EMAIL_CC_DEFAULT = os.getenv("EMAIL_CC_DEFAULT", "").strip()
 
+# Institutional email of the human coordinator. When a Gmail thread's most
+# recent message is from this address, the pipeline skips drafting (the
+# human already handled it) and routes the thread into the learning corpus.
+INSTITUTIONAL_EMAIL = os.getenv("INSTITUTIONAL_EMAIL", "design.grafico@ufpr.br").strip().lower()
+
+# Gmail label used as the learning corpus for future template mining.
+# Nested paths use "/" (Gmail treats labels as IMAP folders). Empty string
+# disables corpus capture entirely.
+GMAIL_LEARNING_LABEL = os.getenv(
+    "GMAIL_LEARNING_LABEL", "aprendizado/interacoes-secretaria-humano"
+).strip()
+
 
 # ============================================================================
 # Email Channel Selection

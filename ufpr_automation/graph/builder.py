@@ -14,6 +14,7 @@ from ufpr_automation.graph.fleet import dispatch_tier1, process_one_email
 from ufpr_automation.graph.nodes import (
     agir_estagios,
     agir_gmail,
+    capturar_corpus_humano,
     perceber_gmail,
     perceber_owa,
     prewarm_sessions,
@@ -121,6 +122,7 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     graph.add_node("rotear", rotear)
     graph.add_node("registrar_feedback", registrar_feedback)
     graph.add_node("agir_estagios", agir_estagios)
+    graph.add_node("capturar_corpus_humano", capturar_corpus_humano)
     graph.add_node("registrar_procedimento", registrar_procedimento)
 
     # Define edges — Tier 0 (playbook) runs first; only the residual Tier 1
@@ -144,7 +146,8 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
 
     graph.add_edge("registrar_feedback", "agir_estagios")
     graph.add_edge("agir_estagios", "agir")
-    graph.add_edge("agir", "registrar_procedimento")
+    graph.add_edge("agir", "capturar_corpus_humano")
+    graph.add_edge("capturar_corpus_humano", "registrar_procedimento")
     graph.add_edge("registrar_procedimento", END)
 
     return graph.compile(checkpointer=checkpointer)

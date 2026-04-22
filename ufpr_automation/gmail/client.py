@@ -16,6 +16,7 @@ import email
 import email.header
 import email.utils
 import imaplib
+import re
 import smtplib
 from email.mime.text import MIMEText
 from typing import Optional
@@ -28,6 +29,18 @@ IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+
+ALL_MAIL_FOLDER = '"[Gmail]/All Mail"'
+
+_THRID_RE = re.compile(rb"X-GM-THRID (\d+)")
+
+
+def _parse_address(raw: str) -> str:
+    """Extract the bare lowercase email address from a 'Name <email>' string."""
+    if not raw:
+        return ""
+    _name, addr = email.utils.parseaddr(raw)
+    return addr.strip().lower()
 
 
 def _decode_header(raw: str) -> str:
@@ -373,3 +386,139 @@ class GmailClient:
             return False
         finally:
             conn.logout()
+
+    # ------------------------------------------------------------------
+    # Thread-aware helpers (Gmail X-GM-THRID extension)
+    # ------------------------------------------------------------------
+
+    def _resolve_thread(
+        self, conn: imaplib.IMAP4_SSL, message_id: str
+    ) -> tuple[str, list[bytes]]:
+        """Given a SELECTed connection on [Gmail]/All Mail, resolve the
+        Gmail thread containing ``message_id``. Returns (thread_id,
+        sequence_numbers). Empty tuple if not found.
+        """
+        if not message_id:
+            return "", []
+        # IMAP HEADER search is case-insensitive; quoting is handled by imaplib.
+        _, data = conn.search(None, "HEADER", "Message-ID", message_id)
+        msns = data[0].split() if data and data[0] else []
+        if not msns:
+            return "", []
+        _, hdr = conn.fetch(msns[0], "(X-GM-THRID)")
+        if not hdr or not hdr[0]:
+            return "", []
+        raw = hdr[0]
+        if isinstance(raw, tuple):
+            raw = raw[0]
+        m = _THRID_RE.search(raw)
+        if not m:
+            return "", []
+        thrid = m.group(1).decode("ascii")
+        _, data = conn.search(None, "X-GM-THRID", thrid)
+        thread_msns = data[0].split() if data and data[0] else []
+        return thrid, thread_msns
+
+    def thread_last_sender(self, message_id: str) -> str:
+        """Return the lowercased bare email of the most recent sender in the
+        Gmail thread that contains ``message_id`` (RFC Message-ID header).
+
+        Searches [Gmail]/All Mail so the result includes Sent items — needed
+        to detect when the human coordinator has already replied. Returns
+        ``""`` if the thread cannot be resolved.
+        """
+        if not message_id:
+            return ""
+        try:
+            conn = self._connect_imap()
+        except Exception as e:
+            logger.warning("Gmail: thread_last_sender — falha no IMAP: %s", e)
+            return ""
+        try:
+            conn.select(ALL_MAIL_FOLDER, readonly=True)
+            _thrid, msns = self._resolve_thread(conn, message_id)
+            if not msns:
+                return ""
+            latest_ts = -1.0
+            latest_sender = ""
+            for msn in msns:
+                _, hdr = conn.fetch(msn, "(BODY.PEEK[HEADER.FIELDS (FROM DATE)])")
+                if not hdr or not hdr[0]:
+                    continue
+                payload = hdr[0][1] if isinstance(hdr[0], tuple) else hdr[0]
+                msg = email.message_from_bytes(payload)
+                try:
+                    ts = email.utils.parsedate_to_datetime(msg.get("Date", "")).timestamp()
+                except (TypeError, ValueError, AttributeError):
+                    ts = 0.0
+                if ts >= latest_ts:
+                    latest_ts = ts
+                    latest_sender = _parse_address(_decode_header(msg.get("From", "")))
+            return latest_sender
+        except Exception as e:
+            logger.warning("Gmail: thread_last_sender — exceção (%s)", e)
+            return ""
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+    def copy_thread_to_label(self, message_id: str, label: str) -> tuple[int, str]:
+        """Copy every message in the Gmail thread to ``label``.
+
+        Creates the label if missing (IMAP CREATE on an existing folder
+        fails silently). Returns (count_copied, thread_id). Returns (0, "")
+        if the thread can't be resolved or the copy fails. Idempotent from
+        Gmail's perspective — copying a message already in the label just
+        keeps the label applied.
+        """
+        if not message_id or not label:
+            return 0, ""
+        try:
+            conn = self._connect_imap()
+        except Exception as e:
+            logger.warning("Gmail: copy_thread_to_label — falha no IMAP: %s", e)
+            return 0, ""
+        try:
+            # Ensure label exists; ignore "already exists" errors.
+            try:
+                conn.create(f'"{label}"')
+            except Exception:
+                pass
+
+            conn.select(ALL_MAIL_FOLDER, readonly=False)
+            thrid, msns = self._resolve_thread(conn, message_id)
+            if not msns:
+                return 0, thrid
+
+            uid_set = b",".join(msns)
+            status, _ = conn.copy(uid_set, f'"{label}"')
+            if status != "OK":
+                logger.warning(
+                    "Gmail: copy_thread_to_label — status %s para thread %s label '%s'",
+                    status,
+                    thrid,
+                    label,
+                )
+                return 0, thrid
+            logger.info(
+                "Gmail: thread %s (%d msg) copiada para label '%s'",
+                thrid,
+                len(msns),
+                label,
+            )
+            return len(msns), thrid
+        except Exception as e:
+            logger.warning(
+                "Gmail: copy_thread_to_label — exceção (message_id=%s, label=%s): %s",
+                message_id[:40],
+                label,
+                e,
+            )
+            return 0, ""
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
