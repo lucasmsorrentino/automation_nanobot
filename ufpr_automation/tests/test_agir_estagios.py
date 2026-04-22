@@ -92,8 +92,8 @@ class TestAgirEstagiosHardBlock:
         body = cls.sugestao_resposta
         assert "Ajustes obrigatórios" in body
         assert "Lucas Martins Sorrentino" in body
-        # And reassures the aluno that the Secretaria handles the SEI side.
-        assert "você não precisa abrir processo" in body.lower()
+        # Call to action pede o reenvio; Secretaria cuida do lado SEI.
+        assert "basta responder este email com os arquivos atualizados" in body
 
 
 class TestAgirEstagiosAllPass:

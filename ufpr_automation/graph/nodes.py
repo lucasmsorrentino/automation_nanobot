@@ -1438,9 +1438,7 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
             if student_hard or student_soft:
                 parts.append(
                     "Assim que a documentação estiver ajustada, basta "
-                    "responder este email com os arquivos atualizados que "
-                    "seguimos com o processo internamente no SEI — você não "
-                    "precisa abrir processo nenhum.\n"
+                    "responder este email com os arquivos atualizados.\n"
                 )
 
             # Signature — fallback institucional se ASSINATURA_EMAIL não
