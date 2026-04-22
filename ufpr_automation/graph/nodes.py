@@ -850,33 +850,46 @@ def registrar_feedback(state: EmailState) -> dict[str, Any]:
 
 
 def consultar_sei(state: EmailState) -> dict[str, Any]:
-    """Consult SEI for emails that mention a process number.
+    """Consult SEI for emails classified as Estágios — cascade fallback.
 
-    Only runs for emails classified as 'Estagios' that contain a SEI process
-    number pattern (XXXXX.XXXXXX/XXXX-XX). READ-ONLY: no data is submitted.
+    Cascata por custo/precisão crescente:
+    1. Nº SEI explícito no texto (raríssimo — usuário confirmou 2026-04-22)
+    2. GRR extraído → ``find_processes_by_grr`` + ``select_best_processo``
+       (disambiguação por ano do número + data + tipo)
+    3. (Futuro) Palavra-chave no Acompanhamento Especial do grupo
+       "Estágios não Obrig" → resultados pré-filtrados por tipo
+    4. (Futuro) Nome do aluno → pesquisa rápida geral
+
+    READ-ONLY. Failures são não-fatais (retorna dict vazio para o email).
     """
     emails = state.get("emails", [])
     classifications = state.get("classifications", {})
     if not emails:
         return {"sei_contexts": {}}
 
-    from ufpr_automation.sei.client import extract_sei_process_number
+    from ufpr_automation.sei.client import extract_grr, extract_sei_process_number
 
-    # Identify emails that need SEI consultation
-    sei_candidates: dict[str, str] = {}  # stable_id -> process number
+    # stable_id -> {"mode": "numero" | "grr", "value": str}
+    candidates: dict[str, dict[str, str]] = {}
     for email in emails:
         cls = classifications.get(email.stable_id)
         if not cls or cls.categoria != "Estágios":
             continue
-        text = f"{email.subject} {email.body or email.preview}"
-        proc_num = extract_sei_process_number(text)
+        texto = f"{email.subject} {email.body or email.preview}"
+        for att in email.attachments:
+            if att.extracted_text:
+                texto += f"\n{att.extracted_text[:4000]}"
+        proc_num = extract_sei_process_number(texto)
         if proc_num:
-            sei_candidates[email.stable_id] = proc_num
+            candidates[email.stable_id] = {"mode": "numero", "value": proc_num}
+            continue
+        grr = extract_grr(texto)
+        if grr:
+            candidates[email.stable_id] = {"mode": "grr", "value": grr}
 
-    if not sei_candidates:
+    if not candidates:
         return {"sei_contexts": {}}
 
-    # Check if Playwright is available (SEI requires browser automation)
     try:
         from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
     except ImportError:
@@ -887,14 +900,15 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
         logger.info("SEI: credenciais nao configuradas, pulando consultas")
         return {"sei_contexts": {}}
 
-    # Run SEI consultations
-    sei_results = asyncio.run(_consult_sei_async(sei_candidates))
+    sei_results = asyncio.run(_consult_sei_async(candidates))
     logger.info("SEI: %d consulta(s) realizadas", len(sei_results))
     return {"sei_contexts": sei_results}
 
 
-async def _consult_sei_async(candidates: dict[str, str]) -> dict[str, Any]:
-    """Internal async implementation for SEI consultations."""
+async def _consult_sei_async(
+    candidates: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """Internal async implementation for SEI consultations (cascade)."""
     from ufpr_automation.config.settings import SEI_URL
     from ufpr_automation.sei.browser import (
         auto_login,
@@ -903,7 +917,7 @@ async def _consult_sei_async(candidates: dict[str, str]) -> dict[str, Any]:
         launch_browser,
         save_session_state,
     )
-    from ufpr_automation.sei.client import SEIClient
+    from ufpr_automation.sei.client import SEIClient, select_best_processo
 
     results: dict[str, Any] = {}
     pw, browser = await launch_browser(headless=True)
@@ -919,15 +933,56 @@ async def _consult_sei_async(candidates: dict[str, str]) -> dict[str, Any]:
             await save_session_state(context)
 
         client = SEIClient(page)
-        for stable_id, proc_num in candidates.items():
-            processo = await client.search_process(proc_num)
+        for stable_id, info in candidates.items():
+            mode = info.get("mode")
+            value = info.get("value", "")
+            processo = None
+            confidence = 1.0
+            all_candidates: list = []
+            try:
+                if mode == "numero":
+                    processo = await client.search_process(value)
+                elif mode == "grr":
+                    all_candidates = await client.find_processes_by_grr(value)
+                    if len(all_candidates) == 1:
+                        processo = all_candidates[0]
+                    elif all_candidates:
+                        processo, confidence = select_best_processo(
+                            all_candidates, grr_hint=value
+                        )
+            except Exception as e:
+                logger.warning(
+                    "SEI: consulta falhou para stable_id=%s mode=%s: %s",
+                    stable_id[:8],
+                    mode,
+                    e,
+                )
+                continue
+
             if processo:
                 results[stable_id] = {
                     "numero": processo.numero,
                     "status": processo.status,
+                    "tipo": processo.tipo,
                     "documentos": len(processo.documentos),
                     "interessados": processo.interessados,
                     "observacoes": processo.observacoes[:300] if processo.observacoes else "",
+                    "lookup_mode": mode,
+                    "lookup_value": value,
+                    "lookup_confidence": confidence,
+                    "lookup_candidates_count": len(all_candidates) if all_candidates else 1,
+                }
+            elif all_candidates:
+                # Tied candidates — let agir_estagios route to human review.
+                results[stable_id] = {
+                    "lookup_mode": mode,
+                    "lookup_value": value,
+                    "lookup_confidence": 0.0,
+                    "lookup_candidates_count": len(all_candidates),
+                    "ambiguous_candidates": [
+                        {"numero": c.numero, "tipo": c.tipo, "interessados": c.interessados}
+                        for c in all_candidates[:5]
+                    ],
                 }
     except Exception as e:
         logger.error("SEI: erro durante consultas: %s", e)
