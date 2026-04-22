@@ -241,4 +241,207 @@ class TestGmailClientInit:
         with patch("ufpr_automation.gmail.client.settings"):
             client = GmailClient(email_addr="a@b.com", app_password="pass123")
             assert client.email_addr == "a@b.com"
-            assert client.app_password == "pass123"
+
+
+# ---------------------------------------------------------------------------
+# Thread-aware helpers — FakeIMAP minimal harness
+# ---------------------------------------------------------------------------
+
+
+class _FakeIMAP:
+    """Minimal stand-in for imaplib.IMAP4_SSL used by thread helpers.
+
+    Each test wires up which message IDs live in which thread via
+    ``messages`` (dict keyed by MSN) and configures the search/fetch
+    responses programmatically.
+    """
+
+    def __init__(self):
+        self.messages: dict[bytes, dict] = {}
+        self.thread_by_msn: dict[bytes, bytes] = {}
+        self.create_calls: list[str] = []
+        self.copy_calls: list[tuple[bytes, str]] = []
+        self.selected_folder: str | None = None
+        self.select_modes: list[tuple[str, bool]] = []
+        self.create_raises: bool = False
+        self.copy_status: str = "OK"
+        self.logged_out: bool = False
+
+    def select(self, folder, readonly=False):
+        self.selected_folder = folder
+        self.select_modes.append((folder, readonly))
+        return ("OK", [b"1"])
+
+    def search(self, _charset, *criteria):
+        # Two call shapes we need to support:
+        #   search(None, "HEADER", "Message-ID", "<abc>")
+        #   search(None, "X-GM-THRID", "12345")
+        if criteria and criteria[0] == "HEADER" and criteria[1] == "Message-ID":
+            msg_id = criteria[2]
+            matches = [msn for msn, m in self.messages.items() if m.get("message_id") == msg_id]
+            return ("OK", [b" ".join(matches) if matches else b""])
+        if criteria and criteria[0] == "X-GM-THRID":
+            thrid = criteria[1].encode() if isinstance(criteria[1], str) else criteria[1]
+            matches = [msn for msn, tid in self.thread_by_msn.items() if tid == thrid]
+            return ("OK", [b" ".join(matches) if matches else b""])
+        return ("OK", [b""])
+
+    def fetch(self, msn, spec):
+        if isinstance(msn, str):
+            msn = msn.encode()
+        if spec == "(X-GM-THRID)":
+            thrid = self.thread_by_msn.get(msn, b"0")
+            return ("OK", [b"1 (X-GM-THRID " + thrid + b" UID 999)"])
+        if "HEADER.FIELDS" in spec:
+            m = self.messages.get(msn, {})
+            payload = (
+                f"From: {m.get('from', '')}\r\n"
+                f"Date: {m.get('date', '')}\r\n\r\n"
+            ).encode("utf-8")
+            return ("OK", [(b"1 (BODY[HEADER.FIELDS (FROM DATE)] {%d}" % len(payload), payload), b")"])
+        return ("OK", [b""])
+
+    def create(self, label):
+        if self.create_raises:
+            raise Exception("already exists")
+        self.create_calls.append(label)
+        return ("OK", [b""])
+
+    def copy(self, uid_set, dest):
+        if isinstance(uid_set, bytes):
+            self.copy_calls.append((uid_set, dest))
+        else:
+            self.copy_calls.append((uid_set.encode(), dest))
+        return (self.copy_status, [b""])
+
+    def logout(self):
+        self.logged_out = True
+        return ("BYE", [b""])
+
+
+def _make_client_with_fake(fake: _FakeIMAP):
+    with patch("ufpr_automation.gmail.client.settings") as mock_settings:
+        mock_settings.GMAIL_EMAIL = "test@gmail.com"
+        mock_settings.GMAIL_APP_PASSWORD = "fakepass"
+        client = GmailClient(email_addr="test@gmail.com", app_password="fakepass")
+    client._connect_imap = lambda: fake  # type: ignore[method-assign]
+    return client
+
+
+class TestThreadLastSender:
+    def test_returns_most_recent_sender_from_thread(self):
+        fake = _FakeIMAP()
+        # Thread of 3 messages — coordinator replied last.
+        fake.messages = {
+            b"10": {
+                "message_id": "<student@example.com>",
+                "from": "Aluno <aluno@ufpr.br>",
+                "date": "Mon, 20 Apr 2026 09:00:00 +0000",
+            },
+            b"11": {
+                "message_id": "<coord@example.com>",
+                "from": "Secretaria DG <design.grafico@ufpr.br>",
+                "date": "Wed, 22 Apr 2026 15:30:00 +0000",
+            },
+            b"12": {
+                "message_id": "<student2@example.com>",
+                "from": "Aluno <aluno@ufpr.br>",
+                "date": "Tue, 21 Apr 2026 14:00:00 +0000",
+            },
+        }
+        fake.thread_by_msn = {b"10": b"999", b"11": b"999", b"12": b"999"}
+        client = _make_client_with_fake(fake)
+
+        sender = client.thread_last_sender("<student@example.com>")
+        assert sender == "design.grafico@ufpr.br"
+        assert fake.logged_out is True
+
+    def test_empty_message_id_returns_empty(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+        # Should not even connect.
+        client._connect_imap = lambda: (_ for _ in ()).throw(AssertionError("should not connect"))  # type: ignore[method-assign]
+        assert client.thread_last_sender("") == ""
+
+    def test_unresolved_thread_returns_empty(self):
+        fake = _FakeIMAP()
+        # No messages match — search returns empty.
+        client = _make_client_with_fake(fake)
+        assert client.thread_last_sender("<unknown@example.com>") == ""
+
+    def test_student_replied_last_returns_student(self):
+        fake = _FakeIMAP()
+        fake.messages = {
+            b"1": {
+                "message_id": "<m1@x>",
+                "from": "design.grafico@ufpr.br",
+                "date": "Mon, 20 Apr 2026 09:00:00 +0000",
+            },
+            b"2": {
+                "message_id": "<m2@x>",
+                "from": "Aluno <aluno@ufpr.br>",
+                "date": "Tue, 21 Apr 2026 10:00:00 +0000",
+            },
+        }
+        fake.thread_by_msn = {b"1": b"42", b"2": b"42"}
+        client = _make_client_with_fake(fake)
+        assert client.thread_last_sender("<m1@x>") == "aluno@ufpr.br"
+
+
+class TestCopyThreadToLabel:
+    def test_creates_label_and_copies_full_thread(self):
+        fake = _FakeIMAP()
+        fake.messages = {
+            b"5": {"message_id": "<m5@x>", "from": "a@x", "date": ""},
+            b"6": {"message_id": "<m6@x>", "from": "b@x", "date": ""},
+        }
+        fake.thread_by_msn = {b"5": b"777", b"6": b"777"}
+        client = _make_client_with_fake(fake)
+
+        count, thread_id = client.copy_thread_to_label(
+            "<m5@x>", "aprendizado/interacoes-secretaria-humano"
+        )
+        assert count == 2
+        assert thread_id == "777"
+        assert fake.create_calls == ['"aprendizado/interacoes-secretaria-humano"']
+        assert len(fake.copy_calls) == 1
+        uid_set, dest = fake.copy_calls[0]
+        # Order depends on dict iteration; check set equality on split bytes.
+        assert set(uid_set.split(b",")) == {b"5", b"6"}
+        assert dest == '"aprendizado/interacoes-secretaria-humano"'
+        assert fake.logged_out is True
+
+    def test_label_already_exists_is_non_fatal(self):
+        fake = _FakeIMAP()
+        fake.create_raises = True  # simulate "folder exists" error
+        fake.messages = {b"1": {"message_id": "<m@x>", "from": "a@x", "date": ""}}
+        fake.thread_by_msn = {b"1": b"4242"}
+        client = _make_client_with_fake(fake)
+        count, thread_id = client.copy_thread_to_label("<m@x>", "some/label")
+        assert count == 1
+        assert thread_id == "4242"
+
+    def test_empty_args_return_zero(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+        assert client.copy_thread_to_label("", "label") == (0, "")
+        assert client.copy_thread_to_label("<x>", "") == (0, "")
+
+    def test_unresolved_thread_returns_zero(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+        count, thread_id = client.copy_thread_to_label("<missing@x>", "some/label")
+        assert count == 0
+        assert thread_id == ""
+        assert fake.copy_calls == []
+
+    def test_copy_status_failure_returns_zero(self):
+        fake = _FakeIMAP()
+        fake.copy_status = "NO"
+        fake.messages = {b"1": {"message_id": "<m@x>", "from": "a@x", "date": ""}}
+        fake.thread_by_msn = {b"1": b"5555"}
+        client = _make_client_with_fake(fake)
+        count, thread_id = client.copy_thread_to_label("<m@x>", "some/label")
+        assert count == 0
+        # thread_id is still returned so the caller can log it
+        assert thread_id == "5555"

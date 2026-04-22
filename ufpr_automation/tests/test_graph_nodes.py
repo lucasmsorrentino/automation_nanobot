@@ -376,3 +376,272 @@ class TestPrewarmSessions:
 
         asyncio.run(_prewarm_sessions_async(max_age_h=6.0))
         assert login_calls == []
+
+
+# ---------------------------------------------------------------------------
+# agir_gmail skip path + capturar_corpus_humano
+# ---------------------------------------------------------------------------
+
+
+class TestAgirGmailSkipAlreadyReplied:
+    """When EmailData.already_replied_by_us is True, agir_gmail must NOT
+    save a draft — the human coordinator already handled this thread.
+    """
+
+    def test_skips_draft_when_already_replied(self, monkeypatch):
+        from ufpr_automation.graph.nodes import agir_gmail
+
+        email = EmailData(
+            sender="aluno@ufpr.br",
+            subject="Solicitação de TCE",
+            body="...",
+            gmail_msg_id="42",
+            gmail_message_id="<student-1@example.com>",
+            already_replied_by_us=True,
+        )
+        email.compute_stable_id()
+        cls = EmailClassification(
+            categoria="Estágios",
+            resumo="...",
+            acao_necessaria="Redigir Resposta",
+            sugestao_resposta="Texto que NÃO deve ser enviado.",
+            confianca=0.99,
+        )
+
+        saved_drafts: list = []
+
+        class _FakeGmail:
+            def save_draft(self, **kw):
+                saved_drafts.append(kw)
+                return True
+
+            def mark_read(self, *_a, **_kw):
+                pass
+
+        monkeypatch.setattr(
+            "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()
+        )
+
+        state = {
+            "emails": [email],
+            "classifications": {email.stable_id: cls},
+            "auto_draft": [email.stable_id],
+            "human_review": [],
+        }
+        result = agir_gmail(state)
+        assert saved_drafts == []
+        assert result["drafts_saved"] == []
+        assert result["drafts_skipped_already_replied"] == [email.stable_id]
+
+    def test_normal_path_still_drafts(self, monkeypatch):
+        from ufpr_automation.graph.nodes import agir_gmail
+
+        email = EmailData(
+            sender="aluno@ufpr.br",
+            subject="Solicitação de TCE",
+            body="...",
+            gmail_msg_id="43",
+            gmail_message_id="<student-2@example.com>",
+            already_replied_by_us=False,
+        )
+        email.compute_stable_id()
+        cls = EmailClassification(
+            categoria="Estágios",
+            resumo="...",
+            acao_necessaria="Redigir Resposta",
+            sugestao_resposta="Texto a enviar.",
+            confianca=0.99,
+        )
+
+        saved: list = []
+
+        class _FakeGmail:
+            def save_draft(self, **kw):
+                saved.append(kw)
+                return True
+
+            def mark_read(self, *_a, **_kw):
+                pass
+
+        monkeypatch.setattr(
+            "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()
+        )
+
+        state = {
+            "emails": [email],
+            "classifications": {email.stable_id: cls},
+            "auto_draft": [email.stable_id],
+            "human_review": [],
+        }
+        result = agir_gmail(state)
+        assert len(saved) == 1
+        assert result["drafts_saved"] == [email.stable_id]
+        assert result["drafts_skipped_already_replied"] == []
+
+
+class TestCapturarCorpusHumano:
+    """Corpus capture should:
+    - No-op when no emails are flagged.
+    - Copy the thread to the label + append a JSONL entry when flagged.
+    - Be idempotent across runs (second run on the same thread doesn't re-append).
+    - Mark the CC'd reply as read after capture.
+    """
+
+    def test_no_flagged_emails_is_noop(self, tmp_path, monkeypatch):
+        from ufpr_automation.graph.nodes import capturar_corpus_humano
+
+        monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)
+        email = EmailData(sender="aluno@ufpr.br", subject="x", body="", already_replied_by_us=False)
+        email.compute_stable_id()
+        result = capturar_corpus_humano({"emails": [email], "classifications": {}})
+        assert result == {"corpus_captured": []}
+
+    def test_missing_label_is_noop(self, tmp_path, monkeypatch):
+        from ufpr_automation.graph import nodes
+        from ufpr_automation.graph.nodes import capturar_corpus_humano
+
+        monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)
+        # Disable the label via settings.
+        from ufpr_automation.config import settings as _settings
+        monkeypatch.setattr(_settings, "GMAIL_LEARNING_LABEL", "")
+
+        email = EmailData(
+            sender="aluno@ufpr.br",
+            subject="x",
+            body="",
+            gmail_message_id="<m@x>",
+            already_replied_by_us=True,
+        )
+        email.compute_stable_id()
+        result = capturar_corpus_humano({"emails": [email], "classifications": {}})
+        assert result == {"corpus_captured": []}
+
+    def test_captures_flagged_thread_and_writes_jsonl(self, tmp_path, monkeypatch):
+        from ufpr_automation.graph.nodes import capturar_corpus_humano
+
+        monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)
+
+        copy_calls: list[tuple[str, str]] = []
+        marked_read: list[str] = []
+
+        class _FakeGmail:
+            def copy_thread_to_label(self, mid, label):
+                copy_calls.append((mid, label))
+                return (3, "777")
+
+            def mark_read(self, msn):
+                marked_read.append(msn)
+
+        monkeypatch.setattr(
+            "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()
+        )
+
+        email = EmailData(
+            sender="Secretaria <design.grafico@ufpr.br>",
+            subject="Re: TCE João",
+            body="...",
+            gmail_msg_id="99",
+            gmail_message_id="<coord-1@example.com>",
+            already_replied_by_us=True,
+        )
+        email.compute_stable_id()
+        cls = EmailClassification(
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="a",
+            sugestao_resposta="",
+            confianca=0.9,
+        )
+
+        result = capturar_corpus_humano({
+            "emails": [email],
+            "classifications": {email.stable_id: cls},
+        })
+        assert len(copy_calls) == 1
+        assert copy_calls[0][0] == "<coord-1@example.com>"
+        assert marked_read == ["99"]
+        assert len(result["corpus_captured"]) == 1
+
+        # JSONL must have one entry with the captured metadata.
+        jsonl = tmp_path / "learning_corpus.jsonl"
+        assert jsonl.exists()
+        lines = [json.loads(ln) for ln in jsonl.read_text(encoding="utf-8").splitlines() if ln]
+        assert len(lines) == 1
+        entry = lines[0]
+        assert entry["thread_id"] == "777"
+        assert entry["stable_id"] == email.stable_id
+        assert entry["categoria"] == "Estágios"
+        assert entry["label"]  # default from settings
+        assert email.thread_id == "777"
+
+    def test_idempotent_across_runs(self, tmp_path, monkeypatch):
+        from ufpr_automation.graph.nodes import capturar_corpus_humano
+
+        monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)
+
+        class _FakeGmail:
+            def copy_thread_to_label(self, mid, label):
+                return (2, "888")
+
+            def mark_read(self, msn):
+                pass
+
+        monkeypatch.setattr(
+            "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()
+        )
+
+        email = EmailData(
+            sender="design.grafico@ufpr.br",
+            subject="Re: x",
+            body="",
+            gmail_msg_id="11",
+            gmail_message_id="<m@x>",
+            already_replied_by_us=True,
+        )
+        email.compute_stable_id()
+        state = {"emails": [email], "classifications": {}}
+
+        r1 = capturar_corpus_humano(state)
+        r2 = capturar_corpus_humano(state)
+        assert len(r1["corpus_captured"]) == 1
+        # Second run finds the thread already in JSONL — no new append.
+        assert r2["corpus_captured"] == []
+        jsonl = tmp_path / "learning_corpus.jsonl"
+        lines = [ln for ln in jsonl.read_text(encoding="utf-8").splitlines() if ln]
+        assert len(lines) == 1
+
+
+class TestAgirEstagiosSkipAlreadyReplied:
+    """agir_estagios must bail out on emails already handled by the human."""
+
+    def test_skips_estagios_sei_flow_when_already_replied(self, monkeypatch):
+        from ufpr_automation.core.models import EmailClassification, EmailData
+        from ufpr_automation.graph.nodes import agir_estagios
+
+        email = EmailData(
+            sender="aluno@ufpr.br",
+            subject="TCE nº 12345",
+            body="Termo de Compromisso ...",
+            gmail_message_id="<s@x>",
+            already_replied_by_us=True,
+        )
+        email.compute_stable_id()
+        cls = EmailClassification(
+            categoria="Estágios",
+            resumo="r",
+            acao_necessaria="a",
+            sugestao_resposta="placeholder",
+            confianca=0.9,
+        )
+        state = {
+            "emails": [email],
+            "classifications": {email.stable_id: cls},
+            "tier0_hits": [email.stable_id],
+            "sei_contexts": {},
+            "siga_contexts": {},
+        }
+        # If agir_estagios DID run the SEI flow, it'd try to import/instantiate
+        # the playbook/checkers — patching not strictly needed since we expect
+        # an early skip. Assert sei_operations stays empty.
+        result = agir_estagios(state)
+        assert result.get("sei_operations", []) == []
