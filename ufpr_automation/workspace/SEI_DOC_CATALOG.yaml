@@ -60,3 +60,17 @@ Ficha de Avaliação:
   sigiloso: true
   motivo_sigilo: "Informação Pessoal"
   nota: "Alguns consideram 'relatório do supervisor'; classificado como Relatório Final no SEI."
+
+Declaração de Experiência do Supervisor:
+  sei_tipo: Externo
+  sei_subtipo: Declaração
+  sei_classificacao: Inicial
+  sigiloso: true
+  motivo_sigilo: "Informação Pessoal"
+  nota: >-
+    Exigida quando a formação/cargo do supervisor não é compatível com a
+    área do curso do estudante (Art. 9 Lei 11.788/2008 + Art. 10 Res.
+    CEPE 46/10). Form PROGRAD: http://www.prograd.ufpr.br/estagio/formularios/form/declaracao_experiencia.php.
+    Campos: nome do supervisor, formação, atividades (50-250 chars), empresa,
+    estudante. Assinada pela chefia imediata do supervisor (não pelo próprio).
+    Acompanha o TCE inicial quando aplicável.

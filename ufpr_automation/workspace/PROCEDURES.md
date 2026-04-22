@@ -99,12 +99,18 @@ intent_name: estagio_nao_obrig_acuse_inicial
 keywords:
   - "TCE"
   - "Termo de Compromisso de Estágio"
+  - "Termo de Estágio"                   # forma curta usada por alunos
+  - "Termo de Estágio para assinatura"   # literal observado em email real 2026-04-22
+  - "termo de estágio para assinatura"
   - "novo estágio"
   - "iniciar estágio"
   - "abrir estágio"
   - "encaminhar TCE"
   - "começar estágio"
   - "assinatura TCE"
+  - "assinatura do termo"
+  - "assinar termo de estágio"
+  - "assinar TCE"
 categoria: "Estágios"
 action: "Redigir Resposta"
 sei_action: "create_process"
@@ -136,6 +142,7 @@ blocking_checks:
   - "tce_jornada_sem_horario"           # HARD: TCE não especifica horário da jornada
   - "tce_jornada_antes_meio_dia"        # HARD (exceto se curriculo_integralizado): aulas de manhã
   - "sei_processo_vigente_duplicado"    # HARD: já existe processo VIGENTE do mesmo tipo para este aluno
+  - "supervisor_formacao_compativel"    # SOFT: formação do supervisor não afim a Design → exigir Declaração de Experiência (form PROGRAD)
 sources:
   - "Lei 11.788/2008"
   - "Resolução 46/10-CEPE"
@@ -143,7 +150,8 @@ sources:
   - "Regulamento de Estágio do Curso de Design Gráfico (2024)"
   - "SOUL.md §7, §8.1, §11, §12, §14.1, §15.1"
   - "base_conhecimento/manual_sei.txt §Estágio Não Obrigatório"
-last_update: "2026-04-10"
+  - "base_conhecimento/estagios/GUIA_ESTAGIOS_DG.txt §SUPERVISOR"
+last_update: "2026-04-22"
 confidence: 0.90
 
 # Email de acuse ao aluno — usado APÓS o processo SEI ter sido criado e

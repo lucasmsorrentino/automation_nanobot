@@ -695,6 +695,104 @@ def relatorio_final_assinado_orientador(ctx: CheckContext) -> CheckResult:
     )
 
 
+# ============================================================================
+# Supervisor elegibility
+# ============================================================================
+
+# Keywords that signal the supervisor's formação/cargo is compatible with
+# Design Gráfico. Compared against `formacao_supervisor` after stripping
+# accents + lowercasing. Sources:
+#   - SOUL.md §7 (roles/supervisor)
+#   - base_conhecimento/estagios/GUIA_ESTAGIOS_DG.txt §SUPERVISOR
+#   - Art. 9 Lei 11.788/2008 + Art. 10 Resolução CEPE 46/10
+#
+# Added conservatively — when in doubt, the soft_block triggers a request
+# for the Declaração de Experiência do Supervisor (form PROGRAD) which the
+# supervisor's chefia imediata signs. Better to over-ask than to let an
+# incompatible supervisor through silently.
+_SUPERVISOR_AREAS_AFINS_DESIGN = {
+    "design",                   # cobre design grafico, de produto, de interiores, etc.
+    "arquitetura",              # arquitetura e urbanismo
+    "artes visuais",
+    "artes plasticas",
+    "comunicacao visual",
+    "comunicacao social",       # publicidade, jornalismo etc.
+    "publicidade",
+    "propaganda",
+    "marketing",
+    "multimidia",
+    "producao cultural",
+    "producao multimidia",
+    "game design",
+    "ux",                       # ux design, ui/ux
+    "interaction design",
+    "direcao de arte",
+    "diagramacao",
+    "editoracao",
+    "ilustracao",
+    "motion",                   # motion design / motion graphics
+    "animacao",
+    "fotografia",
+    "cinema",
+    "audiovisual",
+    "midias digitais",
+    "tecnologia em design",
+}
+
+
+def _strip_accents_lower(s: str) -> str:
+    """Normalize a Portuguese string for keyword matching: remove diacritics,
+    lowercase, collapse whitespace.
+    """
+    import unicodedata
+
+    norm = unicodedata.normalize("NFD", s or "")
+    stripped = "".join(c for c in norm if unicodedata.category(c) != "Mn")
+    return " ".join(stripped.lower().split())
+
+
+@register("supervisor_formacao_compativel")
+def supervisor_formacao_compativel(ctx: CheckContext) -> CheckResult:
+    """SOFT block — supervisor must have formação/experiência em área afim a
+    Design, senão exige Declaração de Experiência do Supervisor.
+
+    Regra (Art. 9 Lei 11.788/2008 + Art. 10 Res. CEPE 46/10): o supervisor
+    no local de estágio precisa ter formação ou experiência profissional
+    na área do curso do estagiário. Quando a formação capturada do TCE
+    não aparenta ser afim a Design, pedir que o aluno providencie
+    Declaração de Experiência do Supervisor (formulário PROGRAD) assinada
+    pela chefia imediata do supervisor.
+
+    Se ``formacao_supervisor`` não foi extraído do TCE, retorna ``pass``
+    silencioso — não é papel deste checker detectar TCE mal formatado;
+    outros checkers (ou revisão humana) pegam esse caso.
+    """
+    formacao = ctx.vars.get("formacao_supervisor", "")
+    if not formacao:
+        # Dado ausente — não bloqueia; outros checkers cuidam de TCE incompleto.
+        return CheckResult(check_id="supervisor_formacao_compativel", status="pass")
+
+    norm = _strip_accents_lower(formacao)
+    for keyword in _SUPERVISOR_AREAS_AFINS_DESIGN:
+        if keyword in norm:
+            return CheckResult(check_id="supervisor_formacao_compativel", status="pass")
+
+    # Nenhuma palavra-chave de área afim casou — exigir declaração.
+    nome_sup = ctx.vars.get("nome_supervisor", "o(a) supervisor(a)")
+    return CheckResult(
+        check_id="supervisor_formacao_compativel",
+        status="soft_block",
+        reason=(
+            f"Formação do supervisor ({formacao!r}) não aparenta ser afim a "
+            f"Design. Art. 9 Lei 11.788/2008 + Art. 10 Res. CEPE 46/10 "
+            f"exigem formação/experiência na área. Solicite Declaração de "
+            f"Experiência do Supervisor (form PROGRAD — "
+            f"http://www.prograd.ufpr.br/estagio/formularios/form/declaracao_experiencia.php), "
+            f"assinada pela chefia imediata de {nome_sup}."
+        ),
+    )
+
+
 def registered_checkers() -> list[str]:
     """Return the list of currently-registered check IDs (for debugging)."""
     return sorted(_CHECKERS.keys())

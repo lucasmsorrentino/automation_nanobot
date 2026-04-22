@@ -705,3 +705,59 @@ class TestEndToEndKeyword:
         draft = playbook.fill(intent, vars)
         assert "Ana Souza" in draft
         assert "1234" in draft
+
+
+# ---------------------------------------------------------------------------
+# Supervisor extraction (2026-04-22) — feeds supervisor_formacao_compativel
+# ---------------------------------------------------------------------------
+
+
+class TestSupervisorExtraction:
+    def _make_attach(self, text: str):
+        from ufpr_automation.core.models import AttachmentData
+
+        return AttachmentData(filename="tce.pdf", extracted_text=text)
+
+    def test_extracts_nome_and_formacao_supervisor_labeled(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        tce = (
+            "TERMO DE COMPROMISSO DE ESTÁGIO\n"
+            "Supervisor no Local de Estágio: João Pereira Silva\n"
+            "Formação do Supervisor: Design Gráfico\n"
+            "CPF: 000.000.000-00\n"
+        )
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="",
+            attachments=[self._make_attach(tce)],
+        )
+        vars = extract_variables(email, intent)
+        assert vars.get("nome_supervisor") == "João Pereira Silva"
+        assert vars.get("formacao_supervisor") == "Design Gráfico"
+
+    def test_extracts_via_cargo_alternative_label(self):
+        """TCE podem usar 'Cargo do Supervisor:' em vez de 'Formação:'."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        tce = "Supervisor: Ana Ribeiro\nCargo do Supervisor: Diretora de Arte\n"
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="",
+            attachments=[self._make_attach(tce)],
+        )
+        vars = extract_variables(email, intent)
+        assert vars.get("nome_supervisor") == "Ana Ribeiro"
+        assert vars.get("formacao_supervisor") == "Diretora de Arte"
+
+    def test_missing_supervisor_returns_no_vars(self):
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="",
+            attachments=[self._make_attach("sem supervisor aqui")],
+        )
+        vars = extract_variables(email, intent)
+        assert "nome_supervisor" not in vars
+        assert "formacao_supervisor" not in vars

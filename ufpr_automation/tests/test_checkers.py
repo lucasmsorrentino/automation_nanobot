@@ -48,6 +48,8 @@ EXPECTED_CHECKERS = {
     "aditivo_antes_vencimento_tce",
     "duracao_total_ate_24_meses",
     "relatorio_final_assinado_orientador",
+    # Supervisor elegibility (2026-04-22) — Art. 9 Lei 11.788 + Res. CEPE 46/10
+    "supervisor_formacao_compativel",
 }
 
 
@@ -710,3 +712,84 @@ class TestWorkingDaysBetween:
     def test_two_weeks(self):
         # Mon to Mon+14 = 10 working days
         assert _working_days_between(date(2026, 4, 13), date(2026, 4, 27)) == 10
+
+
+# ---------------------------------------------------------------------------
+# Supervisor formação compatível (2026-04-22)
+# ---------------------------------------------------------------------------
+
+
+class TestSupervisorFormacaoCompativel:
+    """Soft block quando formação do supervisor não é afim a Design.
+
+    Regra: Art. 9 Lei 11.788/2008 + Art. 10 Res. CEPE 46/10. Quando ativa,
+    a coordenação deve pedir Declaração de Experiência do Supervisor
+    (form PROGRAD assinado pela chefia imediata).
+    """
+
+    def test_pass_when_design_grafico(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "Design Gráfico"}),
+        )
+        assert r.status == "pass"
+
+    def test_pass_when_arquitetura(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "Arquitetura e Urbanismo"}),
+        )
+        assert r.status == "pass"
+
+    def test_pass_case_insensitive_and_accent_insensitive(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "PUBLICIDADE"}),
+        )
+        assert r.status == "pass"
+        r2 = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "comunicação visual"}),
+        )
+        assert r2.status == "pass"
+
+    def test_soft_block_when_engenharia_civil(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(
+                vars={
+                    "formacao_supervisor": "Engenharia Civil",
+                    "nome_supervisor": "João Silva",
+                }
+            ),
+        )
+        assert r.status == "soft_block"
+        assert "Declaração de Experiência" in r.reason
+        assert "prograd.ufpr.br" in r.reason
+        assert "João Silva" in r.reason
+
+    def test_soft_block_when_ciencias_contabeis(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "Ciências Contábeis"}),
+        )
+        assert r.status == "soft_block"
+
+    def test_pass_when_formacao_missing(self):
+        """Sem dado extraído, não bloqueia — outros checkers cuidam."""
+        r = _invoke("supervisor_formacao_compativel", _make_ctx(vars={}))
+        assert r.status == "pass"
+
+    def test_pass_when_ux_design(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "UX Design Senior"}),
+        )
+        assert r.status == "pass"
+
+    def test_pass_when_fotografia(self):
+        r = _invoke(
+            "supervisor_formacao_compativel",
+            _make_ctx(vars={"formacao_supervisor": "Fotografia Profissional"}),
+        )
+        assert r.status == "pass"

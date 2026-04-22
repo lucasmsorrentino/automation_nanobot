@@ -252,6 +252,24 @@ _HORARIO_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Supervisor-specific regex — operate on TCE attachment text. The TCE PDF
+# from PROGRAD's form has a block with "Supervisor:" then separate fields
+# for name and "Formação:" / "Cargo:" / "Graduação:". Captures the text up
+# to the next label or newline.
+_SUPERVISOR_NOME_RE = re.compile(
+    r"(?:Supervisor(?:\s*\(?\s*a\s*\)?)?(?:\s+no\s+local\s+de\s+est[aá]gio)?)"
+    r"\s*[:\-]?\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç\s\.]{4,80}?)"
+    r"(?=\s*(?:\n|Forma[çc][aã]o|Cargo|Gradua[çc][aã]o|CPF|RG|Matr[ií]cula|$))",
+    re.IGNORECASE,
+)
+_SUPERVISOR_FORMACAO_RE = re.compile(
+    r"(?:Forma[çc][aã]o(?:\s+do\s+Supervisor)?|Gradua[çc][aã]o(?:\s+do\s+Supervisor)?"
+    r"|Cargo(?:\s+do\s+Supervisor)?|Profiss[aã]o)"
+    r"\s*[:\-]?\s*([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç][^\n\r]{3,100}?)"
+    r"(?=\s*(?:\n|CPF|RG|Matr[ií]cula|CREA|CAU|E-?mail|$))",
+    re.IGNORECASE,
+)
+
 # Aditivo-specific regex — operate on attachment text (PDF do Termo Aditivo).
 # Matches "Termo Aditivo nº 1", "ADITIVO Nº 02", "Aditivo 3".
 # The negative lookahead `(?!\s+AO\s)` prevents capturing the TCE number in
@@ -485,6 +503,14 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
             hh = int(m.group(1))
             mm = int(m.group(2) or 0)
             vars["jornada_horario_inicio"] = f"{hh:02d}:{mm:02d}"
+
+        m = _SUPERVISOR_NOME_RE.search(attach_text)
+        if m:
+            vars["nome_supervisor"] = " ".join(m.group(1).split()).strip().rstrip(".,;")
+
+        m = _SUPERVISOR_FORMACAO_RE.search(attach_text)
+        if m:
+            vars["formacao_supervisor"] = " ".join(m.group(1).split()).strip().rstrip(".,;")
 
     # Aditivo fields — numero_aditivo and data_termino_novo appear in the
     # Termo Aditivo PDF, sometimes echoed in the email body. Body wins when
