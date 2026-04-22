@@ -400,8 +400,14 @@ class GmailClient:
         """
         if not message_id:
             return "", []
-        # IMAP HEADER search is case-insensitive; quoting is handled by imaplib.
-        _, data = conn.search(None, "HEADER", "Message-ID", message_id)
+        # Gmail's IMAP rejects Message-IDs with '+' / '@' / '<' / '>' unless
+        # the value is explicitly quoted. ``imaplib`` only auto-quotes when
+        # the arg contains whitespace, so we quote manually (escaping any
+        # embedded double-quote or backslash). Use X-GM-RAW + rfc822msgid:
+        # — Gmail's native and most forgiving Message-ID search operator.
+        escaped = message_id.replace("\\", "\\\\").replace('"', '\\"')
+        query = f'rfc822msgid:"{escaped}"'
+        _, data = conn.search(None, "X-GM-RAW", f'"{query}"')
         msns = data[0].split() if data and data[0] else []
         if not msns:
             return "", []

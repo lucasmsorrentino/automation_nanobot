@@ -273,13 +273,21 @@ class _FakeIMAP:
         return ("OK", [b"1"])
 
     def search(self, _charset, *criteria):
-        # Two call shapes we need to support:
-        #   search(None, "HEADER", "Message-ID", "<abc>")
+        # Call shapes we need to support:
+        #   search(None, "X-GM-RAW", '"rfc822msgid:\"<abc>\""')
         #   search(None, "X-GM-THRID", "12345")
-        if criteria and criteria[0] == "HEADER" and criteria[1] == "Message-ID":
-            msg_id = criteria[2]
-            matches = [msn for msn, m in self.messages.items() if m.get("message_id") == msg_id]
-            return ("OK", [b" ".join(matches) if matches else b""])
+        if criteria and criteria[0] == "X-GM-RAW":
+            raw = criteria[1]
+            # Strip outer quotes + leading rfc822msgid: + inner quotes
+            stripped = raw.strip('"')
+            if stripped.startswith("rfc822msgid:"):
+                msg_id = stripped[len("rfc822msgid:"):].strip('"')
+                msg_id = msg_id.replace('\\"', '"').replace("\\\\", "\\")
+                matches = [
+                    msn for msn, m in self.messages.items() if m.get("message_id") == msg_id
+                ]
+                return ("OK", [b" ".join(matches) if matches else b""])
+            return ("OK", [b""])
         if criteria and criteria[0] == "X-GM-THRID":
             thrid = criteria[1].encode() if isinstance(criteria[1], str) else criteria[1]
             matches = [msn for msn, tid in self.thread_by_msn.items() if tid == thrid]
@@ -368,6 +376,24 @@ class TestThreadLastSender:
         # No messages match — search returns empty.
         client = _make_client_with_fake(fake)
         assert client.thread_last_sender("<unknown@example.com>") == ""
+
+    def test_message_id_with_plus_and_at_is_quoted_safely(self):
+        """Regression for Gmail IMAP 'BAD Could not parse command' when a
+        Message-ID with '+' or '@' is passed unquoted. We wrap in
+        X-GM-RAW rfc822msgid:"..." which handles special chars.
+        """
+        tricky_id = "<CAB+deadbeef-123@mail.gmail.com>"
+        fake = _FakeIMAP()
+        fake.messages = {
+            b"7": {
+                "message_id": tricky_id,
+                "from": "design.grafico@ufpr.br",
+                "date": "Tue, 22 Apr 2026 10:00:00 +0000",
+            },
+        }
+        fake.thread_by_msn = {b"7": b"321"}
+        client = _make_client_with_fake(fake)
+        assert client.thread_last_sender(tricky_id) == "design.grafico@ufpr.br"
 
     def test_student_replied_last_returns_student(self):
         fake = _FakeIMAP()
