@@ -278,13 +278,18 @@ class _FakeIMAP:
         #   search(None, "X-GM-THRID", "12345")
         if criteria and criteria[0] == "X-GM-RAW":
             raw = criteria[1]
-            # Strip outer quotes + leading rfc822msgid: + inner quotes
             stripped = raw.strip('"')
             if stripped.startswith("rfc822msgid:"):
-                msg_id = stripped[len("rfc822msgid:"):].strip('"')
-                msg_id = msg_id.replace('\\"', '"').replace("\\\\", "\\")
+                needle = stripped[len("rfc822msgid:"):]
+                needle = needle.replace('\\"', '"').replace("\\\\", "\\")
+
+                def _norm(s: str) -> str:
+                    return s.strip().strip("<>")
+
                 matches = [
-                    msn for msn, m in self.messages.items() if m.get("message_id") == msg_id
+                    msn
+                    for msn, m in self.messages.items()
+                    if _norm(m.get("message_id", "")) == _norm(needle)
                 ]
                 return ("OK", [b" ".join(matches) if matches else b""])
             return ("OK", [b""])

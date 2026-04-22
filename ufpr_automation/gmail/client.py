@@ -400,14 +400,18 @@ class GmailClient:
         """
         if not message_id:
             return "", []
-        # Gmail's IMAP rejects Message-IDs with '+' / '@' / '<' / '>' unless
-        # the value is explicitly quoted. ``imaplib`` only auto-quotes when
-        # the arg contains whitespace, so we quote manually (escaping any
-        # embedded double-quote or backslash). Use X-GM-RAW + rfc822msgid:
-        # — Gmail's native and most forgiving Message-ID search operator.
-        escaped = message_id.replace("\\", "\\\\").replace('"', '\\"')
-        query = f'rfc822msgid:"{escaped}"'
-        _, data = conn.search(None, "X-GM-RAW", f'"{query}"')
+        # imaplib sends args as-is without auto-quoting when they lack
+        # whitespace. Gmail's IMAP then rejects Message-IDs like
+        # "<CAB+…@mail.gmail.com>" because the bare angle brackets and
+        # '+' aren't valid IMAP atom characters. Use Gmail's X-GM-RAW
+        # extension with rfc822msgid: — it accepts the raw id and the
+        # whole query is a single quoted IMAP literal.
+        stripped = message_id.strip().strip("<>")
+        # Escape embedded " or \\ inside the id (extremely rare).
+        escaped = stripped.replace("\\", "\\\\").replace('"', '\\"')
+        # Pre-quote the whole X-GM-RAW argument as an IMAP string.
+        quoted_query = f'"rfc822msgid:{escaped}"'
+        _, data = conn.search(None, "X-GM-RAW", quoted_query)
         msns = data[0].split() if data and data[0] else []
         if not msns:
             return "", []
