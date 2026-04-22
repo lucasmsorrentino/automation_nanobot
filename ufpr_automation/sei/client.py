@@ -323,11 +323,17 @@ class SEIClient:
 
 
 def extract_sei_process_number(text: str) -> str | None:
-    """Extract a SEI process number from text.
+    """Extract a **UFPR** SEI process number from text.
 
-    Looks for pattern: XXXXX.XXXXXX/XXXX-XX (5 digits, dot, 6 digits, slash, 4-XX)
+    UFPR uses prefix ``23075.*``. Processes from other organs (IFPR=23411,
+    outras IFES) têm o mesmo layout mas NÃO são pesquisáveis no SEI UFPR —
+    restringimos o regex pra evitar que um nº de outra instituição no corpo
+    do email seja interpretado como se fosse nosso (regressão identificada
+    no smoke 2026-04-22, processo 23411.005778/2026-16 era IFPR).
+
+    Looks for pattern: ``23075.XXXXXX/YYYY-ZZ``.
     """
-    match = re.search(r"\d{5}\.\d{6}/\d{4}-\d{2}", text)
+    match = re.search(r"23075\.\d{6}/\d{4}-\d{2}", text)
     return match.group(0) if match else None
 
 

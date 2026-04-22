@@ -51,6 +51,18 @@ class TestExtractSEIProcessNumber:
         text = "Ref: TCE n. 123 (SEI 23075.654321/2025-99) do aluno"
         assert extract_sei_process_number(text) == "23075.654321/2025-99"
 
+    def test_ignores_non_ufpr_prefix(self):
+        """Regressão 2026-04-22: email mencionou 23411.005778/2026-16 (IFPR),
+        pipeline tentou buscar no SEI UFPR e encontrou um stub vazio.
+        Agora só aceita 23075 (UFPR).
+        """
+        assert extract_sei_process_number("IFPR 23411.005778/2026-16") is None
+        assert extract_sei_process_number("MEC 23000.123456/2026-11") is None
+
+    def test_picks_ufpr_among_multiple_organs(self):
+        text = "Encaminhado de IFPR 23411.999999/2025-00 para UFPR 23075.111111/2026-22"
+        assert extract_sei_process_number(text) == "23075.111111/2026-22"
+
 
 class TestExtractGRR:
     def test_grr_with_prefix(self):

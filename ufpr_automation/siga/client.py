@@ -66,7 +66,21 @@ class SIGAClient:
         return False
 
     async def _navigate_to_student(self, grr: str) -> bool:
-        """Navigate sidebar Discentes > Consultar, search by GRR, click first result."""
+        """Navigate sidebar Discentes > Consultar, search by GRR, click first result.
+
+        **Fix 2026-04-22**: a lista de discentes usa paginação server-side
+        (default: 20 por página) e o campo ``input[placeholder='Nome ou
+        Documento']`` filtra **client-side** apenas sobre a página carregada
+        — se o aluno estiver além da 20ª linha, o filtro não acha.
+
+        Mitigação: antes do filter, bumpar o combo de ``Items por página``
+        para 300 (máximo observado ao vivo). 300 cobre o volume de DG
+        (~163 ativos + egressos) com folga. Também tenta trocar o combo
+        ``comboAcesso`` no topo da página: o SIGA persiste o último valor
+        de sessão para sessão, e alunos de outros contextos podem ficar
+        ocultos. Se trocar profile não for seguro (pode quebrar outras
+        telas), mantemos o profile atual e só ajustamos a paginação.
+        """
         grr_clean = re.sub(r"[^0-9]", "", grr)
         logger.info("SIGA: consultando aluno GRR%s", grr_clean)
 
@@ -76,7 +90,22 @@ class SIGAClient:
 
         consultar = self._page.locator("a:has-text('Consultar')").first
         await consultar.click()
-        await self._page.wait_for_load_state("networkidle", timeout=15000)
+        await self._page.wait_for_load_state("domcontentloaded", timeout=15000)
+        await asyncio.sleep(1.5)
+
+        # Per-page combo (first <select> on the page, options 10/20/50/100/300).
+        # Saltamos para 300 para que o filtro client-side do campo abaixo veja
+        # a lista toda (ou quase toda) do perfil atual.
+        try:
+            page_size_combo = self._page.locator("select").first
+            if await page_size_combo.count() > 0:
+                options = await page_size_combo.locator("option").all_text_contents()
+                if any("300" in o for o in options):
+                    await page_size_combo.select_option("300")
+                    await asyncio.sleep(2)
+                    logger.debug("SIGA: paginacao ajustada para 300/pagina")
+        except Exception as e:
+            logger.debug("SIGA: falha ao ajustar paginacao (nao-fatal): %s", e)
 
         search_field = self._page.locator("input[placeholder*='Nome ou Documento']").first
         await search_field.fill(grr_clean)
@@ -84,11 +113,15 @@ class SIGAClient:
 
         first_link = self._page.locator("table tbody tr a").first
         if await first_link.count() == 0:
-            logger.warning("SIGA: aluno GRR%s nao encontrado", grr_clean)
+            logger.warning(
+                "SIGA: aluno GRR%s nao encontrado (verificar comboAcesso — "
+                "profile atual pode nao conter este aluno)",
+                grr_clean,
+            )
             return False
 
         await first_link.click()
-        await self._page.wait_for_load_state("networkidle", timeout=15000)
+        await self._page.wait_for_load_state("domcontentloaded", timeout=15000)
         return True
 
     async def _click_tab(self, tab_text: str, pane_id: str) -> None:
