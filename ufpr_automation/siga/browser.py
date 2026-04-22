@@ -66,11 +66,20 @@ async def is_logged_in(page: Page) -> bool:
 
     Positive indicators: "Sair" link present AND sidebar menu with
     "Discentes" visible (rules out the public/visitante page).
+
+    NOTE: does not wait for ``networkidle`` — SIGA is a Vue.js SPA that
+    polls XHRs continuously and rarely reaches idle. We wait for the
+    marker element instead.
     """
     try:
-        await page.wait_for_load_state("networkidle", timeout=10000)
+        discentes = page.locator("a:has-text('Discentes')").first
+        # Short element-based wait: SPA may still be hydrating.
+        try:
+            await discentes.wait_for(state="visible", timeout=3000)
+        except Exception:
+            # Not visible yet — fall back to checking both markers by count.
+            pass
         sair = page.locator("text=Sair")
-        discentes = page.locator("a:has-text('Discentes')")
         if await sair.count() > 0 and await discentes.count() > 0:
             return True
         return False
@@ -102,21 +111,31 @@ async def auto_login(page: Page) -> bool:
     try:
         logger.info("SIGA: login via Portal de Sistemas %s", PORTAL_URL)
         await page.goto(PORTAL_URL, wait_until="domcontentloaded")
-        await page.wait_for_load_state("networkidle", timeout=20000)
-
-        url = page.url.lower()
-        if "login" in url or "auth" in url or "autenticacao" in url:
+        # Portal redireciona para Keycloak se nao ha sessao ativa; caso
+        # contrario cai direto no role picker. Detecta o estado aguardando
+        # seletores concretos um por vez (locator com virgula + text= NAO
+        # funciona — a string e parseada como CSS union e ``text=...``
+        # nao e CSS valido, o wait resolve instantaneo sem bloqueio util).
+        try:
+            await page.locator("input#username").first.wait_for(
+                state="visible", timeout=15000
+            )
+            # Keycloak login visivel — preencher credenciais.
             logger.info("SIGA: preenchendo credenciais Keycloak")
-            user_field = page.locator("input#username").first
-            await user_field.wait_for(state="visible", timeout=10000)
-            await user_field.fill(SIGA_USERNAME)
-
-            pass_field = page.locator("input#password").first
-            await pass_field.fill(SIGA_PASSWORD)
-
-            submit = page.locator("input#kc-login").first
-            await submit.click()
-            await page.wait_for_load_state("networkidle", timeout=20000)
+            await page.locator("input#username").first.fill(SIGA_USERNAME)
+            await page.locator("input#password").first.fill(SIGA_PASSWORD)
+            await page.locator("input#kc-login").first.click()
+            # Apos submit, aguardar o role picker aparecer.
+            try:
+                await page.locator(f"text={SIGA_ROLE_TEXT}").first.wait_for(
+                    state="visible", timeout=25000
+                )
+            except Exception:
+                await page.wait_for_load_state("load", timeout=5000)
+        except Exception:
+            # Sem campo de username — sessao salva provavelmente levou
+            # direto ao role picker. Segue para o proximo passo.
+            pass
 
         # Select the Coordenação role card
         logger.info("SIGA: selecionando papel '%s'", SIGA_ROLE_TEXT)
@@ -136,8 +155,20 @@ async def auto_login(page: Page) -> bool:
                 logger.error("SIGA: papel '%s' nao encontrado no portal", SIGA_ROLE_TEXT)
                 return False
 
-        await page.wait_for_load_state("networkidle", timeout=20000)
-        await asyncio.sleep(2)
+        # Post-card-click: Keycloak → SIGA redirect boots a Vue.js SPA that
+        # fires continuous XHR/polling and never reaches ``networkidle``.
+        # Wait instead for the sidebar "Discentes" link, which is the
+        # canonical marker of the authenticated SIGA home (matches the
+        # selector used by ``is_logged_in``).
+        logger.info("SIGA: aguardando carregamento da home autenticada")
+        try:
+            await page.locator("a:has-text('Discentes')").first.wait_for(
+                state="visible", timeout=30000
+            )
+        except Exception:
+            logger.warning(
+                "SIGA: marcador 'Discentes' nao apareceu em 30s — seguindo para verificacao final"
+            )
 
         logged_in = await is_logged_in(page)
         if logged_in:

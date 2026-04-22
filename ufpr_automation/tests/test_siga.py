@@ -127,9 +127,12 @@ def _setup_client(
     enrollment: EnrollmentInfo | None = ...,
     integ: dict | None = None,
     historico: dict | None = None,
+    logged_in: bool = True,
 ) -> SIGAClient:
     """Set up a fully mocked SIGAClient."""
     client = _mk_client()
+
+    client._ensure_logged_in = AsyncMock(return_value=logged_in)
 
     if student is ...:
         student = StudentStatus(grr="GRR20191234", situacao=situacao)
@@ -340,3 +343,161 @@ class TestGetIntegralizacao:
         client._navigate_to_student = AsyncMock(return_value=False)
         result = await client.get_integralizacao(grr="GRR20191234")
         assert result == {}
+
+
+# ----------------------------------------------------------------------
+# Regression: login flow must not block on networkidle for SPA pages
+# ----------------------------------------------------------------------
+
+
+class TestAutoLoginWaitStrategy:
+    """Regression tests for the 2026-04-22 SIGA login bug.
+
+    The SIGA home is a Vue.js SPA whose XHR/polling never lets the page
+    reach ``networkidle`` within 20s, causing ``auto_login`` to time out
+    even when the login succeeded. The fix replaces the post-card-click
+    ``wait_for_load_state('networkidle', 20000)`` with an element-based
+    wait on the "Discentes" sidebar link. These tests pin that contract.
+    """
+
+    @pytest.mark.asyncio
+    async def test_auto_login_does_not_wait_for_networkidle_after_role_click(self, monkeypatch):
+        """After clicking the role card, auto_login must wait for the
+        'Discentes' sidebar link — NOT for networkidle."""
+        from ufpr_automation.siga import browser as siga_browser
+
+        # Force credentials to look configured.
+        monkeypatch.setattr(siga_browser, "has_credentials", lambda: True)
+
+        page = AsyncMock()
+        # Simulate already-authenticated portal (no login fields needed);
+        # goto leaves us on a URL without 'login'/'auth'/'autenticacao'.
+        page.url = "https://sistemas.ufpr.br/central/"
+
+        # locator() is sync in Playwright, so use MagicMock here.
+        from unittest.mock import MagicMock
+
+        locators_created: list[str] = []
+
+        def make_locator(selector: str):
+            locators_created.append(selector)
+            loc = MagicMock()
+            first = MagicMock()
+            loc.first = first
+            first.wait_for = AsyncMock()
+            first.click = AsyncMock()
+            first.text_content = AsyncMock(return_value="")
+            first.is_visible = AsyncMock(return_value=True)
+            loc.count = AsyncMock(return_value=1)
+            first.count = AsyncMock(return_value=1)
+            # nth() returns a child locator with click/text_content
+            child = MagicMock()
+            child.click = AsyncMock()
+            child.text_content = AsyncMock(return_value="")
+            loc.nth = MagicMock(return_value=child)
+            return loc
+
+        page.locator = MagicMock(side_effect=make_locator)
+        page.goto = AsyncMock()
+        page.wait_for_load_state = AsyncMock()
+
+        # Patch is_logged_in to report success so auto_login returns True.
+        async def fake_is_logged_in(_page):
+            return True
+
+        monkeypatch.setattr(siga_browser, "is_logged_in", fake_is_logged_in)
+
+        ok = await siga_browser.auto_login(page)
+        assert ok is True
+
+        # Regression pin: after the role card is selected, we wait on
+        # the 'Discentes' sidebar marker, not on networkidle.
+        assert any(
+            "Discentes" in sel for sel in locators_created
+        ), f"expected a locator('a:has-text(\"Discentes\")') call, got: {locators_created}"
+
+        # The only wait_for_load_state calls allowed are 'load'
+        # (short fallback for portal/keycloak), never 'networkidle'.
+        for call in page.wait_for_load_state.await_args_list:
+            args, kwargs = call
+            state = args[0] if args else kwargs.get("state")
+            assert state != "networkidle", (
+                "auto_login must not wait_for_load_state('networkidle') — "
+                "SIGA SPA never reaches idle"
+            )
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_does_not_wait_for_networkidle(self, monkeypatch):
+        """is_logged_in must detect the session via element-based wait,
+        not via wait_for_load_state('networkidle')."""
+        from unittest.mock import MagicMock
+
+        from ufpr_automation.siga import browser as siga_browser
+
+        page = AsyncMock()
+
+        def make_locator(_selector: str):
+            loc = MagicMock()
+            first = MagicMock()
+            first.wait_for = AsyncMock()
+            first.count = AsyncMock(return_value=1)
+            loc.first = first
+            loc.count = AsyncMock(return_value=1)
+            return loc
+
+        page.locator = MagicMock(side_effect=make_locator)
+        page.wait_for_load_state = AsyncMock()
+
+        result = await siga_browser.is_logged_in(page)
+        assert result is True
+
+        # Regression pin: is_logged_in must not call networkidle.
+        for call in page.wait_for_load_state.await_args_list:
+            args, kwargs = call
+            state = args[0] if args else kwargs.get("state")
+            assert state != "networkidle"
+
+
+class TestEnsureLoggedInGuard:
+    """Regression: client methods must short-circuit when SIGA is not
+    authenticated, returning a clear signal instead of letting Playwright
+    timeouts bubble up."""
+
+    @pytest.mark.asyncio
+    async def test_validate_internship_eligibility_returns_not_authenticated(self):
+        client = _setup_client(logged_in=False)
+        result = await client.validate_internship_eligibility("GRR20191234")
+        assert result.eligible is False
+        assert result.reasons == ["SIGA nao autenticado"]
+        # check_student_status must not be invoked when the guard trips.
+        client.check_student_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_historico_returns_empty_when_not_authenticated(self, monkeypatch):
+        from ufpr_automation.siga import browser as siga_browser
+
+        async def fake_is_logged_in(_page):
+            return False
+
+        monkeypatch.setattr(siga_browser, "is_logged_in", fake_is_logged_in)
+
+        client = _mk_client()
+        client._navigate_to_student = AsyncMock(return_value=True)
+        result = await client.get_historico(grr="GRR20191234")
+        assert result == {}
+        client._navigate_to_student.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_integralizacao_returns_empty_when_not_authenticated(self, monkeypatch):
+        from ufpr_automation.siga import browser as siga_browser
+
+        async def fake_is_logged_in(_page):
+            return False
+
+        monkeypatch.setattr(siga_browser, "is_logged_in", fake_is_logged_in)
+
+        client = _mk_client()
+        client._navigate_to_student = AsyncMock(return_value=True)
+        result = await client.get_integralizacao(grr="GRR20191234")
+        assert result == {}
+        client._navigate_to_student.assert_not_called()

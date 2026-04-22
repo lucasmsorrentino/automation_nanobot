@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
+from ufpr_automation.siga import browser as siga_browser
 from ufpr_automation.siga.models import EligibilityResult, EnrollmentInfo, StudentStatus
 from ufpr_automation.utils.logging import logger
 
@@ -49,6 +50,20 @@ class SIGAClient:
 
     def __init__(self, page: Page):
         self._page = page
+
+    async def _ensure_logged_in(self) -> bool:
+        """Guard: abort early if the SIGA session is not authenticated.
+
+        Without this, every query method would first hit a 15s
+        ``wait_for_load_state("networkidle")`` inside ``_navigate_to_student``
+        (unreachable when not logged in), wasting time and surfacing a
+        confusing Playwright timeout instead of a clear 'not authenticated'
+        signal.
+        """
+        if await siga_browser.is_logged_in(self._page):
+            return True
+        logger.warning("SIGA: sessao nao autenticada — abortando consulta")
+        return False
 
     async def _navigate_to_student(self, grr: str) -> bool:
         """Navigate sidebar Discentes > Consultar, search by GRR, click first result."""
@@ -112,6 +127,8 @@ class SIGAClient:
     async def check_student_status(self, grr: str) -> StudentStatus | None:
         """Look up a student's academic status by GRR."""
         try:
+            if not await self._ensure_logged_in():
+                return None
             if not await self._navigate_to_student(grr):
                 return None
 
@@ -137,6 +154,8 @@ class SIGAClient:
         reprovacoes_por_frequencia, reprovacoes_por_nota.
         """
         if grr:
+            if not await self._ensure_logged_in():
+                return {}
             if not await self._navigate_to_student(grr):
                 return {}
 
@@ -201,6 +220,8 @@ class SIGAClient:
         nao_vencidas (list of discipline siglas not yet passed).
         """
         if grr:
+            if not await self._ensure_logged_in():
+                return {}
             if not await self._navigate_to_student(grr):
                 return {}
 
@@ -312,6 +333,10 @@ class SIGAClient:
         result = EligibilityResult()
         reasons: list[str] = []
         warnings: list[str] = []
+
+        if not await self._ensure_logged_in():
+            result.reasons = ["SIGA nao autenticado"]
+            return result
 
         student = await self.check_student_status(grr)
         if not student:
