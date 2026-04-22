@@ -471,6 +471,153 @@ def extract_grr(text: str) -> str | None:
     return None
 
 
+# Institutional tokens — ANY token of a candidate name appearing in this
+# set disqualifies the whole candidate. More robust than phrase-level
+# stopwords because multi-word regex slices ("ARTES COMUNICACAO",
+# "UNIVERSIDADE FEDERAL", "SETOR DE ARTES") all share these tokens.
+# Portuguese-normalized (no accents) — we lowercase+strip accents before
+# comparing.
+_INSTITUTIONAL_TOKENS = {
+    "UNIVERSIDADE",
+    "FEDERAL",
+    "PARANA",
+    "SETOR",
+    "ARTES",
+    "COMUNICACAO",
+    "DESIGN",
+    "GRAFICO",
+    "PRODUTO",
+    "CURSO",
+    "COORDENACAO",
+    "COORDENADORIA",
+    "SECRETARIA",
+    "MINISTERIO",
+    "EDUCACAO",
+    "REITORIA",
+    "PROREITORIA",
+    "DEPARTAMENTO",
+    "INSTITUTO",
+    "CAMPUS",
+    "GRADUACAO",
+    "ENSINO",
+    "PESQUISA",
+    "EXTENSAO",
+    "TERMO",
+    "COMPROMISSO",
+    "ADITIVO",
+    "RESCISAO",
+    "ESTAGIO",
+    "ESTAGIOS",
+    "OBRIGATORIO",
+    "OBRIGATORIOS",
+    "CONCEDENTE",
+    "ESTAGIARIO",
+    "ESTAGIARIA",
+    "PROCESSO",
+    "NUMERO",
+    "TCE",
+    "UFPR",
+    "CIEE",
+}
+
+
+def _strip_accents(s: str) -> str:
+    import unicodedata
+
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+    )
+
+# "Aluno:", "Estagiário:", "Estagiária:", "Estagiario(a):" — explicit label.
+_NAME_LABEL_RE = re.compile(
+    r"(?:aluno|estagi[aá]ri[oa](?:\s*\(\s*a\s*\))?)\s*[:\-]\s*"
+    r"([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇa-záéíóúâêîôûàãõç\s]{4,80}?)"
+    r"(?=\s*(?:\n|$|[,;\.]|CPF|GRR|RG|matr[ií]cula))",
+    re.IGNORECASE,
+)
+
+# ALL-CAPS multi-word sequence (TCE PDFs capitalize names). At least 2 words,
+# each ≥3 letters. Allow accented letters.
+_ALLCAPS_NAME_RE = re.compile(
+    r"\b([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ]{3,}(?:[ \t]+[A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ]{3,}){1,4})\b"
+)
+
+
+def _is_stopword_name(candidate: str) -> bool:
+    """Drop candidate if any of its tokens looks institutional.
+
+    Accents are stripped before comparison (``PARANÁ`` → ``PARANA``) so
+    the set matches both accented PDFs and ASCII-flattened email headers.
+    """
+    norm = _strip_accents(candidate.upper())
+    tokens = re.findall(r"[A-Z]+", norm)
+    return any(t in _INSTITUTIONAL_TOKENS for t in tokens)
+
+
+def extract_candidate_names(text: str) -> list[str]:
+    """Extract likely student names from email body + attachment text.
+
+    Returns an ordered list of candidates, best-first, de-duplicated. Meant
+    to feed the AE cascade after AE-GRR fails — sometimes the secretary
+    entered the aluno's name (not the GRR) into the AE Observação field, so
+    AE search by name is the only way to hit it.
+
+    Priority:
+        1. Label-based: text after ``Aluno:``, ``Estagiário(a):``, etc.
+        2. ALL-CAPS multi-word sequences (typical shape of TCE PDFs).
+
+    Stopword filter drops organizational strings ("UNIVERSIDADE FEDERAL DO
+    PARANA", "COORDENACAO", "TERMO DE COMPROMISSO", etc.) that also match
+    the all-caps heuristic but aren't people.
+
+    Args:
+        text: combined email body + attachment text.
+
+    Returns:
+        Up to 3 candidate names (empty if nothing looked name-like).
+    """
+    if not text:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _push(name: str) -> None:
+        cleaned = re.sub(r"\s+", " ", name.strip())
+        if len(cleaned) < 5:
+            return
+        if _is_stopword_name(cleaned):
+            return
+        key = cleaned.upper()
+        if key in seen:
+            return
+        out.append(cleaned)
+        seen.add(key)
+
+    for m in _NAME_LABEL_RE.finditer(text):
+        _push(m.group(1))
+
+    for m in _ALLCAPS_NAME_RE.finditer(text):
+        _push(m.group(1))
+
+    return out[:3]
+
+
+def shorten_name_first_last(name: str) -> str:
+    """Reduce ``"MATHEUS KLEINE ALBERS"`` to ``"MATHEUS ALBERS"``.
+
+    Many secretaries type the aluno's name into AE Observação as just
+    first+last (dropping middle names). Searching the full captured name
+    in AE misses those entries; searching first+last catches them.
+
+    If the name has ≤2 words, returns it unchanged. Returns empty string
+    for empty input.
+    """
+    parts = [p for p in (name or "").strip().split() if p]
+    if len(parts) <= 2:
+        return " ".join(parts)
+    return f"{parts[0]} {parts[-1]}"
+
+
 def extract_year_from_numero(numero: str) -> int | None:
     """Extract the 4-digit year from a SEI process number.
 

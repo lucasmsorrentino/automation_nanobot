@@ -868,10 +868,14 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
     if not emails:
         return {"sei_contexts": {}}
 
-    from ufpr_automation.sei.client import extract_grr, extract_sei_process_number
+    from ufpr_automation.sei.client import (
+        extract_candidate_names,
+        extract_grr,
+        extract_sei_process_number,
+    )
 
-    # stable_id -> {"mode": "numero" | "grr", "value": str}
-    candidates: dict[str, dict[str, str]] = {}
+    # stable_id -> {"mode": "numero" | "grr" | "names", "value": str, "names": list[str]}
+    candidates: dict[str, dict] = {}
     for email in emails:
         cls = classifications.get(email.stable_id)
         if not cls or cls.categoria != "Estágios":
@@ -885,8 +889,20 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
             candidates[email.stable_id] = {"mode": "numero", "value": proc_num}
             continue
         grr = extract_grr(texto)
+        names = extract_candidate_names(texto)
         if grr:
-            candidates[email.stable_id] = {"mode": "grr", "value": grr}
+            candidates[email.stable_id] = {
+                "mode": "grr",
+                "value": grr,
+                "names": names,
+            }
+        elif names:
+            # No GRR but we have name candidates — try AE by name only.
+            candidates[email.stable_id] = {
+                "mode": "names",
+                "value": names[0],
+                "names": names,
+            }
 
     if not candidates:
         return {"sei_contexts": {}}
@@ -933,32 +949,54 @@ async def _consult_sei_async(
                 return results
             await save_session_state(context)
 
+        from ufpr_automation.sei.client import shorten_name_first_last
+
         client = SEIClient(page)
         for stable_id, info in candidates.items():
             mode = info.get("mode")
             value = info.get("value", "")
+            names: list[str] = info.get("names", []) or []
             processo = None
             confidence = 1.0
             all_candidates: list = []
             try:
                 if mode == "numero":
                     processo = await client.search_process(value)
-                elif mode == "grr":
-                    # Path #2: Acompanhamento Especial (curado por unit).
-                    ae_candidates = await client.find_in_acompanhamento_especial(
-                        value
-                    )
-                    if ae_candidates:
-                        all_candidates = ae_candidates
-                        mode = "ae"  # record which path resolved it
-                        if len(ae_candidates) == 1:
-                            processo = ae_candidates[0]
+                elif mode in {"grr", "names"}:
+                    # Build AE search-term order: GRR first (if any), then full
+                    # name candidates, then shortened first+last form. Each
+                    # term tried in AE until one returns hits.
+                    terms: list[tuple[str, str]] = []
+                    if mode == "grr":
+                        terms.append((value, "grr"))
+                    for name in names:
+                        terms.append((name, "name_full"))
+                        short = shorten_name_first_last(name)
+                        if short and short.upper() != name.upper():
+                            terms.append((short, "name_short"))
+
+                    ae_hit_term = None
+                    ae_hit_kind = None
+                    for term, kind in terms:
+                        ae_candidates = await client.find_in_acompanhamento_especial(
+                            term
+                        )
+                        if ae_candidates:
+                            all_candidates = ae_candidates
+                            ae_hit_term = term
+                            ae_hit_kind = kind
+                            break
+
+                    if ae_hit_term is not None:
+                        mode = f"ae_{ae_hit_kind}"  # "ae_grr" | "ae_name_full" | "ae_name_short"
+                        if len(all_candidates) == 1:
+                            processo = all_candidates[0]
                         else:
                             processo, confidence = select_best_processo(
-                                ae_candidates, grr_hint=value
+                                all_candidates, grr_hint=value if info.get("mode") == "grr" else ""
                             )
-                    else:
-                        # Path #3: Pesquisa Rápida geral (fallback).
+                    elif info.get("mode") == "grr":
+                        # Path #3: Pesquisa Rápida geral (fallback GRR only).
                         all_candidates = await client.find_processes_by_grr(value)
                         if len(all_candidates) == 1:
                             processo = all_candidates[0]
@@ -1114,7 +1152,11 @@ def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
     if classification is None or classification.categoria != "Estágios":
         return None
 
-    from ufpr_automation.sei.client import extract_grr, extract_sei_process_number
+    from ufpr_automation.sei.client import (
+        extract_candidate_names,
+        extract_grr,
+        extract_sei_process_number,
+    )
 
     text = f"{email.subject} {email.body or email.preview}"
     for att in email.attachments:
@@ -1123,12 +1165,16 @@ def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
 
     proc_num = extract_sei_process_number(text)
     if proc_num:
-        info = {"mode": "numero", "value": proc_num}
+        info: dict = {"mode": "numero", "value": proc_num}
     else:
         grr = extract_grr(text)
-        if not grr:
+        names = extract_candidate_names(text)
+        if grr:
+            info = {"mode": "grr", "value": grr, "names": names}
+        elif names:
+            info = {"mode": "names", "value": names[0], "names": names}
+        else:
             return None
-        info = {"mode": "grr", "value": grr}
 
     try:
         from ufpr_automation.sei.browser import has_credentials as sei_has_credentials

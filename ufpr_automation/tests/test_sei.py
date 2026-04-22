@@ -9,10 +9,12 @@ import pytest
 from ufpr_automation.graphrag.seed import _compose_despacho
 from ufpr_automation.sei.client import (
     SEIClient,
+    extract_candidate_names,
     extract_grr,
     extract_sei_process_number,
     extract_year_from_numero,
     select_best_processo,
+    shorten_name_first_last,
 )
 from ufpr_automation.sei.models import DocumentoSEI, ProcessoSEI
 
@@ -466,3 +468,92 @@ class TestFindInAcompanhamentoEspecial:
         assert len(procs) == 1
         assert procs[0].numero == "23075.011886/2026-96"
         assert procs[0].tipo == "Estágio não obrigatório"
+
+
+# ---------------------------------------------------------------------------
+# Name extraction for AE-by-name cascade (2026-04-22, GRR20215550 smoke)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractCandidateNames:
+    """Heurística de captura de nome do aluno para busca AE.
+
+    Motivação: smoke 2026-04-22 mostrou processo AE com Observação 'Matheus
+    Albers' (nome, não GRR). Preciso extrair nomes do texto pra tentar AE
+    com o nome quando busca por GRR não retornar.
+    """
+
+    def test_labeled_estagiario(self):
+        text = "Estagiário(a): MARLON HENRIQUE GOMES FERNANDES\nGRR: GRR20223876"
+        names = extract_candidate_names(text)
+        assert "MARLON HENRIQUE GOMES FERNANDES" in names
+
+    def test_labeled_aluno(self):
+        text = "Aluno: Matheus Kleine Albers\nCPF: 123.456.789-00"
+        names = extract_candidate_names(text)
+        # Sei-insensitive lookup
+        norm = [n.upper() for n in names]
+        assert "MATHEUS KLEINE ALBERS" in norm
+
+    def test_allcaps_from_tce(self):
+        text = "TERMO DE COMPROMISSO DE ESTÁGIO\nEstagiário: MATHEUS KLEINE ALBERS"
+        names = extract_candidate_names(text)
+        assert any("MATHEUS KLEINE ALBERS" in n.upper() for n in names)
+
+    def test_rejects_organizational_stopwords(self):
+        """'UNIVERSIDADE FEDERAL DO PARANA', 'COORDENACAO' etc. são all-caps
+        mas não são nomes de pessoa — devem ser filtrados."""
+        text = (
+            "UNIVERSIDADE FEDERAL DO PARANA\n"
+            "SETOR DE ARTES COMUNICACAO E DESIGN\n"
+            "COORDENACAO DO CURSO DE DESIGN GRAFICO\n"
+        )
+        names = extract_candidate_names(text)
+        assert names == []
+
+    def test_empty_input(self):
+        assert extract_candidate_names("") == []
+        assert extract_candidate_names(None) == []  # type: ignore[arg-type]
+
+    def test_deduplicates(self):
+        """Mesmo nome em label + ALL-CAPS não aparece 2 vezes."""
+        text = "Estagiário: MARLON HENRIQUE\nDetalhes: MARLON HENRIQUE assinou ontem."
+        names = extract_candidate_names(text)
+        count = sum(1 for n in names if n.upper() == "MARLON HENRIQUE")
+        assert count == 1
+
+    def test_caps_at_3_candidates(self):
+        text = "\n".join(
+            [
+                "ALUNO UM DOIS",
+                "OUTRO NOME TRES",
+                "TERCEIRO ALUNO QUATRO",
+                "QUARTO ALUNO CINCO",
+                "QUINTO ALUNO SEIS",
+            ]
+        )
+        names = extract_candidate_names(text)
+        assert len(names) <= 3
+
+
+class TestShortenNameFirstLast:
+    def test_three_words_drops_middle(self):
+        assert shorten_name_first_last("MATHEUS KLEINE ALBERS") == "MATHEUS ALBERS"
+
+    def test_four_words_keeps_only_first_and_last(self):
+        assert (
+            shorten_name_first_last("MARLON HENRIQUE GOMES FERNANDES")
+            == "MARLON FERNANDES"
+        )
+
+    def test_two_words_unchanged(self):
+        assert shorten_name_first_last("Matheus Albers") == "Matheus Albers"
+
+    def test_one_word_unchanged(self):
+        assert shorten_name_first_last("Matheus") == "Matheus"
+
+    def test_empty(self):
+        assert shorten_name_first_last("") == ""
+
+    def test_strips_whitespace(self):
+        assert shorten_name_first_last("  MARLON  HENRIQUE  FERNANDES  ") == "MARLON FERNANDES"
