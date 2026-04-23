@@ -21,6 +21,13 @@ from ufpr_automation.utils.logging import logger
 TELEGRAM_API = "https://api.telegram.org"
 _TIMEOUT_S = 10
 
+# Telegram hard limit is 4096 chars per message; stay comfortably under it.
+_MAX_MESSAGE_CHARS = 3800
+# Cap how many per-email blocks we render to keep the digest scannable.
+_MAX_EMAILS_IN_DIGEST = 15
+_ACTION_TRUNCATE = 110
+_SUBJECT_TRUNCATE = 55
+
 
 def send_message(text: str, parse_mode: str | None = None) -> bool:
     """Send a plain-text message to the configured Telegram chat.
@@ -73,6 +80,89 @@ def _format_duration(seconds: float) -> str:
     return f"{hours}h{minutes:02d}m"
 
 
+def _truncate(text: str, limit: int) -> str:
+    """Shorten ``text`` to ``limit`` chars with a single-character ellipsis."""
+    text = (text or "").strip().replace("\n", " ").replace("\r", " ")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _priority_rank(
+    email: Any,
+    *,
+    manual_escalation: set[str],
+    human_review: set[str],
+    auto_draft: set[str],
+    drafts_skipped: set[str],
+) -> tuple[int, float]:
+    """Sort key — smaller = higher priority. Ties broken by lower confidence."""
+    sid = getattr(email, "stable_id", "")
+    cls = getattr(email, "classification", None)
+    categoria = getattr(cls, "categoria", "") if cls else ""
+    confianca = float(getattr(cls, "confianca", 0.0) or 0.0) if cls else 0.0
+    if categoria == "Urgente":
+        return (0, confianca)
+    if sid in manual_escalation:
+        return (1, confianca)
+    if sid in human_review:
+        return (2, confianca)
+    if sid in auto_draft:
+        return (3, -confianca)  # higher conf first inside the auto bucket
+    if sid in drafts_skipped:
+        return (4, confianca)
+    return (5, confianca)
+
+
+def _render_email_block(
+    email: Any,
+    *,
+    manual_escalation: set[str],
+    human_review: set[str],
+    auto_draft: set[str],
+    drafts_saved: set[str],
+    drafts_skipped: set[str],
+    tier0_hits: set[str],
+) -> str:
+    """Format a single email's details for the digest body.
+
+    Output is 3 lines: priority icon + subject, metadata (categoria / conf /
+    tier), and the suggested next action. Callers concatenate the blocks with
+    blank lines between them.
+    """
+    sid = getattr(email, "stable_id", "")
+    subject = _truncate(getattr(email, "subject", "") or "(sem assunto)", _SUBJECT_TRUNCATE)
+    cls = getattr(email, "classification", None)
+    categoria = (getattr(cls, "categoria", "") if cls else "") or "—"
+    acao = (getattr(cls, "acao_necessaria", "") if cls else "") or ""
+    conf = float(getattr(cls, "confianca", 0.0) or 0.0) if cls else 0.0
+
+    is_urgent = categoria == "Urgente"
+    if is_urgent:
+        prio_icon = "🔴 URGENTE"
+    elif sid in manual_escalation:
+        prio_icon = "⚠️ Escalação"
+    elif sid in human_review:
+        prio_icon = "👁️ Revisão"
+    elif sid in drafts_skipped:
+        prio_icon = "⏭️ Já respondido"
+    elif sid in auto_draft or sid in drafts_saved:
+        prio_icon = "🤖 Auto-draft"
+    else:
+        prio_icon = "•"
+
+    tier = "⚡ T0" if sid in tier0_hits else "🧠 T1"
+    draft_tag = " · ✅ rascunho salvo" if sid in drafts_saved else ""
+
+    lines = [
+        f"{prio_icon} · {subject}",
+        f"   📂 {categoria} · 🎯 {int(conf * 100)}% conf. · {tier}{draft_tag}",
+    ]
+    if acao:
+        lines.append(f"   ➜ {_truncate(acao, _ACTION_TRUNCATE)}")
+    return "\n".join(lines)
+
+
 def format_run_summary(
     state: dict[str, Any] | None,
     *,
@@ -109,11 +199,29 @@ def format_run_summary(
         except TypeError:
             return 0
 
+    def _as_set(value: Any) -> set[str]:
+        """Coerce a state field into a set of stable_ids.
+
+        Orchestrator path stores pre-counted ints; only the LangGraph state
+        supplies actual id lists. When we get an int there's no per-email
+        bucket to render, so fall back to an empty set.
+        """
+        if not value or isinstance(value, int):
+            return set()
+        try:
+            return set(value)
+        except TypeError:
+            return set()
+
     state = state or {}
     emails = state.get("emails", []) or []
     classifications = state.get("classifications", {}) or {}
-    tier0_hits = state.get("tier0_hits", []) or []
-    drafts_skipped = state.get("drafts_skipped_already_replied", []) or []
+    tier0_hits = _as_set(state.get("tier0_hits"))
+    drafts_saved = _as_set(state.get("drafts_saved"))
+    drafts_skipped = _as_set(state.get("drafts_skipped_already_replied"))
+    auto_draft = _as_set(state.get("auto_draft"))
+    human_review = _as_set(state.get("human_review"))
+    manual_escalation = _as_set(state.get("manual_escalation"))
     corpus = state.get("corpus_captured", []) or []
     procedures = int(state.get("procedures_logged", 0) or 0)
     sei_ops = state.get("sei_operations", []) or []
@@ -122,8 +230,11 @@ def format_run_summary(
     total_emails = _count(emails) or _count(state.get("total_unread"))
     drafts_count = _count(state.get("drafts_saved"))
     classified_count = _count(classifications) or _count(state.get("classified"))
-    tier0_count = _count(tier0_hits)
+    tier0_count = len(tier0_hits)
     tier1_count = max(0, classified_count - tier0_count)
+    urgent_count = sum(
+        1 for c in classifications.values() if getattr(c, "categoria", None) == "Urgente"
+    )
     sei_success = sum(1 for op in sei_ops if op.get("success") is True)
     sei_failed = sum(1 for op in sei_ops if op.get("op") == "error" or op.get("success") is False)
 
@@ -131,11 +242,16 @@ def format_run_summary(
         header,
         f"📧 {total_emails} email(s) · ⏱️ {duration} · canal: {channel}",
         "",
-        f"⚡ Tier 0 (playbook): {tier0_count}",
-        f"🧠 Tier 1 (RAG+LLM): {tier1_count}",
-        "",
-        f"✅ Rascunhos salvos: {drafts_count}",
+        f"⚡ Tier 0 (playbook): {tier0_count}   🧠 Tier 1 (RAG+LLM): {tier1_count}",
     ]
+    routing_parts = []
+    if urgent_count:
+        routing_parts.append(f"🔴 {urgent_count} urgente(s)")
+    routing_parts.append(f"🤖 {len(auto_draft) or drafts_count} auto")
+    routing_parts.append(f"👁️ {len(human_review)} revisão")
+    routing_parts.append(f"⚠️ {len(manual_escalation)} escalação")
+    lines.append(" · ".join(routing_parts))
+    lines.append(f"✅ Rascunhos salvos: {drafts_count}")
     if drafts_skipped:
         lines.append(f"⏭️ Já respondidos pela humana: {len(drafts_skipped)}")
     if corpus:
@@ -143,17 +259,67 @@ def format_run_summary(
     if sei_ops:
         lines.append(f"📝 SEI ops: {sei_success} ok / {sei_failed} falha(s)")
     if procedures:
-        lines.append(f"📒 Procedimentos registrados: {procedures}")
+        lines.append(f"📒 Procedimentos: {procedures}")
     if errors:
         lines.append(f"🔴 Erros: {len(errors)}")
         first = errors[0]
         node = first.get("node") or "?"
-        err = str(first.get("error") or "")[:120]
-        lines.append(f"   └─ [{node}] {err}")
+        err_msg = str(first.get("error") or "")[:120]
+        lines.append(f"   └─ [{node}] {err_msg}")
     else:
         lines.append("🟢 Sem erros")
 
-    return "\n".join(lines)
+    # Attach classifications to emails when the caller didn't already —
+    # the scheduler path hands us raw state without that side-effect.
+    emails_with_cls: list[Any] = []
+    for e in emails:
+        sid = getattr(e, "stable_id", "")
+        if getattr(e, "classification", None) is None and sid in classifications:
+            try:
+                e.classification = classifications[sid]
+            except Exception:
+                pass
+        emails_with_cls.append(e)
+
+    if emails_with_cls:
+        ordered = sorted(
+            emails_with_cls,
+            key=lambda e: _priority_rank(
+                e,
+                manual_escalation=manual_escalation,
+                human_review=human_review,
+                auto_draft=auto_draft,
+                drafts_skipped=drafts_skipped,
+            ),
+        )
+        visible = ordered[:_MAX_EMAILS_IN_DIGEST]
+        lines.append("")
+        lines.append("— Detalhes —")
+        for i, email in enumerate(visible, 1):
+            block = _render_email_block(
+                email,
+                manual_escalation=manual_escalation,
+                human_review=human_review,
+                auto_draft=auto_draft,
+                drafts_saved=drafts_saved,
+                drafts_skipped=drafts_skipped,
+                tier0_hits=tier0_hits,
+            )
+            # Prefix first line with a 1-based index for scannability.
+            first_nl = block.find("\n")
+            if first_nl == -1:
+                block = f"{i}. {block}"
+            else:
+                block = f"{i}. {block[:first_nl]}\n{block[first_nl + 1 :]}"
+            lines.append(block)
+        overflow = len(ordered) - len(visible)
+        if overflow > 0:
+            lines.append(f"… e mais {overflow} email(s) não exibido(s).")
+
+    text = "\n".join(lines)
+    if len(text) > _MAX_MESSAGE_CHARS:
+        text = text[: _MAX_MESSAGE_CHARS - 1].rstrip() + "…"
+    return text
 
 
 def notify_run_summary(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from ufpr_automation.notify import telegram as tg
@@ -36,17 +37,43 @@ class TestFormatRunSummary:
         assert "gmail" in text
         assert "ConnectionError" in text
 
+    def _make_email(self, sid, subject, categoria, acao, conf):
+        """Build a duck-typed email stub accepted by format_run_summary."""
+        cls = SimpleNamespace(categoria=categoria, acao_necessaria=acao, confianca=conf)
+        return SimpleNamespace(stable_id=sid, subject=subject, classification=cls)
+
     def test_langgraph_state_shape(self):
+        emails = [
+            self._make_email("id0", "Urgente: prazo amanhã", "Urgente", "Agir já", 0.95),
+            self._make_email(
+                "id1",
+                "Re: Termo de Estágio para assinatura",
+                "Estágios",
+                "Revisar anexos e abrir processo SEI",
+                0.92,
+            ),
+            self._make_email(
+                "id2", "Matrícula equivalência", "Acadêmico / Matrícula", "Arquivar", 0.8
+            ),
+            self._make_email(
+                "id3", "Requerimento diverso", "Requerimentos", "Redigir resposta", 0.6
+            ),
+            self._make_email("id4", "Outros assuntos", "Outros", "Human review", 0.55),
+        ]
+        classifications = {e.stable_id: e.classification for e in emails}
         state = {
-            "emails": [object()] * 5,
-            "classifications": {f"id{i}": object() for i in range(5)},
-            "tier0_hits": ["id0", "id1", "id2"],
-            "drafts_saved": ["id3", "id4"],
-            "drafts_skipped_already_replied": ["id0"],
+            "emails": emails,
+            "classifications": classifications,
+            "tier0_hits": ["id0", "id1"],
+            "auto_draft": ["id1"],
+            "human_review": ["id3", "id4"],
+            "manual_escalation": [],
+            "drafts_saved": ["id1"],
+            "drafts_skipped_already_replied": ["id2"],
             "corpus_captured": [{"thread_id": "t1"}],
             "procedures_logged": 3,
             "sei_operations": [
-                {"stable_id": "id3", "op": "attach_document", "success": True},
+                {"stable_id": "id1", "op": "attach_document", "success": True},
                 {"stable_id": "id4", "op": "error", "error": "boom"},
             ],
             "errors": [{"node": "agir_estagios", "stable_id": "id4", "error": "boom"}],
@@ -59,15 +86,43 @@ class TestFormatRunSummary:
         )
         assert "UFPR Automation" in text
         assert "📧 5 email" in text
-        assert "⚡ Tier 0 (playbook): 3" in text
-        assert "🧠 Tier 1 (RAG+LLM): 2" in text
-        assert "✅ Rascunhos salvos: 2" in text
+        assert "⚡ Tier 0 (playbook): 2" in text
+        assert "🧠 Tier 1 (RAG+LLM): 3" in text
+        assert "🔴 1 urgente(s)" in text
+        assert "👁️ 2 revisão" in text
+        assert "⚠️ 0 escalação" in text
+        assert "✅ Rascunhos salvos: 1" in text
         assert "Já respondidos pela humana: 1" in text
         assert "Threads no corpus: 1" in text
         assert "SEI ops: 1 ok / 1 falha" in text
-        assert "Procedimentos registrados: 3" in text
+        assert "Procedimentos: 3" in text
         assert "🔴 Erros: 1" in text
         assert "agir_estagios" in text
+        # Per-email digest present and the urgent one sorts first.
+        assert "— Detalhes —" in text
+        assert "🔴 URGENTE" in text
+        urgent_idx = text.index("🔴 URGENTE")
+        review_idx = text.index("👁️ Revisão")
+        assert urgent_idx < review_idx, "urgent email should render before review bucket"
+        assert "🤖 Auto-draft" in text
+        assert "⏭️ Já respondido" in text
+
+    def test_digest_caps_long_lists(self):
+        emails = [
+            self._make_email(f"id{i}", f"Email {i}", "Outros", f"ação {i}", 0.5) for i in range(25)
+        ]
+        state = {
+            "emails": emails,
+            "classifications": {e.stable_id: e.classification for e in emails},
+            "human_review": [e.stable_id for e in emails],
+        }
+        text = tg.format_run_summary(
+            state,
+            duration_s=10,
+            start_time=self._start(),
+            channel="gmail",
+        )
+        assert "e mais 10 email(s) não exibido(s)" in text
 
     def test_orchestrator_state_shape(self):
         state = {
