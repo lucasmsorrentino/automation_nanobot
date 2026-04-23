@@ -318,13 +318,13 @@ async def _prewarm_sessions_async(max_age_h: float) -> None:
             try:
                 if browser is not None:
                     await browser.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("prewarm %s: browser.close() falhou: %s", label, e)
             try:
                 if pw is not None:
                     await pw.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("prewarm %s: playwright.stop() falhou: %s", label, e)
 
     # Run in parallel — SEI and SIGA are independent systems.
     await asyncio.gather(
@@ -430,8 +430,8 @@ def _get_retriever():
             if RAPTOR_TABLE in db.list_tables().tables:
                 logger.info("RAG: usando RAPTOR (collapsed tree retrieval)")
                 return RaptorRetriever()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("RAG: RAPTOR indisponível, usando flat retriever: %s", e)
 
     from ufpr_automation.rag.retriever import Retriever
 

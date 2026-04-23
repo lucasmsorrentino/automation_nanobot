@@ -22,6 +22,7 @@ import streamlit as st
 from ufpr_automation.config import settings
 from ufpr_automation.core.models import EmailClassification
 from ufpr_automation.feedback.store import FeedbackStore
+from ufpr_automation.utils.logging import logger
 
 # Valid categories (kept in sync with core/models.py)
 _VALID_CATEGORIES = [
@@ -230,8 +231,8 @@ def page_review() -> None:
                                 corrected=corrected,
                             )
                             st.info("Reflexion gerada para correcao")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning("Reflexion generation failed: %s", e)
 
                     st.success(f"Correcao salva: {cat} -> {new_cat}")
                     st.session_state[f"correcting_{i}"] = False
