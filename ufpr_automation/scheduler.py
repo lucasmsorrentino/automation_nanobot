@@ -15,6 +15,7 @@ Environment variables:
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
@@ -22,6 +23,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from ufpr_automation.config import settings
+from ufpr_automation.notify.telegram import notify_run_summary
 from ufpr_automation.utils.logging import logger
 
 SCHEDULE_HOURS = os.getenv("SCHEDULE_HOURS", "8,13,17")
@@ -36,10 +38,12 @@ def run_scheduled_pipeline() -> None:
     from ufpr_automation.graph.builder import build_graph
 
     channel = settings.EMAIL_CHANNEL
+    start_time = datetime.now()
+    started_at = time.monotonic()
     logger.info(
         "Scheduler: iniciando pipeline (canal=%s) em %s",
         channel,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        start_time.strftime("%Y-%m-%d %H:%M:%S"),
     )
 
     try:
@@ -51,6 +55,7 @@ def run_scheduled_pipeline() -> None:
         drafts = result.get("drafts_saved", [])
         procedures = result.get("procedures_logged", 0)
 
+        duration = time.monotonic() - started_at
         logger.info(
             "Scheduler: pipeline concluido — %d email(s), %d classificado(s), "
             "%d rascunho(s), %d procedimento(s) registrado(s)",
@@ -59,8 +64,21 @@ def run_scheduled_pipeline() -> None:
             len(drafts),
             procedures,
         )
+        notify_run_summary(
+            result,
+            duration_s=duration,
+            start_time=start_time,
+            channel=channel,
+        )
     except Exception as e:
         logger.error("Scheduler: pipeline falhou: %s", e, exc_info=True)
+        notify_run_summary(
+            None,
+            duration_s=time.monotonic() - started_at,
+            start_time=start_time,
+            channel=channel,
+            error=str(e),
+        )
 
 
 def _job_listener(event):

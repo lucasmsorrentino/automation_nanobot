@@ -24,8 +24,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
+from datetime import datetime
 
 from ufpr_automation.config import settings
+from ufpr_automation.notify.telegram import notify_run_summary
 
 
 def parse_args() -> argparse.Namespace:
@@ -231,34 +234,49 @@ async def run_gmail_channel(use_langgraph: bool = False, limit: int | None = Non
         print("    Ler e-mails → Pensar (paralelo) → Salvar rascunho")
     print("=" * 60)
 
-    if use_langgraph:
-        from ufpr_automation.graph.builder import build_graph
+    start_time = datetime.now()
+    started_at = time.monotonic()
+    result: dict | None = None
+    error: str | None = None
 
-        graph = build_graph(channel="gmail")
-        initial_state: dict = {"channel": "gmail"}
-        if limit is not None:
-            initial_state["limit"] = limit
-        result = graph.invoke(initial_state)
-        # Adapt LangGraph state to summary format
-        emails = result.get("emails", [])
-        classifications = result.get("classifications", {})
-        drafts = result.get("drafts_saved", [])
-        # Attach classifications to emails for print_summary
-        for e in emails:
-            if e.stable_id in classifications:
-                e.classification = classifications[e.stable_id]
-        summary = {
-            "total_unread": len(emails),
-            "classified": len(classifications),
-            "drafts_saved": len(drafts),
-            "emails": emails,
-        }
-        _print_summary(summary)
-    else:
-        from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
+    try:
+        if use_langgraph:
+            from ufpr_automation.graph.builder import build_graph
 
-        result = await run_pipeline_gmail(limit=limit)
-        print_summary(result)
+            graph = build_graph(channel="gmail")
+            initial_state: dict = {"channel": "gmail"}
+            if limit is not None:
+                initial_state["limit"] = limit
+            result = graph.invoke(initial_state)
+            emails = result.get("emails", [])
+            classifications = result.get("classifications", {})
+            drafts = result.get("drafts_saved", [])
+            for e in emails:
+                if e.stable_id in classifications:
+                    e.classification = classifications[e.stable_id]
+            summary = {
+                "total_unread": len(emails),
+                "classified": len(classifications),
+                "drafts_saved": len(drafts),
+                "emails": emails,
+            }
+            _print_summary(summary)
+        else:
+            from ufpr_automation.orchestrator import print_summary, run_pipeline_gmail
+
+            result = await run_pipeline_gmail(limit=limit)
+            print_summary(result)
+    except Exception as e:
+        error = str(e)
+        raise
+    finally:
+        notify_run_summary(
+            result,
+            duration_s=time.monotonic() - started_at,
+            start_time=start_time,
+            channel="gmail",
+            error=error,
+        )
 
     print("\n👋 Execução finalizada.")
 
