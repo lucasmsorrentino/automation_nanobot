@@ -83,7 +83,7 @@ def load_procedures() -> list[dict]:
     return records
 
 
-def page_dashboard():
+def page_dashboard() -> None:
     """Dashboard: summary of recent pipeline executions."""
     st.header("Dashboard")
 
@@ -122,7 +122,7 @@ def page_dashboard():
                     st.text_area("Rascunho gerado", resposta, height=150, disabled=True)
 
 
-def page_review():
+def page_review() -> None:
     """Review classifications from the last pipeline run."""
     st.header("Revisar Classificacoes")
 
@@ -237,7 +237,7 @@ def page_review():
                     st.session_state[f"correcting_{i}"] = False
 
 
-def page_statistics():
+def page_statistics() -> None:
     """Statistics and learning progress."""
     st.header("Estatisticas de Aprendizado")
 
@@ -333,7 +333,7 @@ def page_statistics():
                 st.text(f"  {cat}: {count}")
 
 
-def page_procedures():
+def page_procedures() -> None:
     """Browse procedure execution logs."""
     st.header("Log de Procedimentos")
 
@@ -387,7 +387,7 @@ def page_procedures():
                         st.text(f"     Notas: {s['notes']}")
 
 
-def main():
+def main() -> None:
     st.set_page_config(
         page_title="UFPR Automation — Feedback",
         page_icon="📋",

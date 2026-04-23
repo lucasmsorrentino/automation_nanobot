@@ -369,7 +369,7 @@ def _collect_pdfs(subset: str | None) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest UFPR docs into vector store")
     parser.add_argument(
         "--subset",

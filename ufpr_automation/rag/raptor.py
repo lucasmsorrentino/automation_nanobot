@@ -420,7 +420,7 @@ class RaptorRetriever:
 # ---------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Build RAPTOR hierarchical index")
     parser.add_argument("--max-levels", type=int, default=3)
     parser.add_argument("--max-clusters", type=int, default=10)

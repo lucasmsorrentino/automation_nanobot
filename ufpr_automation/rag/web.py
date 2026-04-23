@@ -23,7 +23,7 @@ def load_retriever() -> Retriever:
     return r
 
 
-def main():
+def main() -> None:
     st.set_page_config(
         page_title="UFPR RAG — Consulta de Documentos",
         page_icon="🔍",

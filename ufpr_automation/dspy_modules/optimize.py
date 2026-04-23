@@ -151,7 +151,7 @@ def evaluate(module: dspy.Module, examples: list[dspy.Example]) -> float:
     return score
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="DSPy prompt optimization for UFPR pipeline")
     parser.add_argument(
         "--strategy",

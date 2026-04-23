@@ -159,7 +159,7 @@ class Retriever:
 # ---------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Search UFPR docs vector store")
     parser.add_argument("query", type=str, help="Search query in Portuguese")
     parser.add_argument("--conselho", type=str, default=None)

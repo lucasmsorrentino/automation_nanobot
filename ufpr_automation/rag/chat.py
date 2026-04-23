@@ -168,7 +168,7 @@ def run_chat(
         print_results(results, query)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Interactive RAG query CLI")
     parser.add_argument(
         "--conselho", type=str, default=None, help=f"Pre-filter by council ({', '.join(CONSELHOS)})"
