@@ -648,14 +648,14 @@ class TestFillTemplate:
 class TestStaleness:
     def test_intent_fresh_when_rag_older(self, playbook):
         intent = playbook.get("faq_prorrogar_estagio")
-        assert intent is not None
+        assert isinstance(intent, Intent)
         # Pretend RAG store mtime is BEFORE intent.last_update — fresh
         old_mtime = datetime(2025, 1, 1).timestamp()
         assert playbook.is_stale(intent, rag_mtime=old_mtime) is False
 
     def test_intent_stale_when_rag_newer(self, playbook):
         intent = playbook.get("faq_prorrogar_estagio")
-        assert intent is not None
+        assert isinstance(intent, Intent)
         # Pretend RAG was just re-ingested — newer than 2026-01-15
         new_mtime = datetime(2027, 6, 1).timestamp()
         assert playbook.is_stale(intent, rag_mtime=new_mtime) is True

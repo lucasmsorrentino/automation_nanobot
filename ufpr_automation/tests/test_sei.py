@@ -183,7 +183,7 @@ class TestSelectBestProcesso:
         novo = ProcessoSEI(numero="23075.011886/2026-96", tipo="Estágio não obrigatório")
         antigo = ProcessoSEI(numero="23075.047102/2024-04", tipo="Estágio não obrigatório")
         best, conf = select_best_processo([antigo, novo], grr_hint="GRR20223876")
-        assert best is not None
+        assert isinstance(best, ProcessoSEI)
         assert best.numero == "23075.011886/2026-96"
         assert conf > 0
 

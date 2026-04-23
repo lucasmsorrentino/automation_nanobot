@@ -58,12 +58,12 @@ class TestGetDocClassification:
 
     def test_case_insensitive(self, catalog_path):
         cls = get_doc_classification("tce", path=catalog_path)
-        assert cls is not None
+        assert isinstance(cls, SEIDocClassification)
         assert cls.sei_subtipo == "Termo"
 
     def test_multi_word_label(self, catalog_path):
         cls = get_doc_classification("Relatório Parcial", path=catalog_path)
-        assert cls is not None
+        assert isinstance(cls, SEIDocClassification)
         assert cls.sei_subtipo == "Relatório"
         assert cls.sei_classificacao == "Parcial"
 
@@ -87,7 +87,7 @@ class TestRealCatalog:
 
     def test_real_catalog_loads(self):
         cls = get_doc_classification("TCE")
-        assert cls is not None
+        assert isinstance(cls, SEIDocClassification)
         assert cls.sei_tipo == "Externo"
 
     def test_real_catalog_has_expected_labels(self):
