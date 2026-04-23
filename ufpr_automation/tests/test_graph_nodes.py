@@ -165,9 +165,7 @@ class TestPrewarmSessions:
             "ufpr_automation.graph.nodes._prewarm_sessions_async",
             lambda *a, **kw: called.append(1) or None,
         )
-        out = prewarm_sessions(
-            {"emails": [self._mk_email("SEI 23075.123456/2026-01")]}
-        )
+        out = prewarm_sessions({"emails": [self._mk_email("SEI 23075.123456/2026-01")]})
         assert out == {}
         assert called == []  # async path must not run
 
@@ -199,9 +197,7 @@ class TestPrewarmSessions:
         async def _fake_warm(max_age_h):
             executed["max_age_h"] = max_age_h
 
-        monkeypatch.setattr(
-            "ufpr_automation.graph.nodes._prewarm_sessions_async", _fake_warm
-        )
+        monkeypatch.setattr("ufpr_automation.graph.nodes._prewarm_sessions_async", _fake_warm)
         # Use asyncio.run passthrough — the node's own asyncio.run will drive it.
         out = prewarm_sessions(
             {"emails": [self._mk_email("Encaminho TCE", "processo 23075.123456/2026-01")]}
@@ -220,9 +216,7 @@ class TestPrewarmSessions:
         async def _fake_warm(max_age_h):
             executed["max_age_h"] = max_age_h
 
-        monkeypatch.setattr(
-            "ufpr_automation.graph.nodes._prewarm_sessions_async", _fake_warm
-        )
+        monkeypatch.setattr("ufpr_automation.graph.nodes._prewarm_sessions_async", _fake_warm)
         prewarm_sessions({"emails": [self._mk_email("GRR20231234", "")]})
         assert executed["max_age_h"] == 12.0
 
@@ -235,13 +229,9 @@ class TestPrewarmSessions:
         async def _bad(max_age_h):
             raise RuntimeError("boom")
 
-        monkeypatch.setattr(
-            "ufpr_automation.graph.nodes._prewarm_sessions_async", _bad
-        )
+        monkeypatch.setattr("ufpr_automation.graph.nodes._prewarm_sessions_async", _bad)
         # Must not raise.
-        out = prewarm_sessions(
-            {"emails": [self._mk_email("SEI 23075.123456/2026-01")]}
-        )
+        out = prewarm_sessions({"emails": [self._mk_email("SEI 23075.123456/2026-01")]})
         assert out == {}
 
     def test_fresh_session_file_short_circuits(self, monkeypatch, tmp_path):
@@ -503,6 +493,7 @@ class TestCapturarCorpusHumano:
         monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)
         # Disable the label via settings.
         from ufpr_automation.config import settings as _settings
+
         monkeypatch.setattr(_settings, "GMAIL_LEARNING_LABEL", "")
 
         email = EmailData(
@@ -553,10 +544,12 @@ class TestCapturarCorpusHumano:
             confianca=0.9,
         )
 
-        result = capturar_corpus_humano({
-            "emails": [email],
-            "classifications": {email.stable_id: cls},
-        })
+        result = capturar_corpus_humano(
+            {
+                "emails": [email],
+                "classifications": {email.stable_id: cls},
+            }
+        )
         assert len(copy_calls) == 1
         assert copy_calls[0][0] == "<coord-1@example.com>"
         assert marked_read == ["99"]

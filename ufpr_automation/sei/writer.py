@@ -1198,9 +1198,7 @@ class SEIWriter:
                 )
             href = await toolbar_a.get_attribute("href")
             if not href:
-                raise RuntimeError(
-                    "add_to_acompanhamento_especial: toolbar icon has no href."
-                )
+                raise RuntimeError("add_to_acompanhamento_especial: toolbar icon has no href.")
             absolute = urljoin(page.url, href)
 
             # Step 3: navigate the form frame (ifrVisualizacao) there.
@@ -1220,9 +1218,7 @@ class SEIWriter:
             gerenciar_marker = spec["gerenciar_processo"].get(
                 "action_marker", "acompanhamento_gerenciar"
             )
-            cadastrar_marker = spec["cadastrar"].get(
-                "action_marker", "acompanhamento_cadastrar"
-            )
+            cadastrar_marker = spec["cadastrar"].get("action_marker", "acompanhamento_cadastrar")
             if gerenciar_marker in cur_url and cadastrar_marker not in cur_url:
                 adicionar_sel = spec["gerenciar_processo"]["buttons"]["adicionar"]["selector"]
                 adicionar_href = await target.evaluate(
@@ -1240,9 +1236,7 @@ class SEIWriter:
                         f"yield a location.href URL. adicionar_sel={adicionar_sel}"
                     )
                 absolute_add = urljoin(target.url or page.url, adicionar_href)
-                logger.info(
-                    "add_to_acompesp: list page → navigating to cadastrar form"
-                )
+                logger.info("add_to_acompesp: list page → navigating to cadastrar form")
                 vis_frame2 = next((f for f in page.frames if f.name == vis_name), None)
                 if vis_frame2 is None:
                     await page.goto(absolute_add, wait_until="networkidle")
@@ -1310,9 +1304,7 @@ class SEIWriter:
                 nome_sel = modal_spec["fields"]["nome"]["selector"]
                 await modal_frame.wait_for_selector(nome_sel, state="visible", timeout=5000)
                 await modal_frame.locator(nome_sel).fill(grupo)
-                artifacts.append(
-                    await self._screenshot(f"acompesp_modal_filled_{processo_id}")
-                )
+                artifacts.append(await self._screenshot(f"acompesp_modal_filled_{processo_id}"))
                 modal_submit_sel = modal_spec["submit"]["selector"]
                 await self._safe_frame_click(modal_frame, modal_submit_sel)
 

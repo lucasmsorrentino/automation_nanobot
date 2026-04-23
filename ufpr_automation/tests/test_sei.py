@@ -541,10 +541,7 @@ class TestShortenNameFirstLast:
         assert shorten_name_first_last("MATHEUS KLEINE ALBERS") == "MATHEUS ALBERS"
 
     def test_four_words_keeps_only_first_and_last(self):
-        assert (
-            shorten_name_first_last("MARLON HENRIQUE GOMES FERNANDES")
-            == "MARLON FERNANDES"
-        )
+        assert shorten_name_first_last("MARLON HENRIQUE GOMES FERNANDES") == "MARLON FERNANDES"
 
     def test_two_words_unchanged(self):
         assert shorten_name_first_last("Matheus Albers") == "Matheus Albers"

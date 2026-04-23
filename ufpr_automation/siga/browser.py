@@ -117,9 +117,7 @@ async def auto_login(page: Page) -> bool:
         # funciona — a string e parseada como CSS union e ``text=...``
         # nao e CSS valido, o wait resolve instantaneo sem bloqueio util).
         try:
-            await page.locator("input#username").first.wait_for(
-                state="visible", timeout=15000
-            )
+            await page.locator("input#username").first.wait_for(state="visible", timeout=15000)
             # Keycloak login visivel — preencher credenciais.
             logger.info("SIGA: preenchendo credenciais Keycloak")
             await page.locator("input#username").first.fill(SIGA_USERNAME)

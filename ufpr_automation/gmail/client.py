@@ -391,9 +391,7 @@ class GmailClient:
     # Thread-aware helpers (Gmail X-GM-THRID extension)
     # ------------------------------------------------------------------
 
-    def _resolve_thread(
-        self, conn: imaplib.IMAP4_SSL, message_id: str
-    ) -> tuple[str, list[bytes]]:
+    def _resolve_thread(self, conn: imaplib.IMAP4_SSL, message_id: str) -> tuple[str, list[bytes]]:
         """Given a SELECTed connection on [Gmail]/All Mail, resolve the
         Gmail thread containing ``message_id``. Returns (thread_id,
         sequence_numbers). Empty tuple if not found.

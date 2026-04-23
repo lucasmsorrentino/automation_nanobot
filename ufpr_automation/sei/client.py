@@ -86,9 +86,7 @@ class SEIClient:
             logger.error("SEI: falha ao buscar processo %s: %s", numero_processo, e)
             return None
 
-    async def find_processes_by_grr(
-        self, grr: str, *, max_results: int = 20
-    ) -> list[ProcessoSEI]:
+    async def find_processes_by_grr(self, grr: str, *, max_results: int = 20) -> list[ProcessoSEI]:
         """Search SEI for processes by student GRR via ``#txtPesquisaRapida``.
 
         Returns all matches (may be empty, 1, or many — a student can have
@@ -171,8 +169,7 @@ class SEIClient:
         try:
             logger.info("SEI: busca AE por palavra-chave %r", keyword)
             menu = self._page.locator(
-                'a[title="Acompanhamento Especial"], '
-                'a:has-text("Acompanhamento Especial")'
+                'a[title="Acompanhamento Especial"], a:has-text("Acompanhamento Especial")'
             )
             if await menu.count() == 0:
                 logger.warning("SEI: menu Acompanhamento Especial nao encontrado")
@@ -186,9 +183,7 @@ class SEIClient:
                 return []
             await search_input.first.fill(keyword)
 
-            submit = self._page.locator(
-                'button:has-text("Pesquisar"), input[value="Pesquisar"]'
-            )
+            submit = self._page.locator('button:has-text("Pesquisar"), input[value="Pesquisar"]')
             if await submit.count() > 0:
                 await submit.first.click()
             else:
@@ -203,14 +198,10 @@ class SEIClient:
             )
             return results
         except Exception as e:
-            logger.error(
-                "SEI: find_in_acompanhamento_especial(%s) falhou: %s", keyword, e
-            )
+            logger.error("SEI: find_in_acompanhamento_especial(%s) falhou: %s", keyword, e)
             return []
 
-    async def _parse_ae_results_table(
-        self, *, max_results: int = 20
-    ) -> list[ProcessoSEI]:
+    async def _parse_ae_results_table(self, *, max_results: int = 20) -> list[ProcessoSEI]:
         """Parse ``#tblAcompanhamentos`` rows. Columns (from live capture):
         ``[checkbox, sort, Processo, Usuário, Data, Grupo, Observação, Ações]``.
         """
@@ -225,8 +216,7 @@ class SEIClient:
                 if n_cells < 7:
                     continue  # header or malformed
                 cell_texts = [
-                    ((await cells.nth(c).text_content()) or "").strip()
-                    for c in range(n_cells)
+                    ((await cells.nth(c).text_content()) or "").strip() for c in range(n_cells)
                 ]
                 numero = ""
                 for ct in cell_texts:
@@ -248,9 +238,7 @@ class SEIClient:
                     for ct in cell_texts:
                         if not processo.tipo and "estágio" in ct.lower():
                             processo.tipo = ct
-                        if not processo.ultima_movimentacao and re.search(
-                            r"\d{2}/\d{2}/\d{4}", ct
-                        ):
+                        if not processo.ultima_movimentacao and re.search(r"\d{2}/\d{2}/\d{4}", ct):
                             processo.ultima_movimentacao = ct
                         if not processo.interessados and "GRR" in ct.upper():
                             processo.interessados = [ct]
@@ -278,9 +266,7 @@ class SEIClient:
                         return m.group(0)
         return None
 
-    async def _parse_search_results_table(
-        self, *, max_results: int = 20
-    ) -> list[ProcessoSEI]:
+    async def _parse_search_results_table(self, *, max_results: int = 20) -> list[ProcessoSEI]:
         """Parse the SEI search-results table after a ``#txtPesquisaRapida``
         submission that returned multiple hits.
 
@@ -312,8 +298,7 @@ class SEIClient:
                 if n_cells < 2:
                     continue
                 cell_texts = [
-                    ((await cells.nth(c).text_content()) or "").strip()
-                    for c in range(n_cells)
+                    ((await cells.nth(c).text_content()) or "").strip() for c in range(n_cells)
                 ]
                 # Find the cell containing the process number pattern
                 numero = ""
@@ -329,9 +314,7 @@ class SEIClient:
                 for ct in cell_texts:
                     if not processo.tipo and "estágio" in ct.lower():
                         processo.tipo = ct
-                    if not processo.ultima_movimentacao and re.search(
-                        r"\d{2}/\d{2}/\d{4}", ct
-                    ):
+                    if not processo.ultima_movimentacao and re.search(r"\d{2}/\d{2}/\d{4}", ct):
                         processo.ultima_movimentacao = ct
                     if not processo.interessados and (
                         "GRR" in ct.upper() or ct.isupper() and len(ct) > 4
@@ -524,9 +507,8 @@ _INSTITUTIONAL_TOKENS = {
 def _strip_accents(s: str) -> str:
     import unicodedata
 
-    return "".join(
-        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
-    )
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
 
 # "Aluno:", "Estagiário:", "Estagiária:", "Estagiario(a):" — explicit label.
 _NAME_LABEL_RE = re.compile(

@@ -123,9 +123,7 @@ class TestParser:
 
         from ufpr_automation.procedures.playbook import parse_procedures_md
 
-        procedures_md = (
-            Path(__file__).resolve().parents[1] / "workspace" / "PROCEDURES.md"
-        )
+        procedures_md = Path(__file__).resolve().parents[1] / "workspace" / "PROCEDURES.md"
         intents = {i.intent_name: i for i in parse_procedures_md(procedures_md)}
 
         for name in (
@@ -443,9 +441,7 @@ class TestAditivoExtraction:
     def test_extracts_data_termino_novo_numeric(self):
         intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
         email = EmailData(sender="x@y.z", subject="aditivo", body="")
-        email.attachments = [
-            self._make_attach("Fica prorrogada a vigência até 30/06/2027.")
-        ]
+        email.attachments = [self._make_attach("Fica prorrogada a vigência até 30/06/2027.")]
         vars = extract_variables(email, intent)
         assert vars["data_termino_novo"] == "30/06/2027"
 
@@ -466,9 +462,7 @@ class TestAditivoExtraction:
         """Accent in 'março' must normalize — keyed as 'marco' internally."""
         intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
         email = EmailData(sender="x@y.z", subject="aditivo", body="")
-        email.attachments = [
-            self._make_attach("Nova vigência até 15 de março de 2027.")
-        ]
+        email.attachments = [self._make_attach("Nova vigência até 15 de março de 2027.")]
         vars = extract_variables(email, intent)
         assert vars["data_termino_novo"] == "15/03/2027"
 
@@ -514,9 +508,7 @@ class TestLLMExtractionFields:
         """
         from types import SimpleNamespace
 
-        fake = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-        )
+        fake = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
         def _fake_call(*args, **kwargs):
             return fake
@@ -525,15 +517,11 @@ class TestLLMExtractionFields:
 
         # The function imports cascaded_completion_sync lazily *inside*
         # _llm_extract_fields, so we patch the source module, not playbook.
-        monkeypatch.setattr(
-            "ufpr_automation.llm.router.cascaded_completion_sync", _fake_call
-        )
+        monkeypatch.setattr("ufpr_automation.llm.router.cascaded_completion_sync", _fake_call)
         return pb
 
     def test_llm_fills_missing_field_when_declared(self, monkeypatch):
-        pb = self._mock_llm(
-            monkeypatch, "- falta assinatura da concedente\n- CPF ausente"
-        )
+        pb = self._mock_llm(monkeypatch, "- falta assinatura da concedente\n- CPF ausente")
         intent = Intent(
             intent_name="pendencia",
             categoria="Estágios",
@@ -571,9 +559,7 @@ class TestLLMExtractionFields:
             calls.append(1)
             raise AssertionError("LLM must not be called for intents without llm_extraction_fields")
 
-        monkeypatch.setattr(
-            "ufpr_automation.llm.router.cascaded_completion_sync", _boom
-        )
+        monkeypatch.setattr("ufpr_automation.llm.router.cascaded_completion_sync", _boom)
         intent = Intent(
             intent_name="regex_only",
             categoria="Outros",
@@ -593,9 +579,7 @@ class TestLLMExtractionFields:
             calls.append(1)
             raise AssertionError("LLM must not be called when regex already filled the field")
 
-        monkeypatch.setattr(
-            "ufpr_automation.llm.router.cascaded_completion_sync", _boom
-        )
+        monkeypatch.setattr("ufpr_automation.llm.router.cascaded_completion_sync", _boom)
         # grr is regex-covered; declaring it in llm_extraction_fields should be a no-op.
         intent = Intent(
             intent_name="x",
@@ -614,9 +598,7 @@ class TestLLMExtractionFields:
         def _raise(*args, **kwargs):
             raise RuntimeError("simulated LLM failure")
 
-        monkeypatch.setattr(
-            "ufpr_automation.llm.router.cascaded_completion_sync", _raise
-        )
+        monkeypatch.setattr("ufpr_automation.llm.router.cascaded_completion_sync", _raise)
         intent = Intent(
             intent_name="pendencia",
             categoria="Estágios",

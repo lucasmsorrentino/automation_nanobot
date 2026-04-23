@@ -200,8 +200,7 @@ def _scenario_existing_group(processo_id: str = "23075.000001/2026-00") -> FakeP
     vis = FakeFrame(
         name="ifrVisualizacao",
         url=(
-            "https://sei.ufpr.br/sei/controlador.php?"
-            "acao=acompanhamento_cadastrar&id_protocolo=42"
+            "https://sei.ufpr.br/sei/controlador.php?acao=acompanhamento_cadastrar&id_protocolo=42"
         ),
     )
     vis.evaluate_responses = ["grupo-id-99"]  # selects on first try
@@ -213,9 +212,7 @@ def _scenario_existing_group(processo_id: str = "23075.000001/2026-00") -> FakeP
             'xpath=//a[.//img[@title="Acompanhamento Especial"]]': FakeLocator(
                 'xpath=//a[.//img[@title="Acompanhamento Especial"]]',
                 count=1,
-                href=(
-                    "controlador.php?acao=acompanhamento_cadastrar&id_protocolo=42"
-                ),
+                href=("controlador.php?acao=acompanhamento_cadastrar&id_protocolo=42"),
             ),
         },
     )
@@ -230,8 +227,7 @@ def _scenario_new_group(processo_id: str = "23075.000002/2026-00") -> FakePage:
     vis = FakeFrame(
         name="ifrVisualizacao",
         url=(
-            "https://sei.ufpr.br/sei/controlador.php?"
-            "acao=acompanhamento_cadastrar&id_protocolo=43"
+            "https://sei.ufpr.br/sei/controlador.php?acao=acompanhamento_cadastrar&id_protocolo=43"
         ),
     )
     # First evaluate (initial select attempt): None.
@@ -245,9 +241,7 @@ def _scenario_new_group(processo_id: str = "23075.000002/2026-00") -> FakePage:
             'xpath=//a[.//img[@title="Acompanhamento Especial"]]': FakeLocator(
                 'xpath=//a[.//img[@title="Acompanhamento Especial"]]',
                 count=1,
-                href=(
-                    "controlador.php?acao=acompanhamento_cadastrar&id_protocolo=43"
-                ),
+                href=("controlador.php?acao=acompanhamento_cadastrar&id_protocolo=43"),
             ),
         },
     )
@@ -257,10 +251,7 @@ def _scenario_new_group(processo_id: str = "23075.000002/2026-00") -> FakePage:
     # triggers a modal frame injection into page.frames.
     modal_frame = FakeFrame(
         name="modalGrupo",
-        url=(
-            "https://sei.ufpr.br/sei/controlador.php?"
-            "acao=grupo_acompanhamento_cadastrar"
-        ),
+        url=("https://sei.ufpr.br/sei/controlador.php?acao=grupo_acompanhamento_cadastrar"),
     )
 
     class TriggeringLocator(FakeLocator):
@@ -271,9 +262,7 @@ def _scenario_new_group(processo_id: str = "23075.000002/2026-00") -> FakePage:
             # Inject the modal frame upon click.
             page.set_frames([content, vis, modal_frame])
 
-    trigger = TriggeringLocator(
-        "#imgNovoGrupoAcompanhamento", count=1, owner=vis
-    )
+    trigger = TriggeringLocator("#imgNovoGrupoAcompanhamento", count=1, owner=vis)
     vis.locator_overrides["#imgNovoGrupoAcompanhamento"] = trigger
 
     # After modal submit, remove the modal frame (modal closes).
@@ -290,9 +279,7 @@ def _scenario_new_group(processo_id: str = "23075.000002/2026-00") -> FakePage:
         count=1,
         owner=modal_frame,
     )
-    modal_frame.locator_overrides[
-        'button[name="sbmCadastrarGrupoAcompanhamento"]'
-    ] = modal_submit
+    modal_frame.locator_overrides['button[name="sbmCadastrarGrupoAcompanhamento"]'] = modal_submit
 
     return page
 
@@ -353,9 +340,7 @@ class TestAcompanhamentoDryRun:
 
 class TestAcompanhamentoLiveExistingGroup:
     @pytest.mark.asyncio
-    async def test_existing_group_selects_and_submits_without_modal(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_existing_group_selects_and_submits_without_modal(self, tmp_path, monkeypatch):
         from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
@@ -378,18 +363,14 @@ class TestAcompanhamentoLiveExistingGroup:
         assert "#imgNovoGrupoAcompanhamento" not in vis.click_log
 
         # The cadastrar submit button must have been clicked exactly once.
-        assert vis.click_log.count(
-            'button[name="sbmCadastrarAcompanhamento"]'
-        ) == 1
+        assert vis.click_log.count('button[name="sbmCadastrarAcompanhamento"]') == 1
 
         # Observação must have been filled on the textarea.
         obs_fill = [f for (sel, f) in vis.fill_log if sel == "#txaObservacao"]
         assert obs_fill == ["Cohort 2026/1"]
 
     @pytest.mark.asyncio
-    async def test_existing_group_no_observacao_skips_textarea(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_existing_group_no_observacao_skips_textarea(self, tmp_path, monkeypatch):
         from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
@@ -412,9 +393,7 @@ class TestAcompanhamentoLiveExistingGroup:
 
 class TestAcompanhamentoLiveNewGroup:
     @pytest.mark.asyncio
-    async def test_new_group_opens_modal_fills_and_submits_twice(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_new_group_opens_modal_fills_and_submits_twice(self, tmp_path, monkeypatch):
         from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
@@ -434,9 +413,7 @@ class TestAcompanhamentoLiveNewGroup:
         # Modal-trigger icon was clicked exactly once (group didn't exist).
         assert vis.click_log.count("#imgNovoGrupoAcompanhamento") == 1
         # Outer cadastrar submit fired exactly once.
-        assert vis.click_log.count(
-            'button[name="sbmCadastrarAcompanhamento"]'
-        ) == 1
+        assert vis.click_log.count('button[name="sbmCadastrarAcompanhamento"]') == 1
 
         # Observação was filled on the outer form.
         assert ("#txaObservacao", "Nova turma") in vis.fill_log
@@ -469,9 +446,7 @@ class TestAcompanhamentoForbiddenSelectors:
     get_acompanhamento_form."""
 
     @pytest.mark.asyncio
-    async def test_forbidden_submit_selector_raises_permission_error(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_forbidden_submit_selector_raises_permission_error(self, tmp_path, monkeypatch):
         """If the manifest's cadastrar.submit selector matches a forbidden
         token (e.g. btnAssinar), ``_safe_frame_click`` must raise
         PermissionError. The outer except in the writer explicitly
@@ -501,9 +476,7 @@ class TestAcompanhamentoForbiddenSelectors:
         assert 'button[name="btnAssinar"]' not in vis.click_log
 
     @pytest.mark.asyncio
-    async def test_forbidden_novo_grupo_selector_blocks_modal_click(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_forbidden_novo_grupo_selector_blocks_modal_click(self, tmp_path, monkeypatch):
         from ufpr_automation.config import settings
         import ufpr_automation.sei.writer_selectors as ws
 

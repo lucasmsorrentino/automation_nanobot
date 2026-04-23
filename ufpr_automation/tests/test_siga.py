@@ -412,9 +412,9 @@ class TestAutoLoginWaitStrategy:
 
         # Regression pin: after the role card is selected, we wait on
         # the 'Discentes' sidebar marker, not on networkidle.
-        assert any(
-            "Discentes" in sel for sel in locators_created
-        ), f"expected a locator('a:has-text(\"Discentes\")') call, got: {locators_created}"
+        assert any("Discentes" in sel for sel in locators_created), (
+            f"expected a locator('a:has-text(\"Discentes\")') call, got: {locators_created}"
+        )
 
         # The only wait_for_load_state calls allowed are 'load'
         # (short fallback for portal/keycloak), never 'networkidle'.

@@ -723,12 +723,12 @@ def relatorio_final_assinado_orientador(ctx: CheckContext) -> CheckResult:
 # supervisor's chefia imediata signs. Better to over-ask than to let an
 # incompatible supervisor through silently.
 _SUPERVISOR_AREAS_AFINS_DESIGN = {
-    "design",                   # cobre design grafico, de produto, de interiores, etc.
-    "arquitetura",              # arquitetura e urbanismo
+    "design",  # cobre design grafico, de produto, de interiores, etc.
+    "arquitetura",  # arquitetura e urbanismo
     "artes visuais",
     "artes plasticas",
     "comunicacao visual",
-    "comunicacao social",       # publicidade, jornalismo etc.
+    "comunicacao social",  # publicidade, jornalismo etc.
     "publicidade",
     "propaganda",
     "marketing",
@@ -736,13 +736,13 @@ _SUPERVISOR_AREAS_AFINS_DESIGN = {
     "producao cultural",
     "producao multimidia",
     "game design",
-    "ux",                       # ux design, ui/ux
+    "ux",  # ux design, ui/ux
     "interaction design",
     "direcao de arte",
     "diagramacao",
     "editoracao",
     "ilustracao",
-    "motion",                   # motion design / motion graphics
+    "motion",  # motion design / motion graphics
     "animacao",
     "fotografia",
     "cinema",

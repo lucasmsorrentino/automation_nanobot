@@ -43,7 +43,9 @@ def perceber_gmail(state: EmailState) -> dict[str, Any]:
                 try:
                     last_sender = client.thread_last_sender(email.gmail_message_id)
                 except Exception as e:
-                    logger.debug("Gmail: thread_last_sender falhou para %s: %s", email.stable_id[:8], e)
+                    logger.debug(
+                        "Gmail: thread_last_sender falhou para %s: %s", email.stable_id[:8], e
+                    )
                     continue
                 if last_sender and last_sender == institutional:
                     email.already_replied_by_us = True
@@ -978,9 +980,7 @@ async def _consult_sei_async(
                     ae_hit_term = None
                     ae_hit_kind = None
                     for term, kind in terms:
-                        ae_candidates = await client.find_in_acompanhamento_especial(
-                            term
-                        )
+                        ae_candidates = await client.find_in_acompanhamento_especial(term)
                         if ae_candidates:
                             all_candidates = ae_candidates
                             ae_hit_term = term
@@ -1384,8 +1384,10 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
             student_hard = [r for r in summary.hard_blocks if not r.internal_only]
             student_soft = [r for r in summary.soft_blocks if not r.internal_only]
             internal_count = (
-                len(summary.hard_blocks) + len(summary.soft_blocks)
-                - len(student_hard) - len(student_soft)
+                len(summary.hard_blocks)
+                + len(summary.soft_blocks)
+                - len(student_hard)
+                - len(student_soft)
             )
 
             # Primeiro nome em title-case; remove pronomes "Sr./Sra./Prof." se
@@ -1393,7 +1395,11 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
             raw_nome = vars_.get("nome_aluno", "").strip()
             first_name = raw_nome.split()[0] if raw_nome else ""
             first_name = first_name.capitalize() if first_name else "estudante"
-            greeting = f"Prezado(a) {first_name}," if first_name == "estudante" else f"Prezado(a) {first_name},"
+            greeting = (
+                f"Prezado(a) {first_name},"
+                if first_name == "estudante"
+                else f"Prezado(a) {first_name},"
+            )
 
             parts: list[str] = [f"{greeting}\n"]
 
@@ -1745,9 +1751,7 @@ def capturar_corpus_humano(state: EmailState) -> dict[str, Any]:
             continue
 
         if not thread_id:
-            logger.debug(
-                "Corpus humano: thread não resolvida (stable_id=%s)", email.stable_id[:8]
-            )
+            logger.debug("Corpus humano: thread não resolvida (stable_id=%s)", email.stable_id[:8])
             continue
 
         email.thread_id = thread_id

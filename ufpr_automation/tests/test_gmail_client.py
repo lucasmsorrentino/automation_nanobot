@@ -280,7 +280,7 @@ class _FakeIMAP:
             raw = criteria[1]
             stripped = raw.strip('"')
             if stripped.startswith("rfc822msgid:"):
-                needle = stripped[len("rfc822msgid:"):]
+                needle = stripped[len("rfc822msgid:") :]
                 needle = needle.replace('\\"', '"').replace("\\\\", "\\")
 
                 def _norm(s: str) -> str:
@@ -307,11 +307,13 @@ class _FakeIMAP:
             return ("OK", [b"1 (X-GM-THRID " + thrid + b" UID 999)"])
         if "HEADER.FIELDS" in spec:
             m = self.messages.get(msn, {})
-            payload = (
-                f"From: {m.get('from', '')}\r\n"
-                f"Date: {m.get('date', '')}\r\n\r\n"
-            ).encode("utf-8")
-            return ("OK", [(b"1 (BODY[HEADER.FIELDS (FROM DATE)] {%d}" % len(payload), payload), b")"])
+            payload = (f"From: {m.get('from', '')}\r\nDate: {m.get('date', '')}\r\n\r\n").encode(
+                "utf-8"
+            )
+            return (
+                "OK",
+                [(b"1 (BODY[HEADER.FIELDS (FROM DATE)] {%d}" % len(payload), payload), b")"],
+            )
         return ("OK", [b""])
 
     def create(self, label):
