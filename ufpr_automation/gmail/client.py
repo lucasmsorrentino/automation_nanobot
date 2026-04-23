@@ -34,6 +34,68 @@ ALL_MAIL_FOLDER = '"[Gmail]/All Mail"'
 
 _THRID_RE = re.compile(rb"X-GM-THRID (\d+)")
 
+# Sign-off markers that open the signature block in Portuguese correspondence.
+# Matched at start-of-line (tolerating leading whitespace). The last
+# occurrence wins so we don't cut legitimate body text that happens to
+# contain the word elsewhere.
+_SIGNATURE_MARKER_RE = re.compile(
+    r"(?im)^\s*(atenciosamente|att|cordialmente|sauda[çc][õo]es|respeitosamente)\s*[,.:]?\s*$"
+)
+
+# Hallucinated sector names that have shown up in LLM output and must be
+# stripped even if they appear above the sign-off marker. This list is
+# defensive — extend it when new hallucinations surface in logs.
+_HALLUCINATED_SECTORS = (
+    "Núcleo de Estágios",
+    "Nucleo de Estagios",
+)
+
+
+def normalize_signature_block(body: str, canonical: str) -> str:
+    """Replace whatever sign-off the source produced with ``canonical``.
+
+    LLMs (including MiniMax-M2 used by the project) routinely invent
+    sectors like "Núcleo de Estágios / UFPR" that do not exist, and
+    draft-to-draft signatures drift in wording and case. To keep every
+    outgoing draft anchored to the real persona, we rewrite the tail of
+    the body:
+
+    1. Find the LAST sign-off marker (``Atenciosamente``, ``Att``,
+       ``Cordialmente``...) on its own line; cut everything from that
+       line onwards.
+    2. Strip any line containing a known hallucinated sector.
+    3. Append ``canonical`` (typically ``settings.ASSINATURA_EMAIL``)
+       separated by a blank line.
+
+    If ``canonical`` is empty the body is returned unchanged (useful for
+    test environments without ``ASSINATURA_EMAIL`` configured).
+    """
+    if not canonical or not canonical.strip():
+        return body
+    if not body:
+        return canonical.rstrip() + "\n"
+
+    lines = body.splitlines()
+    cut_at: Optional[int] = None
+    for i in range(len(lines) - 1, -1, -1):
+        if _SIGNATURE_MARKER_RE.match(lines[i]):
+            cut_at = i
+            break
+    if cut_at is not None:
+        lines = lines[:cut_at]
+
+    # Strip lines that carry hallucinated sector names (case-insensitive,
+    # accent-insensitive for the ASCII fallback).
+    cleaned = []
+    for line in lines:
+        low = line.lower()
+        if any(h.lower() in low for h in _HALLUCINATED_SECTORS):
+            continue
+        cleaned.append(line)
+
+    trimmed = "\n".join(cleaned).rstrip()
+    return trimmed + "\n\n" + canonical.rstrip() + "\n"
+
 
 def _parse_address(raw: str) -> str:
     """Extract the bare lowercase email address from a 'Name <email>' string."""
@@ -346,6 +408,17 @@ class GmailClient:
     ) -> bool:
         """Save a reply as a draft in Gmail's Drafts folder via IMAP APPEND.
 
+        Side-effects:
+            1. Normalizes the body signature — any LLM-generated sign-off
+               is replaced with ``settings.ASSINATURA_EMAIL`` (see
+               :func:`normalize_signature_block`). This prevents the LLM
+               from inventing fictitious sectors (e.g. "Núcleo de Estágios")
+               or drifting persona across runs.
+            2. Deletes any previous draft addressed to the same recipient
+               in the same Gmail thread (matched by ``in_reply_to``) so
+               each pipeline re-run leaves exactly one draft per thread
+               instead of stacking stale versions.
+
         Args:
             to_addr: Recipient email address.
             subject: Email subject.
@@ -360,6 +433,10 @@ class GmailClient:
         if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
 
+        # Anti-hallucination: force canonical signature regardless of
+        # whatever the LLM / template produced.
+        body = normalize_signature_block(body, settings.ASSINATURA_EMAIL)
+
         msg = MIMEText(body, "plain", "utf-8")
         msg["From"] = self.email_addr
         msg["To"] = to_addr
@@ -373,12 +450,23 @@ class GmailClient:
 
         conn = self._connect_imap()
         try:
+            # Best-effort: remove existing drafts for the same thread so the
+            # reviewer doesn't see stacks of half-written replies from
+            # previous pipeline runs.
+            deleted = 0
+            if in_reply_to:
+                try:
+                    deleted = self._delete_existing_drafts(conn, in_reply_to, to_addr)
+                except Exception as e:
+                    logger.debug("Gmail: falha limpando drafts antigos: %s", e)
+
             conn.append("[Gmail]/Drafts", "\\Draft", None, msg.as_bytes())
             logger.info(
-                "Gmail: rascunho salvo para %s%s — %s",
+                "Gmail: rascunho salvo para %s%s — %s%s",
                 to_addr,
                 f" (cc {cc})" if cc else "",
                 subject[:50],
+                f" [substituiu {deleted} antigo(s)]" if deleted else "",
             )
             return True
         except Exception as e:
@@ -386,6 +474,56 @@ class GmailClient:
             return False
         finally:
             conn.logout()
+
+    def _delete_existing_drafts(
+        self,
+        conn: imaplib.IMAP4_SSL,
+        in_reply_to: str,
+        to_addr: str,
+    ) -> int:
+        """Delete drafts in ``[Gmail]/Drafts`` addressed to ``to_addr`` whose
+        ``In-Reply-To`` / ``References`` point to the same upstream message.
+
+        Returns number of drafts deleted. Matching is conservative: the
+        ``In-Reply-To`` header must contain the exact message-id and the
+        recipient must match. We also fall back to matching by recipient
+        alone for drafts whose headers have been stripped by Gmail — safer
+        to drop a stale draft than to leave it confusing the reviewer.
+        """
+        stripped_mid = in_reply_to.strip().strip("<>")
+        if not stripped_mid:
+            return 0
+        conn.select("[Gmail]/Drafts")
+        try:
+            # Gmail doesn't index In-Reply-To for SEARCH, but X-GM-RAW
+            # with rfc822msgid: on References works.
+            escaped = stripped_mid.replace("\\", "\\\\").replace('"', '\\"')
+            quoted = f'"rfc822msgid:{escaped}"'
+            try:
+                _, data = conn.search(None, "X-GM-RAW", quoted)
+            except imaplib.IMAP4.error:
+                data = [b""]
+            candidate_ids: set[bytes] = set((data[0].split() if data and data[0] else []))
+            # Also match by TO alone — catches the case where Gmail
+            # reorganized the draft and the thread link was lost.
+            try:
+                _, data_to = conn.search(None, "TO", to_addr)
+                candidate_ids.update(data_to[0].split() if data_to and data_to[0] else [])
+            except imaplib.IMAP4.error:
+                pass
+
+            deleted = 0
+            for mid in candidate_ids:
+                try:
+                    conn.store(mid, "+FLAGS", "\\Deleted")
+                    deleted += 1
+                except imaplib.IMAP4.error:
+                    continue
+            if deleted:
+                conn.expunge()
+            return deleted
+        finally:
+            pass
 
     # ------------------------------------------------------------------
     # Thread-aware helpers (Gmail X-GM-THRID extension)

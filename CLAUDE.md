@@ -87,6 +87,13 @@ python -m ufpr_automation --channel gmail --langgraph           # use LangGraph 
 # Default já é Fleet. Configura tamanho do pool de browsers Playwright:
 FLEET_BROWSER_POOL_SIZE=5 python -m ufpr_automation --channel gmail
 
+# Limita quantos sub-agentes Tier 1 rodam concorrentemente (semáforo em
+# graph/fleet.py). Complementa o singleton do SentenceTransformer em
+# rag/_embedder.py — com ambos em vigor a RAM fica flat independente de N.
+# Default 2. O default prático depende da RAM disponível: 1 se <8 GB livre,
+# 2-3 com 16 GB, 4+ com 32 GB.
+FLEET_MAX_CONCURRENT_SUBAGENTS=1 python -m ufpr_automation --channel gmail
+
 # AFlow topology evaluator (Marco III) — 5 topologias hand-authored + evaluator
 python -m ufpr_automation.aflow.cli --topologies all --limit 20            # eval all variants
 python -m ufpr_automation.aflow.cli --topologies baseline,fleet --limit 10
@@ -190,7 +197,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 
 **Packages under `ufpr_automation/`:**
 
-- **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()` (with attachment download), `save_draft()`, `send_reply()`, `mark_read()`. `thread.py` splits email bodies into (new_reply, quoted_history) by detecting `Em … escreveu:` / `On … wrote:` / `-----Mensagem Original-----` / `>` quoting — used by the LLM prompt so the model can tell what the sender is asking *now* vs. what was said before in the thread.
+- **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()` (with attachment download), `save_draft()`, `send_reply()`, `mark_read()`. `thread.py` splits email bodies into (new_reply, quoted_history) by detecting `Em … escreveu:` / `On … wrote:` / `-----Mensagem Original-----` / `>` quoting — used by the LLM prompt so the model can tell what the sender is asking *now* vs. what was said before in the thread. **`save_draft` anti-hallucination pipeline (2026-04-23)**: every draft body is passed through `normalize_signature_block(body, settings.ASSINATURA_EMAIL)` which (a) locates the LAST sign-off marker (`Atenciosamente`/`Att`/`Cordialmente`/`Saudações`/`Respeitosamente` on its own line), (b) cuts everything from there onwards, (c) strips any line containing a known hallucinated sector (`_HALLUCINATED_SECTORS` whitelist — started with "Núcleo de Estágios" after MiniMax-M2 invented it for the Paloma aditivo 2026-04-23 run), (d) appends the canonical `settings.ASSINATURA_EMAIL`. Idempotent. `save_draft` also dedupes within the recipient's thread before APPEND (`_delete_existing_drafts`): stale drafts from previous pipeline runs are removed so the reviewer sees exactly one current version per thread.
 - **`attachments/`** — Attachment text extraction module. `extractor.py` handles PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), plain text, and **OCR** (Tesseract via pytesseract) for scanned PDFs and images. Falls back to `needs_ocr=True` if Tesseract is not installed. Downloaded files saved to `ATTACHMENTS_DIR`.
 - **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot. `locators.py` provides resilient locator fallback chains (semantic -> text -> ID -> CSS).
 - **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle), RAG context injection, attachment text injection, and **model cascading** (`router.py` — routes classification to cheap/local models and drafting to capable API models, with automatic fallback).

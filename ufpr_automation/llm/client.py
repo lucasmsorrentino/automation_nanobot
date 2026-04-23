@@ -151,13 +151,35 @@ class LLMClient:
                         "tipo nao suportado para extracao]\n"
                     )
 
+        # Explicit anti-hallucination guard on the signature. MiniMax-M2
+        # (and other small LLMs) routinely invent plausible-looking but
+        # fictitious sectors ("Núcleo de Estágios", "Secretaria do Curso",
+        # "Assessoria de Estágios" etc.) when left to freestyle the
+        # sign-off. The canonical signature is already in the system
+        # prompt (via SOUL_ESSENTIALS), but restating it inside the user
+        # prompt near the draft-writing instruction materially reduces
+        # hallucinations in the generated draft.
+        signature_guard = ""
+        if settings.ASSINATURA_EMAIL:
+            signature_guard = (
+                "\n\n=== ASSINATURA OBRIGATÓRIA ===\n"
+                "Use EXATAMENTE este bloco ao final do campo 'sugestao_resposta', "
+                "sem alterações, abreviações, substituições ou acréscimos:\n\n"
+                f"{settings.ASSINATURA_EMAIL}\n\n"
+                "NÃO invente nomes de setores. O único setor válido é "
+                "'Secretaria da Coordenação de Design Gráfico'. NÃO escreva "
+                "'Núcleo de Estágios', 'Secretaria do Curso', 'Assessoria de "
+                "Estágios' ou qualquer outra variação — esses setores NÃO EXISTEM."
+            )
+
         user_prompt = (
             "Por favor, analise o seguinte e-mail recebido na caixa de entrada:\n\n"
             f"Remetente: {email.sender}\n"
             f"Assunto: {email.subject}\n"
             f"{content_label}:\n{content}\n"
             f"{attachment_section}"
-            f"{rag_section}\n"
+            f"{rag_section}"
+            f"{signature_guard}\n\n"
             "Classifique o e-mail e redija uma resposta adequada seguindo as normas "
             "da UFPR contidas no seu contexto.\n\n"
             "Responda SOMENTE com um JSON válido contendo as chaves: "
