@@ -377,8 +377,8 @@ def _llm_extract_fields(email: EmailData, fields: list[str]) -> dict[str, str]:
     body = email.body or email.preview or ""
     user_prefix = f"Assunto: {email.subject}\n\n{body}"
 
-    for field in fields:
-        instruction = _LLM_FIELD_EXTRACTORS.get(field)
+    for field_name in fields:
+        instruction = _LLM_FIELD_EXTRACTORS.get(field_name)
         if not instruction:
             continue
         try:
@@ -395,10 +395,10 @@ def _llm_extract_fields(email: EmailData, fields: list[str]) -> dict[str, str]:
             )
             content = (response.choices[0].message.content or "").strip()
         except Exception as e:
-            logger.warning("Tier 0 LLM extraction falhou (%s): %s", field, e)
+            logger.warning("Tier 0 LLM extraction falhou (%s): %s", field_name, e)
             continue
         if content and content.strip().upper() != "NONE":
-            out[field] = content
+            out[field_name] = content
 
     return out
 
