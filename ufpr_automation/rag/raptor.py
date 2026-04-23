@@ -324,14 +324,18 @@ class RaptorRetriever:
             return
 
         import lancedb
-        from sentence_transformers import SentenceTransformer
+
+        # Use the process-wide shared embedder (see rag/_embedder.py) so the
+        # LangGraph Fleet sub-agents don't each load their own ~2 GB copy of
+        # the model weights into RAM.
+        from ufpr_automation.rag._embedder import get_shared_embedder
 
         db_path = STORE_DIR / "ufpr.lance"
         if not db_path.exists():
             raise FileNotFoundError(f"Vector store not found at {db_path}")
 
         self._db = lancedb.connect(str(db_path))
-        self._model = SentenceTransformer(self._model_name)
+        self._model = get_shared_embedder(self._model_name)
 
     def _embed_query(self, query: str) -> list[float]:
         vec = self._model.encode(f"query: {query}", normalize_embeddings=True)

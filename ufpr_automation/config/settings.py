@@ -272,6 +272,22 @@ SEI_WRITE_MODE = os.getenv("SEI_WRITE_MODE", "dry_run").lower()
 
 
 # ============================================================================
+# LangGraph Fleet — sub-agent concurrency
+# ============================================================================
+# Caps how many Fleet sub-agents (``process_one_email`` bodies) execute the
+# heavy RAG + classify work at the same time. LangGraph's Send API fan-out
+# dispatches one sub-agent per Tier 1 email in its own thread; without this
+# cap, N emails would hit the LLM / RAG stack with N-wide parallelism and
+# risk OOM (see ``ufpr_automation/TASKS.md`` "Fleet OOM"). The semaphore is
+# created in :mod:`ufpr_automation.graph.fleet`; sub-agents beyond the limit
+# block inside ``with _SUBAGENT_SEMAPHORE:`` until a slot frees up.
+#
+# Default 2 is tuned for the current dev host (~16 GB RAM). Raise this when
+# the box has more memory/CPU; lower to 1 to serialize completely.
+FLEET_MAX_CONCURRENT_SUBAGENTS = int(os.getenv("FLEET_MAX_CONCURRENT_SUBAGENTS", "2"))
+
+
+# ============================================================================
 # AFlow — topology evaluator (Marco III)
 # ============================================================================
 AFLOW_TOPOLOGY = os.getenv("AFLOW_TOPOLOGY", "fleet").lower()

@@ -48,11 +48,15 @@ class ReflexionMemory:
             return
 
         import lancedb
-        from sentence_transformers import SentenceTransformer
+
+        # Use the process-wide shared embedder (see rag/_embedder.py) so the
+        # LangGraph Fleet sub-agents don't each load their own ~2 GB copy of
+        # the model weights into RAM.
+        from ufpr_automation.rag._embedder import get_shared_embedder
 
         REFLEXION_DIR.mkdir(parents=True, exist_ok=True)
         self._db = lancedb.connect(str(REFLEXION_STORE))
-        self._model = SentenceTransformer("intfloat/multilingual-e5-large")
+        self._model = get_shared_embedder("intfloat/multilingual-e5-large")
 
         if REFLEXION_TABLE in self._db.list_tables().tables:
             self._table = self._db.open_table(REFLEXION_TABLE)
