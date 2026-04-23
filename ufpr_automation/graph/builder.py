@@ -15,6 +15,7 @@ from ufpr_automation.graph.nodes import (
     agir_estagios,
     agir_gmail,
     capturar_corpus_humano,
+    consultar_tier0_sei_siga,
     perceber_gmail,
     perceber_owa,
     prewarm_sessions,
@@ -114,6 +115,14 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     # when disabled, the node is a cheap no-op.
     graph.add_node("prewarm_sessions", prewarm_sessions)
 
+    # Consult SEI + SIGA for Tier 0 HITS with non-trivial sei_action
+    # (aditivo / conclusão / rescisão / new TCE). Without this, agir_estagios
+    # runs checkers with empty sei_context / siga_context and soft-blocks
+    # defensively, sending nonsensical "please provide data you already sent"
+    # replies to students. Tier 1 emails continue to consult inside
+    # process_one_email. See bug note in nodes.py:consultar_tier0_sei_siga.
+    graph.add_node("consultar_tier0_sei_siga", consultar_tier0_sei_siga)
+
     # Fleet sub-agent — runs the full Tier 1 pipeline (rag_retrieve +
     # classificar + optional SEI/SIGA consult) for ONE email. Invoked in
     # parallel via Send fan-out from `dispatch_tier1`.
@@ -133,8 +142,9 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
         "perceber", _has_emails, {"tier0_lookup": "tier0_lookup", "end": END}
     )
     graph.add_edge("tier0_lookup", "prewarm_sessions")
+    graph.add_edge("prewarm_sessions", "consultar_tier0_sei_siga")
     graph.add_conditional_edges(
-        "prewarm_sessions",
+        "consultar_tier0_sei_siga",
         dispatch_tier1,
         ["process_one_email", "rotear"],
     )

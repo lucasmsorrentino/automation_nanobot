@@ -331,6 +331,111 @@ async def _prewarm_sessions_async(max_age_h: float) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Consult SEI + SIGA for Tier 0 HITS that need them (aditivo/conclusão/etc.)
+# ---------------------------------------------------------------------------
+#
+# Bug architectural discovered 2026-04-23 (Paloma run): when Tier 0 resolves an
+# email with ``sei_action != "none"`` the pipeline short-circuits past the
+# Fleet fan-out — which is where :func:`_consult_sei_for_email` /
+# :func:`_consult_siga_for_email` normally run. ``agir_estagios`` then sees
+# empty ``sei_contexts`` / ``siga_contexts`` and its checkers (which read
+# ``ctx.sei_context`` / ``ctx.siga_context``) all fall into defensive
+# soft-blocks — "SEI não consultado", "SIGA não consultado", "Data de início
+# do TCE original não disponível". The student receives a nonsensical
+# "please provide data you already sent" email, and the SEI write path
+# never fires.
+#
+# Fix: run the same per-email SEI/SIGA consultation for Tier 0 hits whose
+# intent declares ``sei_action != "none"``, BEFORE the Fleet conditional.
+# Tier 1 emails continue to consult inside ``process_one_email`` (still the
+# right place because RAG + classify also live there).
+
+
+def consultar_tier0_sei_siga(state: EmailState) -> dict[str, Any]:
+    """Populate ``sei_contexts`` + ``siga_contexts`` for Tier 0 HITS whose
+    intent declares a non-trivial ``sei_action`` (i.e. aditivo/conclusão/
+    rescisão or new TCE). Tier 1 emails are consulted inside the Fleet
+    sub-agent, so this node is a no-op for them.
+
+    The consultation reuses :func:`_consult_sei_for_email` and
+    :func:`_consult_siga_for_email` — the exact functions that the Fleet
+    sub-agent calls — so checker behaviour stays identical regardless of
+    which tier resolved the email.
+
+    Runs synchronously in the main thread (one email at a time). When
+    ``FLEET_MAX_CONCURRENT_SUBAGENTS=1`` (default when RAM is tight) this
+    is also what Tier 1 does, so no performance regression in practice.
+    Failures per email are isolated — a broken SEI consult for email A
+    does not prevent the consult for email B.
+    """
+    tier0_hits = state.get("tier0_hits", [])
+    if not tier0_hits:
+        return {}
+
+    classifications = state.get("classifications", {})
+    emails = state.get("emails", [])
+    email_map = {e.stable_id: e for e in emails}
+
+    # Avoid importing playbook at module-import time (heavy).
+    from ufpr_automation.procedures.playbook import get_playbook
+
+    playbook = get_playbook()
+
+    sei_results: dict[str, Any] = {}
+    siga_results: dict[str, Any] = {}
+
+    eligible_count = 0
+    for sid in tier0_hits:
+        email = email_map.get(sid)
+        cls = classifications.get(sid)
+        if not email or not cls or cls.categoria != "Estágios":
+            continue
+
+        # Look up the Tier 0 intent to check its sei_action. Matches the
+        # same body the playbook used in :func:`tier0_lookup`.
+        match = playbook.lookup(email.body or email.subject)
+        if not match or match.intent.sei_action in ("none", None, ""):
+            continue
+
+        eligible_count += 1
+        try:
+            sei_data = _consult_sei_for_email(email, cls)
+            if sei_data is not None:
+                sei_results[sid] = sei_data
+        except Exception as e:
+            logger.warning(
+                "consultar_tier0_sei_siga[%s]: SEI consult falhou: %s",
+                sid[:8],
+                e,
+            )
+
+        try:
+            siga_data = _consult_siga_for_email(email, cls)
+            if siga_data is not None:
+                siga_results[sid] = siga_data
+        except Exception as e:
+            logger.warning(
+                "consultar_tier0_sei_siga[%s]: SIGA consult falhou: %s",
+                sid[:8],
+                e,
+            )
+
+    if eligible_count:
+        logger.info(
+            "Tier 0 SEI/SIGA: %d email(s) com sei_action consultados — "
+            "sei=%d siga=%d hit(s)",
+            eligible_count,
+            len(sei_results),
+            len(siga_results),
+        )
+
+    return {
+        "sei_contexts": sei_results,
+        "siga_contexts": siga_results,
+    }
+
+
 async def _perceber_owa_async() -> list:
     """Internal async implementation for OWA scraping with full browser lifecycle."""
     from ufpr_automation.agents.perceber import PerceberAgent
