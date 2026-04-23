@@ -614,6 +614,15 @@ def _should_use_dspy() -> bool:
 def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
     """Classify emails using DSPy modules (optimizable prompts).
 
+    Thread-safety: called from each Fleet sub-agent, which LangGraph runs
+    in its own worker thread. We use ``dspy.settings.context(lm=lm)``
+    (thread-local override) instead of ``dspy.configure(lm=lm)`` (global,
+    owner-thread-locked). See upstream docs in
+    ``dspy/dsp/utils/settings.py`` (``Settings`` docstring):
+
+        "Any thread can use dspy.context. It propagates to child threads
+         created with DSPy primitives: Parallel, asyncify, etc."
+
     Raises RuntimeError if called without a compiled file. The
     ``_should_use_dspy()`` gate should prevent that, but the defensive
     check helps debugging.
@@ -627,7 +636,6 @@ def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
     )
 
     lm = _dspy.LM(model=settings.LLM_MODEL, temperature=0.2)
-    _dspy.configure(lm=lm)
 
     module = SelfRefineModule()
     loaded: str | None = None
@@ -646,18 +654,19 @@ def _classify_with_dspy(emails, rag_contexts) -> dict[str, Any]:
         )
 
     results = {}
-    for email in emails:
-        try:
-            rag_ctx = rag_contexts.get(email.stable_id, "")
-            pred = module(
-                email_subject=email.subject,
-                email_body=email.body or email.preview,
-                email_sender=email.sender,
-                rag_context=rag_ctx,
-            )
-            results[email.stable_id] = prediction_to_classification(pred)
-        except Exception as e:
-            logger.warning("DSPy classificacao falhou para '%s': %s", email.subject[:40], e)
+    with _dspy.settings.context(lm=lm):
+        for email in emails:
+            try:
+                rag_ctx = rag_contexts.get(email.stable_id, "")
+                pred = module(
+                    email_subject=email.subject,
+                    email_body=email.body or email.preview,
+                    email_sender=email.sender,
+                    rag_context=rag_ctx,
+                )
+                results[email.stable_id] = prediction_to_classification(pred)
+            except Exception as e:
+                logger.warning("DSPy classificacao falhou para '%s': %s", email.subject[:40], e)
     return results
 
 
