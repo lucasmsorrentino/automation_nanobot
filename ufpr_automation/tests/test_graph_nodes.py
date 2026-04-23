@@ -187,7 +187,6 @@ class TestPrewarmSessions:
 
     def test_runs_async_when_enabled_and_sei_mentioned(self, monkeypatch):
         """Enabled + SEI number in email → async warming executes."""
-        import asyncio
 
         from ufpr_automation.graph.nodes import prewarm_sessions
 
@@ -237,7 +236,6 @@ class TestPrewarmSessions:
     def test_fresh_session_file_short_circuits(self, monkeypatch, tmp_path):
         """_prewarm_sessions_async must skip systems whose session file is young."""
         import asyncio
-        import time
 
         # Point the session files at tmp_path and touch them fresh.
         sei_file = tmp_path / "sei_state.json"
@@ -487,7 +485,6 @@ class TestCapturarCorpusHumano:
         assert result == {"corpus_captured": []}
 
     def test_missing_label_is_noop(self, tmp_path, monkeypatch):
-        from ufpr_automation.graph import nodes
         from ufpr_automation.graph.nodes import capturar_corpus_humano
 
         monkeypatch.setattr("ufpr_automation.feedback.store.FEEDBACK_DIR", tmp_path)

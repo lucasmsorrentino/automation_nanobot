@@ -29,7 +29,6 @@ import pytest
 from ufpr_automation.sei.writer import SEIWriter
 from ufpr_automation.sei.writer_selectors import _ACOMPANHAMENTO_ESPECIAL_DEFAULTS
 
-
 # ---------------------------------------------------------------------------
 # Fake Playwright surface
 # ---------------------------------------------------------------------------
@@ -452,8 +451,8 @@ class TestAcompanhamentoForbiddenSelectors:
         PermissionError. The outer except in the writer explicitly
         re-raises PermissionError instead of wrapping it, so callers see
         the raise."""
-        from ufpr_automation.config import settings
         import ufpr_automation.sei.writer_selectors as ws
+        from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
 
@@ -477,8 +476,8 @@ class TestAcompanhamentoForbiddenSelectors:
 
     @pytest.mark.asyncio
     async def test_forbidden_novo_grupo_selector_blocks_modal_click(self, tmp_path, monkeypatch):
-        from ufpr_automation.config import settings
         import ufpr_automation.sei.writer_selectors as ws
+        from ufpr_automation.config import settings
 
         monkeypatch.setattr(settings, "SEI_WRITE_ARTIFACTS_DIR", tmp_path)
 
