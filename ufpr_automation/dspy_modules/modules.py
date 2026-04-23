@@ -34,6 +34,7 @@ class EmailClassifierModule(dspy.Module):
         email_sender: str,
         rag_context: str = "",
     ) -> dspy.Prediction:
+        """Single-shot classification — no critique/refine loop."""
         return self.classify(
             email_subject=email_subject,
             email_body=email_body,
@@ -62,6 +63,7 @@ class SelfRefineModule(dspy.Module):
         email_sender: str,
         rag_context: str = "",
     ) -> dspy.Prediction:
+        """Run classify → critique → refine; skip refine when critic is clean."""
         # Step 1: Classify
         classification = self.classify(
             email_subject=email_subject,

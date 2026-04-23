@@ -617,10 +617,12 @@ class Playbook:
 
     @property
     def intents(self) -> list[Intent]:
+        """Parsed intents (lazy-loads PROCEDURES.md on first access)."""
         self._ensure_parsed()
         return list(self._intents)
 
     def get(self, intent_name: str) -> Optional[Intent]:
+        """Return the intent with matching ``intent_name`` or ``None``."""
         self._ensure_parsed()
         for intent in self._intents:
             if intent.intent_name == intent_name:
@@ -783,6 +785,7 @@ class Playbook:
     # -- template convenience -------------------------------------------
 
     def fill(self, intent: Intent, vars: dict[str, str]) -> str:
+        """Shortcut for ``fill_template(intent.template, vars)``."""
         return fill_template(intent.template, vars)
 
 

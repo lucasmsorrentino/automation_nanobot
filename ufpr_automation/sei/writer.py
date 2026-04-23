@@ -137,10 +137,12 @@ class SEIWriter:
 
     @property
     def dry_run(self) -> bool:
+        """True when write ops are logged/screenshotted but not clicked in SEI."""
         return self._dry_run
 
     @property
     def run_id(self) -> str:
+        """Stable identifier for this writer instance (tags audit artifacts)."""
         return self._run_id
 
     @staticmethod

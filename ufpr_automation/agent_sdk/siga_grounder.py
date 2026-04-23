@@ -466,6 +466,12 @@ def run(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point for ``python -m ufpr_automation.agent_sdk.siga_grounder``.
+
+    Reads the BLOCO 3 Moodle tutorial markdown, asks the grounding LLM to
+    emit a ``siga_selectors.yaml`` and writes it under the session folder.
+    Returns 0 on success.
+    """
     p = argparse.ArgumentParser(
         prog="siga_grounder",
         description="Produce siga_selectors.yaml from UFPR Aberta BLOCO 3 tutorial.",

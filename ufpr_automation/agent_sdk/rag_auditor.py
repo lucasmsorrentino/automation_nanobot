@@ -84,6 +84,7 @@ class SubsetMetrics:
 
     @property
     def recall(self) -> float:
+        """Fraction of queries that produced at least one hit (0.0 if empty)."""
         return self.n_hits / self.n_queries if self.n_queries else 0.0
 
 

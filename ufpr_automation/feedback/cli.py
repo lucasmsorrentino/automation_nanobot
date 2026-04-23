@@ -302,6 +302,12 @@ def cmd_add(store: FeedbackStore) -> None:
 
 
 def main() -> None:
+    """Entry point for ``python -m ufpr_automation.feedback``.
+
+    Dispatches to ``stats`` (print counts), ``export`` (JSON dump for DSPy),
+    ``review`` (interactive review of the last pipeline run) or ``add``
+    (manual correction entry).
+    """
     parser = argparse.ArgumentParser(description="Feedback CLI — UFPR Automation")
     parser.add_argument(
         "command",

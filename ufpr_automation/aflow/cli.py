@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point for ``python -m ufpr_automation.aflow.cli``.
+
+    Parses flags (``--topologies``, ``--limit``, etc.), runs the evaluator
+    across the selected variants and prints a comparison report. Returns 0
+    on success, non-zero on failure (suitable for shell use).
+    """
     parser = argparse.ArgumentParser(description="AFlow topology evaluator")
     parser.add_argument(
         "--topologies",

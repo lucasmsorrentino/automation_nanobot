@@ -76,14 +76,17 @@ class CheckSummary:
 
     @property
     def hard_blocks(self) -> list[CheckResult]:
+        """Sub-list of results with ``status == "hard_block"``."""
         return [r for r in self.results if r.status == "hard_block"]
 
     @property
     def soft_blocks(self) -> list[CheckResult]:
+        """Sub-list of results with ``status == "soft_block"``."""
         return [r for r in self.results if r.status == "soft_block"]
 
     @property
     def passed(self) -> list[CheckResult]:
+        """Sub-list of results with ``status == "pass"``."""
         return [r for r in self.results if r.status == "pass"]
 
     @property

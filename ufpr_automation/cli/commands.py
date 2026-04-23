@@ -29,6 +29,12 @@ from ufpr_automation.config import settings
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command-line flags for ``python -m ufpr_automation``.
+
+    Defines channel selection, scheduler / once-mode toggles, debug flags
+    and LangGraph options. Returns the populated ``argparse.Namespace``
+    for ``main()`` to dispatch on.
+    """
     parser = argparse.ArgumentParser(
         description="UFPR Bureaucratic Automation — Marco I (Multi-Agent Pipeline)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
