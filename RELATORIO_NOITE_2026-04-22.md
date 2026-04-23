@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-- **8 commits** atômicos, todos SAFE (formato, imports, docs, types, observability, tests, refactor mínimo)
+- **10 commits** atômicos, todos SAFE (formato, imports, docs, types, observability, tests, refactor mínimo, bug latente)
 - **886/886 testes passando** em todos os pontos de checkpoint (baseline inicial e final)
 - **Zero mudanças de comportamento** observável — toda a refatoração é non-functional
 - **29 arquivos** tocados: 288 linhas adicionadas, 492 removidas (net −204 linhas, principalmente format + dead imports + remoção do `NOTAS_AUTONOMO.md`)
@@ -23,6 +23,8 @@
 | 6 | `0cdfef1` | `obs(auto):` `logger.debug/warning` em 4 except blocks silenciosos | +9 / −8 | baixo |
 | 7 | `63d9b3f` | `test(auto):` `assert isinstance(...)` em 5 asserts fracas | +6 / −6 | zero |
 | 8 | `559416c` | `refactor(auto):` extract `capturar_corpus_humano` → `nodes_actions.py` | +142 / −125 | médio (validado por 4 testes de regressão) |
+| 9 | `b0a6e06` | `docs(auto):` este relatório | +90 / 0 | zero |
+| 10 | `37929ca` | `fix(auto):` rename loop var `field` → `field_name` em playbook.py (F402 shadowing latente) | +4 / −4 | zero |
 
 ## Métricas
 
@@ -42,9 +44,10 @@
 ### Ruff
 
 - Baseline: 9 erros (7 autofixáveis via I001)
-- Final: 2 erros — **pré-existentes, não introduzidos por mim**:
-  - `F402` em `playbook.py:380` (loop var `field` shadowing pydantic import — ambíguo se é bug ou intencional)
-  - `N802` em `test_sei_writer_acompanhamento_live.py:421` (nome mixed-case `test_new_group_fills_txtNome_in_modal` — provavelmente intencional para casar com `txtNome` do SEI)
+- Após Batch 3: 2 erros remanescentes
+- **Final: 1 erro restante** — apenas o pré-existente intencional:
+  - `N802` em `test_sei_writer_acompanhamento_live.py:421` (nome mixed-case `test_new_group_fills_txtNome_in_modal` — intencional para espelhar o `#txtNome` do DOM do SEI)
+- `F402` (shadowing do `field`) corrigido em commit `37929ca` — renomeado loop var para `field_name`.
 
 ### Arquivo mais alterado
 
@@ -66,7 +69,7 @@ O plano original previa mais algumas mudanças que optei por NÃO fazer por risc
 - **Refatorar `sei/writer.py:add_to_acompanhamento_especial`** (~250 linhas) — tem testes live e roda contra secretaria real, risco alto.
 - **Split completo de `nodes.py` (`agir_gmail`, `agir_estagios`, `_run_sei_chain`)** — precisa decisão de qual arquivo colocar o helper compartilhado.
 - **Setup `.pre-commit-config.yaml`** — muda fluxo de dev, quer alinhar com você.
-- **Arrumar os 2 erros ruff pré-existentes** — um pode ser bug real (`F402`), precisa investigação.
+- **Arrumar o 1 erro ruff pré-existente** — o `N802` do `test_new_group_fills_txtNome_in_modal` parece intencional; basta suprimir com `# noqa: N802` se quiser baseline zero.
 - **`pip install -e ".[dev]"` / instalar `pre-commit`** — dependências novas, prefiro você decidir.
 - **Abrir PR `auto/overnight-debt-2026-04-22` → `dev`** — deixei a branch pushada, você abre quando revisar.
 
