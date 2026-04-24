@@ -327,6 +327,39 @@ class _FakeIMAP:
             self.copy_calls.append((uid_set.encode(), dest))
         return (self.copy_status, [b""])
 
+    def uid(self, command, *args):
+        """Support UID-based SEARCH/FETCH/STORE used by list_unread/mark_read.
+
+        Stores calls in ``self.uid_calls`` so tests can assert the client
+        actually uses UID-based IMAP commands (not MSN-based) for the
+        unread/mark-read path. Sequence numbers drift across sessions —
+        UIDs are stable, so the mark_read in a later session always hits
+        the same message.
+        """
+        if not hasattr(self, "uid_calls"):
+            self.uid_calls = []
+        self.uid_calls.append((command, args))
+        cmd = command.upper()
+        if cmd == "SEARCH":
+            # Return all message "UIDs" we have messages for
+            return ("OK", [b" ".join(self.messages.keys()) if self.messages else b""])
+        if cmd == "FETCH":
+            uid = args[0] if args else b""
+            if isinstance(uid, str):
+                uid = uid.encode()
+            m = self.messages.get(uid, {})
+            raw = (
+                f"From: {m.get('from', 'a@x')}\r\n"
+                f"Subject: {m.get('subject', 's')}\r\n"
+                f"Message-ID: {m.get('message_id', '<m@x>')}\r\n"
+                f"Date: {m.get('date', '')}\r\n\r\n"
+                f"{m.get('body', 'body')}"
+            ).encode("utf-8")
+            return ("OK", [(b"1 (UID " + uid + b" RFC822 {%d}" % len(raw), raw), b")"])
+        if cmd == "STORE":
+            return ("OK", [b""])
+        return ("OK", [b""])
+
     def logout(self):
         self.logged_out = True
         return ("BYE", [b""])
@@ -476,3 +509,46 @@ class TestCopyThreadToLabel:
         assert count == 0
         # thread_id is still returned so the caller can log it
         assert thread_id == "5555"
+
+
+class TestUnreadLifecycleUsesUID:
+    """Regression: list_unread + mark_read must use IMAP UIDs (stable), not
+    sequence numbers (drift between sessions under sustained runs, causing
+    ``mark_read`` to flag the wrong message and the same email to be
+    re-picked next run)."""
+
+    def test_list_unread_issues_uid_search_and_fetch(self):
+        fake = _FakeIMAP()
+        fake.messages = {
+            b"101": {
+                "message_id": "<a@x>",
+                "from": "Alice <a@x.com>",
+                "subject": "Hi",
+                "date": "Thu, 24 Apr 2026 09:00:00 -0300",
+                "body": "hello",
+            },
+        }
+        client = _make_client_with_fake(fake)
+        emails = client.list_unread(folder="INBOX", limit=5)
+
+        assert len(emails) == 1
+        assert emails[0].gmail_msg_id == "101"  # UID, not MSN
+
+        commands = [c for c, _ in fake.uid_calls]
+        assert "SEARCH" in commands
+        assert "FETCH" in commands
+
+    def test_mark_read_issues_uid_store(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+
+        ok = client.mark_read("101")
+
+        assert ok
+        assert fake.uid_calls, "mark_read must use conn.uid(...)"
+        store_calls = [c for c in fake.uid_calls if c[0].upper() == "STORE"]
+        assert len(store_calls) == 1
+        _cmd, args = store_calls[0]
+        assert args[0] == b"101"
+        assert args[1] == "+FLAGS"
+        assert args[2] == "\\Seen"

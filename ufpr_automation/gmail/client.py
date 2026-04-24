@@ -242,6 +242,14 @@ class GmailClient:
     def list_unread(self, folder: str = "INBOX", limit: int = 20) -> list[EmailData]:
         """Fetch unread emails and return as EmailData objects.
 
+        Uses IMAP **UIDs** (not sequence numbers) throughout: UIDs are
+        stable across sessions, so the ``mark_read`` call later in the
+        pipeline operates on the exact same message even if new mail
+        arrived in INBOX during the run. Using MSNs caused drift under
+        sustained runs (10+ min) — new unread mail shifted numbering,
+        and ``STORE +Seen`` quietly hit the wrong row, leaving emails
+        as UNSEEN and making subsequent runs re-pick them.
+
         Args:
             folder: IMAP folder to read from.
             limit: Max number of unread emails to fetch.
@@ -252,20 +260,20 @@ class GmailClient:
         conn = self._connect_imap()
         try:
             conn.select(folder, readonly=True)
-            _, data = conn.search(None, "UNSEEN")
-            msg_ids = data[0].split() if data[0] else []
+            _, data = conn.uid("SEARCH", None, "UNSEEN")
+            msg_uids = data[0].split() if data[0] else []
 
-            if not msg_ids:
+            if not msg_uids:
                 logger.info("Gmail: nenhum e-mail não lido encontrado.")
                 return []
 
             # Most recent first, respect limit
-            msg_ids = msg_ids[-limit:][::-1]
-            logger.info("Gmail: %d e-mail(s) não lido(s) encontrado(s).", len(msg_ids))
+            msg_uids = msg_uids[-limit:][::-1]
+            logger.info("Gmail: %d e-mail(s) não lido(s) encontrado(s).", len(msg_uids))
 
             emails: list[EmailData] = []
-            for idx, msg_id in enumerate(msg_ids):
-                _, msg_data = conn.fetch(msg_id, "(RFC822)")
+            for idx, msg_uid in enumerate(msg_uids):
+                _, msg_data = conn.uid("FETCH", msg_uid, "(RFC822)")
                 if not msg_data or not msg_data[0]:
                     continue
 
@@ -286,7 +294,7 @@ class GmailClient:
                     email_index=idx,
                     is_unread=True,
                     timestamp=date_str,
-                    gmail_msg_id=msg_id.decode("utf-8"),
+                    gmail_msg_id=msg_uid.decode("utf-8"),
                     gmail_message_id=message_id,
                 )
                 ed.compute_stable_id()
@@ -303,7 +311,7 @@ class GmailClient:
                 logger.info(
                     "  [%d/%d] %s (id: %s%s)",
                     idx + 1,
-                    len(msg_ids),
+                    len(msg_uids),
                     subject[:60],
                     ed.stable_id[:8],
                     att_info,
@@ -318,15 +326,29 @@ class GmailClient:
     # ------------------------------------------------------------------
 
     def mark_read(self, gmail_msg_id: str, folder: str = "INBOX") -> bool:
-        """Mark a specific email as read (Seen) by its IMAP message ID."""
+        """Mark a specific email as read (Seen) by its IMAP UID.
+
+        ``gmail_msg_id`` is the stable IMAP UID captured by ``list_unread``
+        (not a sequence number). Uses ``UID STORE`` so the flag change
+        hits the exact message even after INBOX has changed between the
+        two sessions.
+        """
         conn = self._connect_imap()
         try:
             conn.select(folder)
-            conn.store(gmail_msg_id.encode(), "+FLAGS", "\\Seen")
-            logger.debug("Gmail: marcou msg %s como lido.", gmail_msg_id)
+            typ, resp = conn.uid("STORE", gmail_msg_id.encode(), "+FLAGS", "\\Seen")
+            if typ != "OK":
+                logger.warning(
+                    "Gmail: STORE +Seen retornou %s para uid=%s (%r)",
+                    typ,
+                    gmail_msg_id,
+                    resp,
+                )
+                return False
+            logger.debug("Gmail: marcou uid=%s como lido.", gmail_msg_id)
             return True
         except Exception as e:
-            logger.warning("Gmail: falha ao marcar msg %s como lido: %s", gmail_msg_id, e)
+            logger.warning("Gmail: falha ao marcar uid=%s como lido: %s", gmail_msg_id, e)
             return False
         finally:
             conn.logout()
