@@ -373,6 +373,78 @@ class TestExtractVariables:
         assert vars["nome_aluno"] == "João Silva"
         assert vars["nome_aluno_maiusculas"] == "JOÃO SILVA"
 
+    def test_forwarded_email_prefers_original_sender_pt(self):
+        """When a prof forwards a student's TCE, nome_aluno must point at
+        the STUDENT (inner ``De:``) — not the forwarder (outer From:).
+
+        Regression for the run 2026-04-24 where Paloma/Stephania's forward
+        of Alanis's TCE made the pipeline address "Prezada Stephania".
+        """
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        body = (
+            "Olá, Lucas!\n"
+            "Prepara a documentação do estágio da Alanis para eu assinar via SEI.\n\n"
+            "---------- Forwarded message ---------\n"
+            "De: alanis lima <alanis.lima.dg@gmail.com>\n"
+            "Date: ter, 14 de abr de 2026 09:23\n"
+            "Subject: Assinatura do termo de estágio\n"
+            "To: stephaniapadovani@gmail.com\n\n"
+            "Oi prof! Bom dia! Estou enviando o meu termo de estágio..."
+        )
+        email = EmailData(
+            sender="Stephania Padovani <stephania.padovani@gmail.com>",
+            subject="Fwd: Assinatura do termo de estágio",
+            body=body,
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_aluno"] == "Alanis Lima"
+        assert vars["nome_aluno_maiusculas"] == "ALANIS LIMA"
+
+    def test_forwarded_email_en_forward(self):
+        """Gmail in English: `Forwarded message` + `From:` (not `De:`)."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        body = (
+            "Please handle this for me.\n\n"
+            "---------- Forwarded message ---------\n"
+            "From: Maria Souza <maria@ex.com>\n"
+            "Subject: TCE\n"
+        )
+        email = EmailData(
+            sender="Prof X <prof@ufpr.br>",
+            subject="Fwd: TCE",
+            body=body,
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_aluno"] == "Maria Souza"
+
+    def test_non_forwarded_email_uses_outer_sender(self):
+        """Guard: no forward marker → normal behavior (outer From: wins)."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        email = EmailData(
+            sender="Carlos Neves <carlos@ufpr.br>",
+            subject="TCE",
+            body="Segue meu TCE em anexo.\n\nAtt, Carlos",
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_aluno"] == "Carlos Neves"
+
+    def test_forwarded_email_mensagem_original_pt(self):
+        """Outlook/Thunderbird variant: `-----Mensagem Original-----`."""
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        body = (
+            "Repassando.\n\n"
+            "-----Mensagem Original-----\n"
+            "De: Joao Silva <joao@ex.com>\n"
+            "Assunto: Termo\n"
+        )
+        email = EmailData(
+            sender="Outer <outer@ufpr.br>",
+            subject="Enc: Termo",
+            body=body,
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_aluno"] == "Joao Silva"
+
     def test_nome_concedente_maiusculas_variant(self):
         from ufpr_automation.core.models import AttachmentData
 

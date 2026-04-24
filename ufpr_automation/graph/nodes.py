@@ -6,6 +6,7 @@ Each function takes the current state and returns a partial state update.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import os
 from typing import Any
@@ -16,6 +17,33 @@ from ufpr_automation.utils.logging import logger
 # Confidence thresholds for routing
 CONFIDENCE_HIGH = 0.95  # auto-draft
 CONFIDENCE_MEDIUM = 0.70  # human review
+
+
+def _run_async_safe(coro):
+    """Run ``coro`` whether or not the current thread has a running event loop.
+
+    LangGraph's scheduler drives sync nodes from inside the main async loop
+    when ``graph.invoke()`` is called from a coroutine (as CLI does via
+    ``asyncio.run(run_gmail_channel(...))``). Plain ``asyncio.run()`` raises
+    ``RuntimeError: asyncio.run() cannot be called from a running event loop``
+    in that setup. To keep helpers that only speak async (Playwright, SEI/SIGA
+    clients) usable from sync nodes, we offload to a fresh worker thread when
+    a loop is already running — the worker thread has no loop, so
+    ``asyncio.run`` works there.
+
+    Fleet's ``process_one_email`` gets this behavior for free because the
+    ``Send`` fan-out already dispatches sub-agents in worker threads; this
+    helper covers the non-Fleet sync nodes (consultar_sei/siga legacy paths,
+    agir_estagios, prewarm_sessions, consultar_tier0_sei_siga).
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop in this thread — safe to asyncio.run directly.
+        return asyncio.run(coro)
+    # A loop is running — offload to a worker thread (no loop there).
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(asyncio.run, coro).result()
 
 
 def perceber_gmail(state: EmailState) -> dict[str, Any]:
@@ -71,7 +99,7 @@ def perceber_owa(state: EmailState) -> dict[str, Any]:
     """
     limit = state.get("limit")
     try:
-        emails = asyncio.run(_perceber_owa_async())
+        emails = _run_async_safe(_perceber_owa_async())
         if limit is not None:
             emails = emails[:limit]
         logger.info("Perceber (OWA): %d e-mail(s) nao lido(s)", len(emails))
@@ -267,7 +295,7 @@ def prewarm_sessions(state: EmailState) -> dict[str, Any]:
     max_age_h = float(os.environ.get("PREWARM_SESSIONS_MAX_AGE_H", "6"))
 
     try:
-        asyncio.run(_prewarm_sessions_async(max_age_h))
+        _run_async_safe(_prewarm_sessions_async(max_age_h))
     except Exception as e:
         # Never fail the pipeline on prewarm errors — Fleet sub-agents
         # will just do their own logins.
@@ -368,6 +396,12 @@ def consultar_tier0_sei_siga(state: EmailState) -> dict[str, Any]:
     is also what Tier 1 does, so no performance regression in practice.
     Failures per email are isolated — a broken SEI consult for email A
     does not prevent the consult for email B.
+
+    The ``_consult_{sei,siga}_for_email`` helpers internally call
+    ``asyncio.run(...)``; they use :func:`_run_async_safe` so the coroutine
+    runs in a worker thread when this sync node is invoked from inside
+    LangGraph's async loop. Fleet's ``process_one_email`` gets this for
+    free because ``Send`` fan-out already runs sub-agents in worker threads.
     """
     tier0_hits = state.get("tier0_hits", [])
     if not tier0_hits:
@@ -802,7 +836,7 @@ def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
                 logger.warning("Classificacao falhou para '%s': %s", email.subject[:40], e)
         return results
 
-    return asyncio.run(_classify_all())
+    return _run_async_safe(_classify_all())
 
 
 def classificar(state: EmailState) -> dict[str, Any]:
@@ -1031,7 +1065,7 @@ def consultar_sei(state: EmailState) -> dict[str, Any]:
         logger.info("SEI: credenciais nao configuradas, pulando consultas")
         return {"sei_contexts": {}}
 
-    sei_results = asyncio.run(_consult_sei_async(candidates))
+    sei_results = _run_async_safe(_consult_sei_async(candidates))
     logger.info("SEI: %d consulta(s) realizadas", len(sei_results))
     return {"sei_contexts": sei_results}
 
@@ -1197,7 +1231,7 @@ def consultar_siga(state: EmailState) -> dict[str, Any]:
         logger.info("SIGA: credenciais nao configuradas, pulando consultas")
         return {"siga_contexts": {}}
 
-    siga_results = asyncio.run(_consult_siga_async(siga_candidates))
+    siga_results = _run_async_safe(_consult_siga_async(siga_candidates))
     logger.info("SIGA: %d consulta(s) realizadas", len(siga_results))
     return {"siga_contexts": siga_results}
 
@@ -1301,7 +1335,7 @@ def _consult_sei_for_email(email, classification) -> dict[str, Any] | None:
         return None
 
     try:
-        results = asyncio.run(_consult_sei_async({email.stable_id: info}))
+        results = _run_async_safe(_consult_sei_async({email.stable_id: info}))
     except Exception as e:
         logger.warning("SEI (single) consulta falhou para '%s': %s", email.subject[:40], e)
         return None
@@ -1340,7 +1374,7 @@ def _consult_siga_for_email(email, classification) -> dict[str, Any] | None:
         return None
 
     try:
-        results = asyncio.run(_consult_siga_async({email.stable_id: grr}))
+        results = _run_async_safe(_consult_siga_async({email.stable_id: grr}))
     except Exception as e:
         logger.warning("SIGA (single) consulta falhou para '%s': %s", email.subject[:40], e)
         return None
@@ -1608,7 +1642,7 @@ def agir_estagios(state: EmailState) -> dict[str, Any]:
         )
 
         try:
-            sei_result = asyncio.run(_run_sei_chain(intent, vars_, email, sid))
+            sei_result = _run_async_safe(_run_sei_chain(intent, vars_, email, sid))
             sei_ops.append(sei_result)
 
             # Update classification with acuse

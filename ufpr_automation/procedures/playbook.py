@@ -220,6 +220,54 @@ def _extract_sender_name(sender: str) -> str:
     return sender
 
 
+_FORWARD_MARKER_RE = re.compile(
+    r"(?:----*\s*Forwarded\s+message\s*----*"
+    r"|----*\s*Mensagem\s+encaminhada\s*----*"
+    r"|----*\s*Mensagem\s+[Oo]riginal\s*----*)",
+    re.IGNORECASE,
+)
+_FORWARD_ORIGINAL_FROM_RE = re.compile(
+    r"(?:^|\n)\s*(?:De|From):\s*([^<\n]+?)\s*<",
+    re.IGNORECASE,
+)
+
+
+def _extract_forwarded_original_sender(body: str) -> str:
+    """Return the name of the ORIGINAL sender when ``body`` is a forward.
+
+    Gmail/Outlook/Thunderbird all wrap forwarded content in a header block
+    like ``---------- Forwarded message ---------`` / ``Mensagem encaminhada``
+    followed by ``De: Nome <addr>`` (or ``From:``). When a professor/staffer
+    forwards a student's TCE, the outer ``From:`` is the forwarder and
+    extracting ``nome_aluno`` from it misattributes the student — the intent
+    template then addresses the wrong person ("estudante Stephania Padovani"
+    when the real student is Alanis). Prefer the inner sender in that case.
+
+    Returns empty string when no forward marker exists or no inner ``De:/From:``
+    line is found. Conservative — falls through to normal extraction.
+    """
+    if not body:
+        return ""
+    marker = _FORWARD_MARKER_RE.search(body)
+    if not marker:
+        return ""
+    # Only scan the text AFTER the forward marker; the forwarder's own sig
+    # before the marker should not match.
+    after = body[marker.end():]
+    m = _FORWARD_ORIGINAL_FROM_RE.search(after)
+    if not m:
+        return ""
+    name = m.group(1).strip().strip('"').strip("'").rstrip(".,;")
+    if len(name) < 3 or "@" in name:
+        return ""
+    # lower-case single-word senders like "alanis lima" look funny in "Prezado
+    # alanis lima,"; normalize to Title Case. Multi-word with caps already
+    # (e.g. "Alanis Rocha Lima") passes through unchanged.
+    if name.islower() or name.isupper():
+        name = " ".join(w.capitalize() for w in name.split())
+    return name
+
+
 _TCE_RE = re.compile(
     r"(?:TCE|Termo\s+de\s+Compromisso(?:\s+de\s+Est[áa]gio)?)"
     r"\s*(?:n[º°o]\.?|num\.?|nr?\.?)?\s*[:\-]?\s*(\d{2,6}(?:[/\-]\d{2,6})?)",
@@ -442,7 +490,13 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     """
     vars: dict[str, str] = {}
 
-    sender_name = _extract_sender_name(email.sender)
+    # For forwarded emails (prof/staff forwarding a student's TCE), the outer
+    # `From:` is the forwarder — prefer the inner `De:/From:` from the forward
+    # block so `nome_aluno` points at the actual student. Falls back to the
+    # outer sender when the body has no forward markers.
+    original_body = email.body or email.preview
+    forwarded_name = _extract_forwarded_original_sender(original_body)
+    sender_name = forwarded_name or _extract_sender_name(email.sender)
     if sender_name:
         vars["nome_aluno"] = sender_name
         vars["nome_aluno_maiusculas"] = sender_name.upper()

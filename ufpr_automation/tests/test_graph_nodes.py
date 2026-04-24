@@ -645,3 +645,61 @@ class TestAgirEstagiosSkipAlreadyReplied:
         # an early skip. Assert sei_operations stays empty.
         result = agir_estagios(state)
         assert result.get("sei_operations", []) == []
+
+
+class TestRunAsyncSafe:
+    """Regression for the baseline-topology RuntimeError bug.
+
+    Sync LangGraph nodes (consultar_sei/siga, agir_estagios) call into async
+    helpers. When the pipeline is driven from an already-running event loop
+    (CLI does ``asyncio.run(run_gmail_channel())`` → ``graph.invoke()``),
+    plain ``asyncio.run`` raises. ``_run_async_safe`` must work in both
+    contexts.
+    """
+
+    def test_runs_coroutine_without_existing_loop(self):
+        """No running loop in the current thread → direct asyncio.run path."""
+        from ufpr_automation.graph.nodes import _run_async_safe
+
+        async def _work():
+            return 42
+
+        assert _run_async_safe(_work()) == 42
+
+    def test_runs_coroutine_inside_running_loop(self):
+        """A coroutine inside a running loop offloads to a worker thread.
+
+        This simulates exactly what LangGraph does when a sync node calls a
+        helper that uses ``asyncio.run`` internally. Without the helper it
+        would raise ``RuntimeError: asyncio.run() cannot be called from a
+        running event loop``.
+        """
+        import asyncio
+
+        from ufpr_automation.graph.nodes import _run_async_safe
+
+        async def _inner():
+            return "ok"
+
+        async def _outer():
+            # Inside a running loop here — simulate the LangGraph setup
+            return _run_async_safe(_inner())
+
+        assert asyncio.run(_outer()) == "ok"
+
+    def test_propagates_exception_from_worker_thread(self):
+        """An exception raised in the worker thread must propagate."""
+        import asyncio
+
+        from ufpr_automation.graph.nodes import _run_async_safe
+
+        async def _boom():
+            raise ValueError("boom")
+
+        async def _outer():
+            return _run_async_safe(_boom())
+
+        import pytest
+
+        with pytest.raises(ValueError, match="boom"):
+            asyncio.run(_outer())

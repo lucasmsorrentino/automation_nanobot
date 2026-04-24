@@ -261,14 +261,15 @@ SEI_WRITE_ARTIFACTS_DIR = Path(
 )
 
 # SEI write mode — controls whether SEIWriter actually clicks in SEI.
-#   dry_run (default) — logs intended operations, captures screenshots,
-#                       but does NOT click anything in SEI. Safe to run
-#                       in production while the Playwright selectors are
-#                       still being validated.
-#   live              — full Playwright flow (requires selector capture
-#                       from a real SEI session; currently raises
-#                       NotImplementedError in all three write methods).
-SEI_WRITE_MODE = os.getenv("SEI_WRITE_MODE", "dry_run").lower()
+#   live (default)   — full Playwright flow. Sprint 3 validado 2026-04-16
+#                      (run_id c0357e8dd8f2, processo 23075.022027/2026-22)
+#                      e ativo em produção desde 2026-04-23. Fleet ainda
+#                      gateia via 16-checker `agir_estagios` — SEIWriter
+#                      só roda quando todos os checks passam.
+#   dry_run          — apenas loga intenção + screenshots, NÃO clica em
+#                      nada. Usar pra smokes offline, CI, ou quando os
+#                      seletores precisarem ser re-capturados.
+SEI_WRITE_MODE = os.getenv("SEI_WRITE_MODE", "live").lower()
 
 
 # ============================================================================
