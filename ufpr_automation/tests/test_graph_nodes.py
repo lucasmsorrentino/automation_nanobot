@@ -418,6 +418,9 @@ class TestAgirGmailSkipAlreadyReplied:
             def mark_read(self, *_a, **_kw):
                 pass
 
+            def apply_labels(self, *_a, **_kw):
+                return True
+
         monkeypatch.setattr(
             "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()
         )
@@ -462,6 +465,9 @@ class TestAgirGmailSkipAlreadyReplied:
 
             def mark_read(self, *_a, **_kw):
                 pass
+
+            def apply_labels(self, *_a, **_kw):
+                return True
 
         monkeypatch.setattr(
             "ufpr_automation.gmail.client.GmailClient", lambda *_a, **_kw: _FakeGmail()

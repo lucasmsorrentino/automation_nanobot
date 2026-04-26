@@ -552,3 +552,72 @@ class TestUnreadLifecycleUsesUID:
         assert args[0] == b"101"
         assert args[1] == "+FLAGS"
         assert args[2] == "\\Seen"
+
+    def test_list_unread_search_excludes_processed_label(self):
+        """list_unread must combine UNSEEN with `-label:ufpr/processado`
+        so emails already handled in a prior run never come back, even if
+        Gmail's `\\Seen` flag has been reset elsewhere."""
+        from ufpr_automation.gmail.client import PROCESSED_LABEL
+
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+        client.list_unread(folder="INBOX", limit=5)
+
+        assert fake.uid_calls
+        search_calls = [c for c in fake.uid_calls if c[0].upper() == "SEARCH"]
+        assert search_calls
+        _cmd, args = search_calls[0]
+        # Args: (charset, "UNSEEN", "X-GM-RAW", "-label:ufpr/processado")
+        assert "UNSEEN" in args
+        assert "X-GM-RAW" in args
+        raw_idx = args.index("X-GM-RAW")
+        assert args[raw_idx + 1] == f"-label:{PROCESSED_LABEL}"
+
+
+class TestApplyLabels:
+    def test_apply_labels_issues_uid_store_x_gm_labels(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+
+        ok = client.apply_labels("101", ["ufpr/processado", "ufpr/estagios"])
+
+        assert ok
+        store_calls = [c for c in fake.uid_calls if c[0].upper() == "STORE"]
+        assert len(store_calls) == 1
+        _cmd, args = store_calls[0]
+        assert args[0] == b"101"
+        assert args[1] == "+X-GM-LABELS"
+        # Quoted, parenthesized list per IMAP grammar
+        assert args[2] == '("ufpr/processado" "ufpr/estagios")'
+
+    def test_apply_labels_creates_each_label_first(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+
+        client.apply_labels("101", ["ufpr/foo", "ufpr/bar"])
+
+        # _FakeIMAP.create only records label names without quotes here;
+        # we recorded the call via create_calls in the _FakeIMAP class.
+        # CREATE is best-effort (silently accepts already-exists), so we
+        # don't strictly require a specific count — just that something
+        # was attempted.
+        assert len(fake.create_calls) >= 2
+
+    def test_apply_labels_empty_list_is_noop(self):
+        fake = _FakeIMAP()
+        client = _make_client_with_fake(fake)
+        assert client.apply_labels("101", []) is False
+        # No uid_calls — apply_labels short-circuited.
+        assert not getattr(fake, "uid_calls", [])
+
+    def test_categoria_to_label_mapping(self):
+        from ufpr_automation.gmail.client import categoria_to_label
+
+        assert categoria_to_label("Estágios") == "ufpr/estagios"
+        assert categoria_to_label("Correio Lixo") == "ufpr/lixo"
+        # Sub-category collapses to top-level
+        assert categoria_to_label("Diplomação / Diploma") == "ufpr/diplomacao"
+        assert categoria_to_label("Acadêmico / Matrícula") == "ufpr/academico"
+        # Unknown falls back to ufpr/outros
+        assert categoria_to_label("CategoriaInexistente") == "ufpr/outros"
+        assert categoria_to_label("") == "ufpr/outros"

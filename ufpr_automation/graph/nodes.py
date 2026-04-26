@@ -1763,8 +1763,19 @@ async def _run_sei_chain(intent, vars_: dict, email, stable_id: str) -> dict:
 
 
 def agir_gmail(state: EmailState) -> dict[str, Any]:
-    """Save drafts to Gmail for emails routed to auto_draft or human_review."""
-    from ufpr_automation.gmail.client import GmailClient
+    """Save drafts to Gmail for emails routed to auto_draft or human_review.
+
+    Após ``save_draft`` (ou skip por thread-já-respondida), aplica os
+    labels ``ufpr/processado`` + ``ufpr/<categoria>`` à mensagem original.
+    O label ``ufpr/processado`` é o sinal durável que ``list_unread`` usa
+    pra excluir emails já tratados — mais robusto que ``\\Seen`` (que pode
+    ser resetado quando o user abre o email no Gmail web).
+    """
+    from ufpr_automation.gmail.client import (
+        PROCESSED_LABEL,
+        GmailClient,
+        categoria_to_label,
+    )
 
     emails = state.get("emails", [])
     classifications = state.get("classifications", {})
@@ -1772,12 +1783,17 @@ def agir_gmail(state: EmailState) -> dict[str, Any]:
     # Save drafts for both auto and review — human reviews the draft
     eligible = set(state.get("auto_draft", []) + state.get("human_review", []))
 
-    if not eligible:
-        return {"drafts_saved": []}
-
     email_map = {e.stable_id: e for e in emails}
     gmail = GmailClient()
     saved: list[str] = []
+
+    def _label_email(email, cls) -> None:
+        if not email.gmail_msg_id:
+            return
+        labels = [PROCESSED_LABEL]
+        if cls and cls.categoria:
+            labels.append(categoria_to_label(cls.categoria))
+        gmail.apply_labels(email.gmail_msg_id, labels)
 
     skipped_already_replied: list[str] = []
     for sid in eligible:
@@ -1791,6 +1807,8 @@ def agir_gmail(state: EmailState) -> dict[str, Any]:
         # copy the whole thread into the learning-corpus label.
         if email.already_replied_by_us:
             skipped_already_replied.append(sid)
+            # Still label so future runs skip it via list_unread filter.
+            _label_email(email, cls)
             continue
 
         sender = email.sender
@@ -1806,6 +1824,21 @@ def agir_gmail(state: EmailState) -> dict[str, Any]:
         if ok:
             saved.append(sid)
             gmail.mark_read(email.gmail_msg_id)
+            _label_email(email, cls)
+
+    # Label every classified email that didn't get a draft saved with at
+    # least the processed marker. Without this, manual_escalation emails
+    # (low confidence — never drafted) and emails with empty
+    # sugestao_resposta would stay UNSEEN AND unlabeled, getting re-picked
+    # in the next pipeline run. Idempotent — re-applying a label is a
+    # no-op on Gmail.
+    labeled_sids = set(saved) | set(skipped_already_replied)
+    for sid, cls in classifications.items():
+        if sid in labeled_sids:
+            continue
+        email = email_map.get(sid)
+        if email and email.gmail_msg_id:
+            _label_email(email, cls)
 
     if skipped_already_replied:
         logger.info(

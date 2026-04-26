@@ -34,6 +34,37 @@ ALL_MAIL_FOLDER = '"[Gmail]/All Mail"'
 
 _THRID_RE = re.compile(rb"X-GM-THRID (\d+)")
 
+# Pipeline-managed Gmail labels. ``PROCESSED_LABEL`` is the durable marker
+# that ``list_unread`` excludes — once an email has it, the pipeline never
+# re-picks it, even if Gmail's ``\Seen`` flag gets reset (which happens
+# when the user/another client opens it on the web). The category labels
+# are organizational; they get applied alongside the marker.
+PROCESSED_LABEL = "ufpr/processado"
+_CATEGORIA_TO_LABEL = {
+    "Estágios": "ufpr/estagios",
+    "Acadêmico": "ufpr/academico",
+    "Diplomação": "ufpr/diplomacao",
+    "Extensão": "ufpr/extensao",
+    "Formativas": "ufpr/formativas",
+    "Requerimentos": "ufpr/requerimentos",
+    "Urgente": "ufpr/urgente",
+    "Correio Lixo": "ufpr/lixo",
+    "Outros": "ufpr/outros",
+}
+
+
+def categoria_to_label(categoria: str) -> str:
+    """Map a ``Categoria`` value to its Gmail label.
+
+    Categoria uses ``" / "`` for sub-categories (e.g. ``"Diplomação /
+    Diploma"``) — we collapse to the top-level label, since the goal is
+    inbox triage rather than perfect mirroring.
+    """
+    if not categoria:
+        return "ufpr/outros"
+    top = categoria.split(" / ")[0].strip()
+    return _CATEGORIA_TO_LABEL.get(top, "ufpr/outros")
+
 # Sign-off markers that open the signature block in Portuguese correspondence.
 # Matched at start-of-line (tolerating leading whitespace). The last
 # occurrence wins so we don't cut legitimate body text that happens to
@@ -260,7 +291,17 @@ class GmailClient:
         conn = self._connect_imap()
         try:
             conn.select(folder, readonly=True)
-            _, data = conn.uid("SEARCH", None, "UNSEEN")
+            # Exclude anything already labeled with the pipeline marker —
+            # durable across sessions even if ``\Seen`` is reset (e.g. when
+            # the user opens the email on Gmail web). ``X-GM-RAW`` is
+            # Gmail's IMAP extension that accepts native search syntax.
+            _, data = conn.uid(
+                "SEARCH",
+                None,
+                "UNSEEN",
+                "X-GM-RAW",
+                f'-label:{PROCESSED_LABEL}',
+            )
             msg_uids = data[0].split() if data[0] else []
 
             if not msg_uids:
@@ -324,6 +365,73 @@ class GmailClient:
     # ------------------------------------------------------------------
     # Mark as read
     # ------------------------------------------------------------------
+
+    def apply_labels(
+        self,
+        gmail_msg_id: str,
+        labels: list[str],
+        folder: str = "INBOX",
+    ) -> bool:
+        """Add one or more Gmail labels to a message by IMAP UID.
+
+        Uses Gmail's ``X-GM-LABELS`` IMAP extension via ``UID STORE +X-GM-LABELS``
+        — this is non-destructive (existing labels are preserved) and
+        idempotent (re-applying a label is a no-op). Ensures each label
+        exists first via ``conn.create`` (which fails silently if it already
+        does, like every other IMAP CREATE).
+
+        Args:
+            gmail_msg_id: IMAP UID from ``list_unread``.
+            labels: list of Gmail label paths (use ``/`` for nesting,
+                e.g. ``"ufpr/estagios"``).
+
+        Returns:
+            True if the STORE command succeeded; False otherwise. Failures
+            are logged at WARNING level but don't raise.
+        """
+        if not gmail_msg_id or not labels:
+            return False
+        conn = self._connect_imap()
+        try:
+            conn.select(folder)
+            for label in labels:
+                try:
+                    conn.create(f'"{label}"')
+                except Exception:
+                    pass  # already exists — IMAP CREATE is idempotent-by-error
+            # Build space-separated, double-quoted label list:
+            #   ("ufpr/processado" "ufpr/estagios")
+            quoted = " ".join(f'"{label}"' for label in labels)
+            typ, resp = conn.uid(
+                "STORE",
+                gmail_msg_id.encode(),
+                "+X-GM-LABELS",
+                f"({quoted})",
+            )
+            if typ != "OK":
+                logger.warning(
+                    "Gmail: STORE +X-GM-LABELS retornou %s para uid=%s labels=%s (%r)",
+                    typ,
+                    gmail_msg_id,
+                    labels,
+                    resp,
+                )
+                return False
+            logger.debug("Gmail: aplicou labels=%s em uid=%s", labels, gmail_msg_id)
+            return True
+        except Exception as e:
+            logger.warning(
+                "Gmail: falha ao aplicar labels=%s em uid=%s: %s",
+                labels,
+                gmail_msg_id,
+                e,
+            )
+            return False
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
 
     def mark_read(self, gmail_msg_id: str, folder: str = "INBOX") -> bool:
         """Mark a specific email as read (Seen) by its IMAP UID.
