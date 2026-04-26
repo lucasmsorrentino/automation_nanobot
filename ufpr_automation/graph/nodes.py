@@ -1786,14 +1786,20 @@ def agir_gmail(state: EmailState) -> dict[str, Any]:
     email_map = {e.stable_id: e for e in emails}
     gmail = GmailClient()
     saved: list[str] = []
+    label_ok = 0
+    label_fail = 0
 
     def _label_email(email, cls) -> None:
+        nonlocal label_ok, label_fail
         if not email.gmail_msg_id:
             return
         labels = [PROCESSED_LABEL]
         if cls and cls.categoria:
             labels.append(categoria_to_label(cls.categoria))
-        gmail.apply_labels(email.gmail_msg_id, labels)
+        if gmail.apply_labels(email.gmail_msg_id, labels):
+            label_ok += 1
+        else:
+            label_fail += 1
 
     skipped_already_replied: list[str] = []
     for sid in eligible:
@@ -1846,6 +1852,15 @@ def agir_gmail(state: EmailState) -> dict[str, Any]:
             len(skipped_already_replied),
         )
     logger.info("Agir (Gmail): %d rascunho(s) salvo(s)", len(saved))
+    if label_ok or label_fail:
+        if label_fail:
+            logger.warning(
+                "Agir (Gmail): %d email(s) etiquetado(s) — %d falha(s) ao aplicar label",
+                label_ok,
+                label_fail,
+            )
+        else:
+            logger.info("Agir (Gmail): %d email(s) etiquetado(s)", label_ok)
     return {
         "drafts_saved": saved,
         "drafts_skipped_already_replied": skipped_already_replied,
