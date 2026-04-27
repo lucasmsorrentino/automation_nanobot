@@ -111,12 +111,62 @@ def _ocr_pdf(pdf_path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Mapa pasta-nivel-1 -> orgao_emissor.
+# A pasta "estagio/" e heterogenea (Lei federal + Res CEPE + regulamento DG +
+# manual PROGRAP + FAQ COAPPE), por isso e resolvida em segundo passo via
+# _ESTAGIO_FILENAME_PATTERNS antes de cair em DESCONHECIDO.
+# Ver `ufpr_automation/PLANO_EXPANSAO_TIER0_E_ROLE.md` (Frente 3).
+_ORGAO_EMISSOR_MAP = {
+    "cepe": "CEPE",
+    "coun": "COUN",
+    "coplad": "COPLAD",
+    "concur": "CONCUR",
+    "design_grafico": "CCDG",
+    "sei_pop": "UFPR",
+    "ufpr_aberta": "UFPR_ABERTA",
+}
+
+_ESTAGIO_FILENAME_PATTERNS = (
+    (re.compile(r"^Lei", re.IGNORECASE), "MEC"),
+    (re.compile(r"resolucaoCEPE", re.IGNORECASE), "CEPE"),
+    (re.compile(r"DesignGrafico|design[._-]?grafico", re.IGNORECASE), "CCDG"),
+    (re.compile(r"manual[-_]?de[-_]?estagios", re.IGNORECASE), "PROGRAP"),
+    (re.compile(r"^Perguntas\s+Frequentes.*COAPPE", re.IGNORECASE), "COAPPE"),
+    (re.compile(r"^exemplo", re.IGNORECASE), "CCDG"),
+)
+
+
+def _infer_orgao_emissor(rel_path: Path) -> str:
+    """Mapeia o caminho relativo do PDF para a sigla do orgao emissor.
+
+    Args:
+        rel_path: Path relativo a DOCS_DIR (ex.: Path("cepe/resolucoes/res46.pdf")).
+
+    Returns:
+        Sigla do orgao (CEPE, COUN, COPLAD, CONCUR, CCDG, MEC, PROGRAP,
+        COAPPE, UFPR, UFPR_ABERTA) ou "DESCONHECIDO" se nao houver match.
+    """
+    parts = rel_path.parts
+    if not parts:
+        return "DESCONHECIDO"
+    top = parts[0].lower()
+    if top in _ORGAO_EMISSOR_MAP:
+        return _ORGAO_EMISSOR_MAP[top]
+    if top == "estagio":
+        for pattern, orgao in _ESTAGIO_FILENAME_PATTERNS:
+            if pattern.search(rel_path.name):
+                return orgao
+    return "DESCONHECIDO"
+
+
 def metadata_from_path(pdf_path: Path) -> dict:
     """Derive metadata from the file's position in the docs/ tree.
 
     Examples:
-        docs/cepe/resolucoes/foo.pdf  -> {conselho: cepe, tipo: resolucoes}
-        docs/estagio/bar.pdf          -> {conselho: estagio, tipo: estagio}
+        docs/cepe/resolucoes/foo.pdf  -> {conselho: cepe, tipo: resolucoes,
+                                           orgao_emissor: CEPE, is_coordenacao: False}
+        docs/estagio/bar.pdf          -> {conselho: estagio, tipo: estagio,
+                                           orgao_emissor: <conforme filename>, ...}
     """
     rel = pdf_path.relative_to(DOCS_DIR)
     parts = rel.parts  # e.g. ("cepe", "resolucoes", "foo.pdf")
@@ -135,11 +185,14 @@ def metadata_from_path(pdf_path: Path) -> dict:
         # Try yyyy pattern at end of filename
         date_match = re.search(r"(\d{4})", pdf_path.stem)
 
+    orgao_emissor = _infer_orgao_emissor(rel)
     return {
         "conselho": conselho,
         "tipo": tipo,
         "arquivo": pdf_path.name,
         "caminho": str(rel),
+        "orgao_emissor": orgao_emissor,
+        "is_coordenacao": orgao_emissor == "CCDG",
     }
 
 
@@ -319,6 +372,8 @@ def ingest_docs(
                     "tipo": meta["tipo"],
                     "arquivo": meta["arquivo"],
                     "caminho": meta["caminho"],
+                    "orgao_emissor": meta["orgao_emissor"],
+                    "is_coordenacao": meta["is_coordenacao"],
                     "chunk_idx": j,
                 }
                 all_records.append(record)

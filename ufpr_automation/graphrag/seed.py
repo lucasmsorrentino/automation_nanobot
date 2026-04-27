@@ -159,6 +159,12 @@ def _seed_orgaos(client: Neo4jClient) -> int:
            descricao: 'Homologa estágios no exterior'})
     MERGE (sibi:Orgao {sigla: 'SIBI', nome: 'Sistema de Bibliotecas'})
 
+    // Órgão externo (federal) — emissor de leis aplicáveis (Lei 11.788/2008 etc.)
+    MERGE (mec:Orgao {sigla: 'MEC', nome: 'Ministério da Educação',
+           descricao: 'Órgão federal — não está subordinado à Reitoria, '
+                      'mas é citado como emissor de leis aplicáveis (Lei de Estágios, '
+                      'Diretrizes Curriculares Nacionais, ENADE/SINAES)'})
+
     // Hierarchical relationships
     MERGE (prograp)-[:SUBORDINADO_A]->(reitoria)
     MERGE (prppg)-[:SUBORDINADO_A]->(reitoria)
@@ -357,6 +363,44 @@ def _seed_normas(client: Neo4jClient) -> int:
     RETURN count(*) AS ops
     """
     client.run_write(cypher)
+
+    # EMITIDO_POR relationships — vincula cada Norma ao Orgao emissor
+    # (ver Frente 3 do plano: queries que precisam saber "Regulamento DG 2024
+    # foi emitido pela CCDG, não pela CEPE" passam a ser triviais).
+    emitido_por = """
+    // Federais (MEC e CNE/MEC)
+    MATCH (n:Norma {codigo: 'Lei 11.788/2008'}), (o:Orgao {sigla: 'MEC'})
+    MERGE (n)-[:EMITIDO_POR]->(o);
+    """
+    client.run_write(emitido_por)
+    client.run_write(
+        "MATCH (n:Norma {codigo: 'Resolução CNE/CES nº 2/2006'}), (o:Orgao {sigla: 'MEC'}) "
+        "MERGE (n)-[:EMITIDO_POR]->(o);"
+    )
+    # CEPE
+    for codigo in [
+        "Resolução 70/04-CEPE",
+        "Resolução 46/10-CEPE",
+        "IN 01/12-CEPE",
+        "IN 02/12-CEPE",
+        "IN 01/13-CEPE",
+        "Resolução 92/13-CEPE",
+    ]:
+        client.run_write(
+            f"MATCH (n:Norma {{codigo: '{codigo}'}}), (o:Orgao {{sigla: 'CEPE'}}) "
+            "MERGE (n)-[:EMITIDO_POR]->(o);"
+        )
+    # PROGRAP
+    client.run_write(
+        "MATCH (n:Norma {codigo: 'IN 01/16-PROGRAD'}), (o:Orgao {sigla: 'PROGRAP'}) "
+        "MERGE (n)-[:EMITIDO_POR]->(o);"
+    )
+    # CCDG (regulamento local do curso)
+    client.run_write(
+        "MATCH (n:Norma {codigo: 'Regulamento DG 2024'}), (o:Orgao {sigla: 'CCDG'}) "
+        "MERGE (n)-[:EMITIDO_POR]->(o);"
+    )
+
     rows = client.run_query("MATCH (n:Norma) RETURN count(n) AS cnt")
     return rows[0]["cnt"]
 
@@ -768,6 +812,16 @@ def _seed_templates(client: Neo4jClient) -> int:
         templates_seeded.append(despacho_tipo)
 
     logger.info("Seeded %d templates with conteudo", len(templates_seeded))
+
+    # EMITIDO_POR — todos os templates da Coordenação (despachos + e-mails
+    # institucionais) são emitidos pela CCDG. Permite queries do tipo
+    # "documentos próprios da Coordenação" no GraphRAG.
+    client.run_write(
+        """
+        MATCH (t:Template), (o:Orgao {sigla: 'CCDG'})
+        MERGE (t)-[:EMITIDO_POR]->(o)
+        """
+    )
 
     rows = client.run_query("MATCH (t:Template) RETURN count(t) AS cnt")
     return rows[0]["cnt"]

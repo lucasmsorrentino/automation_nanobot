@@ -172,6 +172,54 @@ class GraphRetriever:
 
         return "\n".join(lines)
 
+    # ------------------------------------------------------------------
+    # Filtros por órgão emissor (Frente 3 do plano)
+    # ------------------------------------------------------------------
+
+    def find_normas_by_orgao(self, sigla: str) -> list[dict[str, Any]]:
+        """Retorna todas as Normas emitidas por um órgão (sigla).
+
+        Exemplos:
+            find_normas_by_orgao("CCDG") → Regulamento DG 2024
+            find_normas_by_orgao("CEPE") → Res 70/04, Res 46/10, IN 01/12, ...
+            find_normas_by_orgao("MEC")  → Lei 11.788/2008, Res CNE/CES 2/2006
+
+        Pré-requisito: arestas (:Norma)-[:EMITIDO_POR]->(:Orgao) populadas
+        pelo `graphrag.seed._seed_normas`. Ver Frente 3 do plano em
+        `ufpr_automation/PLANO_EXPANSAO_TIER0_E_ROLE.md`.
+        """
+        return self._client.run_query(
+            """
+            MATCH (n:Norma)-[:EMITIDO_POR]->(o:Orgao {sigla: $sigla})
+            RETURN n.codigo AS codigo, n.nome AS nome, n.descricao AS desc, n.tipo AS tipo
+            ORDER BY n.codigo
+            """,
+            {"sigla": sigla},
+        )
+
+    def find_templates_by_orgao(self, sigla: str) -> list[dict[str, Any]]:
+        """Retorna Templates emitidos por um órgão. Após o seed, todos
+        os templates pertencem à CCDG (Coordenação do Curso de Design
+        Gráfico) — útil para auditar o catálogo de comunicação institucional.
+        """
+        return self._client.run_query(
+            """
+            MATCH (t:Template)-[:EMITIDO_POR]->(o:Orgao {sigla: $sigla})
+            RETURN t.nome AS nome, t.tipo AS tipo, t.descricao AS desc,
+                   t.despacho_tipo AS despacho_tipo
+            ORDER BY t.nome
+            """,
+            {"sigla": sigla},
+        )
+
+    def find_normas_da_coordenacao(self) -> list[dict[str, Any]]:
+        """Atalho: normas próprias da Coordenação do Curso de Design Gráfico."""
+        return self.find_normas_by_orgao("CCDG")
+
+    # ------------------------------------------------------------------
+    # Norms (search by full-text + keyword)
+    # ------------------------------------------------------------------
+
     def _get_norms_context(self, subject: str, body: str) -> str:
         """Find norms relevant to the email content via full-text search."""
         query_text = f"{subject} {body}"[:200]
