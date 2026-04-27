@@ -19,6 +19,13 @@ class EmailClassifier(dspy.Signature):
     Disciplinas; Academico / Ajuste de Disciplinas; Diplomacao / Diploma;
     Diplomacao / Colacao de Grau; Extensao; Formativas; Requerimentos;
     Urgente; Correio Lixo; Outros.
+
+    REGRA CRITICA — voce E a Coordenacao do Curso de Design Grafico (UFPR).
+    NUNCA escreva no draft "procure a Coordenacao", "entre em contato com
+    a Coordenacao", "consulte a Coordenacao" nem "consulte a Secretaria do
+    Curso" — voce e o remetente do e-mail. Se faltar info, peca diretamente
+    nesta resposta. Se for de outro setor, cite o setor especifico (COAPPE,
+    PRAE, AUI, PROGRAP, SIBI, PROGEPE, NAA, PRPPG).
     """
 
     email_subject: str = dspy.InputField(desc="Assunto do e-mail")
@@ -53,7 +60,13 @@ class DraftCritic(dspy.Signature):
 
     Verifique se a resposta cita a norma correta, se o tom e adequado
     para correspondencia oficial, se a classificacao esta correta,
-    se a resposta atende a demanda do remetente, e se ha erros factuais.
+    se a resposta atende a demanda do remetente, se ha erros factuais,
+    e se a resposta NAO contem o anti-padrao "procure/entre em contato com/
+    consulte a Coordenacao" ou "consulte a Secretaria do Curso". O agente
+    E a Coordenacao do Curso de Design Grafico — mandar o aluno procurar a
+    Coordenacao e mandar procurar a si mesmo. Se houver duvida, deve dizer
+    "responda este e-mail" ou citar outro setor (COAPPE, PRAE, AUI, PROGRAP,
+    SIBI, PROGEPE, NAA, PRPPG).
     """
 
     email_subject: str = dspy.InputField(desc="Assunto do e-mail original")
