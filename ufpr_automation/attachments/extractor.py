@@ -73,17 +73,32 @@ def extract_text_from_attachment(att: AttachmentData) -> str:
 
 
 def _extract_pdf(path: Path) -> str:
-    """Extract text from a PDF using PyMuPDF."""
+    """Extract text from a PDF using PyMuPDF.
+
+    Returns empty string on parse failure (e.g. ``code=7: cycle in resources``)
+    so the caller falls through to ``_ocr_pdf_scanned`` instead of giving up.
+    """
     import pymupdf
 
-    doc = pymupdf.open(str(path))
-    pages = []
-    for page in doc:
-        text = page.get_text()
-        if text.strip():
-            pages.append(text)
-    num_pages = len(doc)
-    doc.close()
+    try:
+        doc = pymupdf.open(str(path))
+    except Exception as e:
+        logger.warning("PyMuPDF nao conseguiu abrir '%s' (%s) — tentando OCR", path.name, e)
+        return ""
+
+    try:
+        pages = []
+        for page in doc:
+            try:
+                text = page.get_text()
+            except Exception as e:
+                logger.debug("PyMuPDF falhou em pagina de '%s': %s", path.name, e)
+                continue
+            if text.strip():
+                pages.append(text)
+        num_pages = len(doc)
+    finally:
+        doc.close()
 
     full_text = "\n\n".join(pages)
 

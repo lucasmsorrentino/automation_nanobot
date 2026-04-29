@@ -111,6 +111,10 @@ keywords:
   - "assinatura do termo"
   - "assinar termo de estágio"
   - "assinar TCE"
+  - "Contrato de Estágio"            # variante observada 2026-04-29 (Nicollas)
+  - "contrato de estágio"
+  - "contrato estágio"
+  - "envio do contrato de estágio"
 categoria: "Estágios"
 action: "Redigir Resposta"
 sei_action: "create_process"
@@ -281,6 +285,10 @@ keywords:
   - "relatório final de estágio"
   - "termo de rescisão"
   - "finalizar estágio"
+  - "rescisão"                          # forma curta (ambígua, mas só estagiários enviam)
+  - "termo de rescisão de estágio"
+  - "rescisão antecipada de estágio"
+  - "termo de conclusão de estágio"
 categoria: "Estágios"
 action: "Redigir Resposta"
 # Processo SEI já existe — append: anexar Termo de Rescisão + Relatório Final
@@ -337,6 +345,62 @@ despacho_template: |
 
           Solicita-se o encaminhamento à Unidade de Estágios da COAPPE para
   homologação e providências cabíveis.
+```
+
+```intent
+intent_name: estagio_nao_obrig_relatorio_periodico
+keywords:
+  - "relatório de estágio"               # observado 2026-04-29 (Flávio Bach)
+  - "relatório periódico de estágio"
+  - "relatório parcial de estágio"
+  - "relatório bimestral de estágio"
+  - "relatório semestral de estágio"
+  - "relatório de atividades de estágio"
+  - "envio de relatório de estágio"
+categoria: "Estágios"
+action: "Redigir Resposta"
+# Processo SEI já existe — append: anexar Relatório Periódico + redigir despacho
+# de encaminhamento à COAPPE. NÃO confundir com Relatório FINAL (cobre intent
+# estagio_nao_obrig_conclusao). Este intent cobre relatórios bimestrais/semestrais
+# DURANTE o estágio (Lei 11.788/08 Art. 9º §1º — apresentação a cada 6 meses).
+sei_action: "append_to_existing"
+required_fields:
+  - nome_aluno
+  - nome_concedente
+required_attachments:
+  - "Relatório Periódico"        # ou Parcial/Bimestral/Semestral — Lei 11.788/08 Art. 9º §1º
+blocking_checks:
+  - "sei_processo_tce_existente"        # HARD: precisa ter processo SEI vigente do TCE
+sources:
+  - "Lei 11.788/2008 Art. 9º §1º"
+  - "Resolução 46/10-CEPE"
+  - "IN 01/12-CEPE"
+last_update: "2026-04-29"
+confidence: 0.85
+template: |
+  Prezado(a) [NOME_ALUNO],
+
+  A Coordenação do Curso de Design Gráfico confirma o recebimento do
+  Relatório Periódico de Estágio referente à sua atuação na
+  [NOME_CONCEDENTE]. O documento será anexado ao processo SEI já existente
+  e encaminhado à COAPPE para acompanhamento.
+
+  Lembramos que o Relatório Periódico é exigência da Lei 11.788/08
+  (Art. 9º §1º) — apresentação a cada 6 meses, até a conclusão do estágio.
+
+  {{ assinatura_email }}
+
+# Despacho SEI (encaminhamento de Relatório Periódico).
+despacho_template: |
+  Prezados,
+
+          A Coordenação do Curso de Design Gráfico encaminha para anexação ao
+  processo o Relatório Periódico de Estágio Não Obrigatório do(a) estudante
+  [NOME_ALUNO_MAIUSCULAS], [GRR], junto à [NOME_CONCEDENTE_MAIUSCULAS], em
+  cumprimento ao Art. 9º §1º da Lei 11.788/2008 e à Resolução 46/10-CEPE.
+
+          Solicita-se o encaminhamento à Unidade de Estágios da COAPPE para
+  acompanhamento das providências cabíveis.
 ```
 
 ```intent

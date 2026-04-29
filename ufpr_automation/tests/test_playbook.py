@@ -463,6 +463,55 @@ class TestExtractVariables:
         assert vars["nome_concedente"] == "Acme Studios Ltda"
         assert vars["nome_concedente_maiusculas"] == "ACME STUDIOS LTDA"
 
+    def test_grr_via_matricula_label(self):
+        """Some TCE PDFs and casual emails write 'Matrícula 20231234' instead
+        of 'GRR20231234'. Both should populate the same `grr` field."""
+        intent = Intent(intent_name="x", categoria="Outros", keywords=["x"])
+        email = EmailData(
+            sender="x@y.z",
+            subject="Aluno",
+            body="Aluno: Joao Silva, matrícula 20231234, curso de Design.",
+        )
+        vars = extract_variables(email, intent)
+        assert vars["grr"] == "20231234"
+
+    def test_concedente_via_razao_social_label(self):
+        """CIEE TCE templates use 'Razão Social:' for the company name."""
+        from ufpr_automation.core.models import AttachmentData
+
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        attach = AttachmentData(
+            filename="tce.pdf",
+            extracted_text="Razão Social: Acme Estúdio de Design Ltda\nCNPJ: 00.000.000/0001-00",
+        )
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="",
+            attachments=[attach],
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_concedente"] == "Acme Estúdio de Design Ltda"
+
+    def test_concedente_via_organizacao_label(self):
+        """Some TCEs (third-sector / NGOs) use 'Organização:' instead of
+        'Concedente:' or 'Razão Social:'."""
+        from ufpr_automation.core.models import AttachmentData
+
+        intent = Intent(intent_name="x", categoria="Estágios", keywords=["x"])
+        attach = AttachmentData(
+            filename="tce.pdf",
+            extracted_text="Organização: Instituto Brasileiro de Arte e Cultura",
+        )
+        email = EmailData(
+            sender="x@y.z",
+            subject="TCE",
+            body="",
+            attachments=[attach],
+        )
+        vars = extract_variables(email, intent)
+        assert vars["nome_concedente"] == "Instituto Brasileiro de Arte e Cultura"
+
 
 # ---------------------------------------------------------------------------
 # Aditivo extraction — numero_aditivo + data_termino_novo (numeric / extenso)

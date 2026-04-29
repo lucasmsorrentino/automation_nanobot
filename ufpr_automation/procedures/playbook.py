@@ -274,12 +274,23 @@ _TCE_RE = re.compile(
     re.IGNORECASE,
 )
 _SEI_RE = re.compile(r"\b(\d{5}\.\d{6}/\d{4}-\d{2})\b")
-_GRR_RE = re.compile(r"\bGRR\s*[:\-]?\s*(\d{6,10})\b", re.IGNORECASE)
+# Matches "GRR20244602", "GRR: 20244602", "GRR-20244602", "GRR 20244602" and
+# also "Matrícula 20244602" / "matricula: 20244602" (alternative label seen in
+# TCE PDFs and casual emails). The 6-10 digit window keeps it strict enough to
+# avoid catching arbitrary numbers like CPF/RG fragments.
+_GRR_RE = re.compile(
+    r"(?:\bGRR\s*[:\-]?\s*|\bMatr[ií]cula\s*[:\-]?\s*)(\d{6,10})\b",
+    re.IGNORECASE,
+)
 _DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 
 # TCE-specific regex — operate on attachment text (PDFs digitalized into the email)
+# TCE PDFs use various labels for the company: "Concedente:", "Empresa:",
+# "Razão Social:" (CIEE template), "Organização:", "Instituição:".
 _CONCEDENTE_RE = re.compile(
-    r"(?:Concedente|CONCEDENTE|Empresa|Parte\s+Concedente)\s*[:\-]?\s*([^\n\r]{5,120})",
+    r"(?:Concedente|CONCEDENTE|Empresa|Parte\s+Concedente|Raz[ãa]o\s+Social"
+    r"|Organiza[çc][ãa]o|Institui[çc][ãa]o)"
+    r"\s*[:\-]?\s*([^\n\r]{5,120})",
     re.IGNORECASE,
 )
 _PERIODO_RE = re.compile(
@@ -586,6 +597,24 @@ def extract_variables(email: EmailData, intent: Intent) -> dict[str, str]:
     pending_llm = [f for f in intent.llm_extraction_fields if f not in vars]
     if pending_llm:
         vars.update(_llm_extract_fields(email, pending_llm))
+
+    # Debug trace — boolean snapshot of the critical fields per intent. Lets
+    # post-mortem auditing answer "did extract_variables actually find grr
+    # in this email?" without re-running the pipeline.
+    logger.debug(
+        "extract_variables[%s]: %d field(s) extracted "
+        "(grr=%s, nome_aluno=%s, nome_concedente=%s, data_inicio=%s, data_fim=%s, "
+        "numero_tce=%s, numero_aditivo=%s)",
+        intent.intent_name,
+        len(vars),
+        bool(vars.get("grr")),
+        bool(vars.get("nome_aluno")),
+        bool(vars.get("nome_concedente")),
+        bool(vars.get("data_inicio")),
+        bool(vars.get("data_fim")),
+        bool(vars.get("numero_tce")),
+        bool(vars.get("numero_aditivo")),
+    )
 
     return vars
 
