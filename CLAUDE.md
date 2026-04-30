@@ -235,6 +235,14 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 
 > Este projeto roda em **2 PCs** (Lucas — casa + trabalho). Cada PC tem o RAG store e o Neo4j **localmente**; `G:/Meu Drive/ufpr_rag/store/` (Google Drive) é apenas o **canal de sincronização** entre eles, não o path operacional. `RAG_STORE_DIR` no `.env` deve apontar pra um diretório local — o que está no `.env` neste momento pode estar stale (copiado do outro PC).
 
+### Verificação automática de drift (3 camadas)
+
+1. **`SessionStart` hook do Claude Code** ([.claude/settings.json](.claude/settings.json)): toda vez que você abre uma sessão Claude Code neste projeto, `scripts/check_drive_status.ps1` roda e o output entra no contexto da conversa. Se o status for `STALE` (G: mais novo que local), Claude **vai te avisar** antes de sugerir qualquer operação em RAG/Neo4j.
+2. **Pre-flight do pipeline** ([scheduler.py:_check_drive_freshness](ufpr_automation/scheduler.py)): toda execução agendada (08h/13h/17h) chama o check antes de processar emails. Se `STALE`, loga WARNING em `logs/scheduler.log` e segue (não aborta — perder triggers seria pior que processar com RAG levemente defasado).
+3. **Manual a qualquer momento**: `powershell -ExecutionPolicy Bypass -File scripts\check_drive_status.ps1` — saída humano-legível com counts dos 2 lados e prescrição de ação.
+
+Status possíveis (exit codes do `check_drive_freshness.py`): `SYNCED` (0), `STALE` (1), `AHEAD` (2), `NO_REMOTE` (3), `NO_LOCAL` (4), `CONFLICT` (5), `ERROR` (6).
+
 ### Scripts prontos (preferir aos comandos manuais)
 
 ```powershell

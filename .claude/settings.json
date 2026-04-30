@@ -26,5 +26,19 @@
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)"
     ]
+  },
+  "hooks": {
+    "_comment_hooks": "SessionStart roda check_drive_status.ps1 ao abrir cada sessao do Claude Code, em ambos os PCs (casa + trabalho). Saida vai para o contexto da sessao -- Claude ve se o RAG/Neo4j local esta sincronizado com o G: antes de sugerir qualquer operacao em RAG/Neo4j. STALE/AHEAD/CONFLICT entram como WARNING; SYNCED tambem aparece (informacao util). Timeout 30s pra nao travar a abertura da sessao se o G: estiver lento.",
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File scripts/check_drive_status.ps1",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }

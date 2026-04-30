@@ -30,12 +30,67 @@ SCHEDULE_HOURS = os.getenv("SCHEDULE_HOURS", "8,13,17")
 SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "America/Sao_Paulo")
 
 
+def _check_drive_freshness() -> None:
+    """Pre-flight check: avisa se o RAG/Neo4j local esta defasado em relacao ao G:.
+
+    NAO aborta o pipeline em caso de drift — apenas loga WARNING. A logica e:
+    melhor processar emails com RAG levemente defasado do que perder triggers
+    enquanto o operador resolve o sync. Sem MANIFEST.json em algum lado o
+    check vira no-op silencioso (DEBUG only).
+    """
+    try:
+        from scripts import check_drive_freshness  # noqa: WPS433 (lazy import)
+    except ImportError:
+        try:
+            import importlib.util
+            from pathlib import Path
+            spec_path = Path(__file__).resolve().parent.parent / "scripts" / "check_drive_freshness.py"
+            if not spec_path.exists():
+                return
+            spec = importlib.util.spec_from_file_location("_check_drive_freshness", spec_path)
+            check_drive_freshness = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(check_drive_freshness)
+        except Exception as e:
+            logger.debug("Scheduler: pre-flight check indisponivel: %s", e)
+            return
+
+    try:
+        result = check_drive_freshness.evaluate()
+    except Exception as e:
+        logger.debug("Scheduler: pre-flight check falhou: %s", e)
+        return
+
+    status = result.get("status")
+    if status == "SYNCED":
+        logger.info("Scheduler: pre-flight RAG/Neo4j SYNCED com G:")
+    elif status == "STALE":
+        logger.warning(
+            "Scheduler: G: tem versao mais recente que este PC — RAG/Neo4j "
+            "pode estar defasado. Rode scripts/sync_from_drive.ps1 quando puder. "
+            "Pipeline vai prosseguir com o estado local."
+        )
+    elif status == "AHEAD":
+        logger.info(
+            "Scheduler: pre-flight — local mais recente que G: "
+            "(rode scripts/sync_to_drive.ps1 pra publicar)."
+        )
+    elif status == "CONFLICT":
+        logger.warning(
+            "Scheduler: pre-flight — manifests divergem mas timestamps batem (CONFLICT). "
+            "Investigar antes do proximo sync."
+        )
+    elif status in ("NO_REMOTE", "NO_LOCAL"):
+        logger.debug("Scheduler: pre-flight — %s (sem manifest pra comparar)", status)
+
+
 def run_scheduled_pipeline() -> None:
     """Execute the LangGraph pipeline once.
 
     Called by the scheduler at each configured time, or directly via --once.
     """
     from ufpr_automation.graph.builder import build_graph
+
+    _check_drive_freshness()
 
     channel = settings.EMAIL_CHANNEL
     start_time = datetime.now()
