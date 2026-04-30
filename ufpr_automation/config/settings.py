@@ -264,7 +264,7 @@ SEI_WRITE_ARTIFACTS_DIR = Path(
 #   live (default)   — full Playwright flow. Sprint 3 validado 2026-04-16
 #                      (run_id c0357e8dd8f2, processo 23075.022027/2026-22)
 #                      e ativo em produção desde 2026-04-23. Fleet ainda
-#                      gateia via 16-checker `agir_estagios` — SEIWriter
+#                      gateia via `agir_estagios` (checker registry) — SEIWriter
 #                      só roda quando todos os checks passam.
 #   dry_run          — apenas loga intenção + screenshots, NÃO clica em
 #                      nada. Usar pra smokes offline, CI, ou quando os

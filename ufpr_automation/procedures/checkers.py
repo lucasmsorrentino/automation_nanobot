@@ -320,64 +320,15 @@ def siga_curriculo_integralizado(ctx: CheckContext) -> CheckResult:
     return CheckResult(check_id="siga_curriculo_integralizado", status="pass")
 
 
-@register("siga_ch_simultaneos_30h")
-def siga_ch_simultaneos_30h(ctx: CheckContext) -> CheckResult:
-    """HARD block if sum of simultaneous internships + new TCE > 30h/week."""
-    ativos = _siga_val(ctx, "estagios_ativos", []) or []
-    if not isinstance(ativos, list):
-        return CheckResult(
-            check_id="siga_ch_simultaneos_30h",
-            status="hard_block",
-            reason=f"formato inesperado de estagios_ativos: {type(ativos).__name__}",
-        )
-    existing = 0.0
-    for est in ativos:
-        try:
-            existing += float(est.get("ch_semanal", 0))
-        except (TypeError, ValueError, AttributeError):
-            continue
-    try:
-        new_ch = float(ctx.vars.get("horas_semanais", "0"))
-    except (TypeError, ValueError):
-        new_ch = 0.0
-    total = existing + new_ch
-    if total > 30:
-        return CheckResult(
-            check_id="siga_ch_simultaneos_30h",
-            status="hard_block",
-            reason=(
-                f"Carga horária total de estágios simultâneos seria "
-                f"{total:.1f}h/semana (existentes: {existing:.1f}h + "
-                f"novo TCE: {new_ch:.1f}h) — limite legal é 30h/semana."
-            ),
-        )
-    return CheckResult(check_id="siga_ch_simultaneos_30h", status="pass")
-
-
-@register("siga_concedente_duplicada")
-def siga_concedente_duplicada(ctx: CheckContext) -> CheckResult:
-    """HARD block — dois estágios simultâneos na mesma concedente."""
-    ativos = _siga_val(ctx, "estagios_ativos", []) or []
-    concedente = ctx.vars.get("nome_concedente", "").strip().lower()
-    if not concedente:
-        return CheckResult(
-            check_id="siga_concedente_duplicada",
-            status="hard_block",
-            reason="nome_concedente não extraído do TCE — não é possível validar",
-        )
-    for est in ativos:
-        existing = str(est.get("concedente", "")).strip().lower()
-        if existing and existing == concedente:
-            return CheckResult(
-                check_id="siga_concedente_duplicada",
-                status="hard_block",
-                reason=(
-                    f"Aluno já possui estágio ativo na mesma concedente "
-                    f"({ctx.vars['nome_concedente']}) — Lei 11.788/2008 "
-                    f"veda duplicidade."
-                ),
-            )
-    return CheckResult(check_id="siga_concedente_duplicada", status="pass")
+# NOTE: ``siga_ch_simultaneos_30h`` e ``siga_concedente_duplicada`` foram
+# removidos em 2026-04-30. Verificacao de estagio ativo / duplicado e
+# responsabilidade do **SEI cascade** (busca processos vigentes via
+# Acompanhamento Especial em ``_consult_sei_for_email`` + checker
+# ``sei_processo_vigente_duplicado``), nao do SIGA — ``estagios_ativos``
+# nao e fetchado do SIGA hoje, e nem deveria ser, ja que o SEI tem a
+# fonte de verdade dos processos abertos. A regra de carga horaria foi
+# substituida pela regra de **periodo** (manha vs. tarde) implementada em
+# ``tce_jornada_antes_meio_dia`` abaixo.
 
 
 # ============================================================================
@@ -458,15 +409,32 @@ def tce_jornada_sem_horario(ctx: CheckContext) -> CheckResult:
     return CheckResult(check_id="tce_jornada_sem_horario", status="pass")
 
 
+# Disciplinas que NAO exigem aula presencial de manha — alunos com so
+# essas pendentes podem estagiar de manha sem prejuizo academico. Lista
+# vinda do regulamento do curso de Design Grafico:
+#   OD501  — Estagio Supervisionado (anual, 360h, sem aula regular)
+#   ODDA6  — TCC1 (orientacao individual)
+#   ODDA7  — TCC2 (orientacao individual)
+_DISCIPLINAS_SEM_AULA_MANHA = frozenset({"OD501", "ODDA6", "ODDA7"})
+
+
 @register("tce_jornada_antes_meio_dia")
 def tce_jornada_antes_meio_dia(ctx: CheckContext) -> CheckResult:
-    """HARD block — jornada começando antes das 12h00 conflita com aulas
-    (exceto se o aluno já integralizou todas as disciplinas).
+    """HARD block — jornada começando antes das 12h00 conflita com aulas.
 
-    As aulas do curso de Design Gráfico são de manhã, portanto estágios
-    que começam antes do meio-dia atrapalham a frequência. A exceção é
-    quando o aluno já cursou todas as disciplinas obrigatórias (SIGA →
-    aba integralização) — nesse caso o bloqueio é dispensado.
+    As aulas do curso de Design Gráfico são pela manhã, portanto estágios
+    que começam antes do meio-dia atrapalham a frequência. **Duas exceções**:
+
+    1. Aluno já integralizou todas as disciplinas da grade
+       (``curriculo_integralizado=True`` no SIGA).
+    2. Aluno só tem pendentes disciplinas que NÃO exigem aula presencial
+       de manhã — TCC1 (ODDA6), TCC2 (ODDA7) e Estágio Supervisionado
+       (OD501). Ou seja, ``set(nao_vencidas) ⊆ {OD501, ODDA6, ODDA7}``.
+       Nesse caso o aluno pode estagiar tanto de manhã quanto de tarde
+       porque o que falta na grade não conflita com horário matinal.
+
+    Sem dados de SIGA (campo ausente no contexto), bloqueia — fail-safe:
+    melhor pedir verificação manual do que liberar manhã indevidamente.
     """
     horario = ctx.vars.get("jornada_horario_inicio", "")
     if not horario:
@@ -483,21 +451,28 @@ def tce_jornada_antes_meio_dia(ctx: CheckContext) -> CheckResult:
     if hh >= 12:
         return CheckResult(check_id="tce_jornada_antes_meio_dia", status="pass")
 
-    # Começa antes do meio-dia — verificar exceção de integralização
-    integralizado = _siga_val(ctx, "curriculo_integralizado", None)
-    if integralizado is True:
-        return CheckResult(
-            check_id="tce_jornada_antes_meio_dia",
-            status="pass",  # exceção aplica — já cumpriu todas as disciplinas
-        )
+    # Comeca antes do meio-dia — verificar exceções.
+    # Excecao 1: ja cumpriu tudo.
+    if _siga_val(ctx, "curriculo_integralizado", None) is True:
+        return CheckResult(check_id="tce_jornada_antes_meio_dia", status="pass")
+
+    # Excecao 2: so pendentes sao TCC1/TCC2/Estagio Supervisionado.
+    nao_vencidas = _siga_val(ctx, "nao_vencidas", None)
+    if isinstance(nao_vencidas, list):
+        pendentes = {str(s).strip().upper() for s in nao_vencidas if s}
+        if pendentes and pendentes.issubset(_DISCIPLINAS_SEM_AULA_MANHA):
+            return CheckResult(check_id="tce_jornada_antes_meio_dia", status="pass")
+
     return CheckResult(
         check_id="tce_jornada_antes_meio_dia",
         status="hard_block",
         reason=(
             f"Jornada de estágio começa às {horario}, antes do meio-dia, "
             f"mas as aulas do Curso de Design Gráfico são pela manhã. "
-            f"Exceção: aluno que já integralizou todas as disciplinas da "
-            f"grade (verificar aba 'Integralização' no SIGA)."
+            f"Exceções: (a) aluno que já integralizou todas as disciplinas "
+            f"OU (b) aluno cujas únicas pendências são TCC1 (ODDA6), "
+            f"TCC2 (ODDA7) e/ou Estágio Supervisionado (OD501) — "
+            f"verificar aba 'Integralização' no SIGA."
         ),
     )
 

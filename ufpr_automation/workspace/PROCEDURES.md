@@ -139,12 +139,10 @@ blocking_checks:
   - "siga_reprovacoes_ultimo_semestre"  # SOFT: > 1 → exigir justificativa formal
   - "siga_reprovacao_por_falta"         # HARD: regra específica Design Gráfico
   - "siga_curriculo_integralizado"      # HARD: não pode estágio não-obrig. se já integralizou
-  - "siga_ch_simultaneos_30h"           # HARD: soma de estágios > 30h/semana
-  - "siga_concedente_duplicada"         # HARD: dois estágios simultâneos na mesma concedente
   - "data_inicio_retroativa"            # HARD: início < hoje
   - "data_inicio_antecedencia_minima"   # HARD: início - hoje < 2 dias úteis
   - "tce_jornada_sem_horario"           # HARD: TCE não especifica horário da jornada
-  - "tce_jornada_antes_meio_dia"        # HARD (exceto se curriculo_integralizado): aulas de manhã
+  - "tce_jornada_antes_meio_dia"        # HARD: aulas DG são de manhã. Exceções: integralizado OU pendentes ⊆ {OD501, ODDA6, ODDA7}
   - "sei_processo_vigente_duplicado"    # HARD: já existe processo VIGENTE do mesmo tipo para este aluno
   - "supervisor_formacao_compativel"    # SOFT: formação do supervisor não afim a Design → exigir Declaração de Experiência (form PROGRAD)
 sources:

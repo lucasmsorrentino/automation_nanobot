@@ -36,8 +36,9 @@ EXPECTED_CHECKERS = {
     "siga_reprovacoes_ultimo_semestre",
     "siga_reprovacao_por_falta",
     "siga_curriculo_integralizado",
-    "siga_ch_simultaneos_30h",
-    "siga_concedente_duplicada",
+    # Removidos em 2026-04-30: siga_ch_simultaneos_30h, siga_concedente_duplicada
+    # — verificacao de estagio ativo / duplicado e responsabilidade do SEI
+    # cascade (sei_processo_vigente_duplicado), nao do SIGA.
     "data_inicio_retroativa",
     "data_inicio_antecedencia_minima",
     "tce_jornada_sem_horario",
@@ -174,75 +175,10 @@ class TestSigaCurriculoIntegralizado:
         assert r.status == "hard_block"
 
 
-class TestSigaChSimultaneos30h:
-    def test_pass_under_30h(self):
-        r = _invoke(
-            "siga_ch_simultaneos_30h",
-            _make_ctx(
-                siga={"estagios_ativos": [{"ch_semanal": 10}]},
-                vars={"horas_semanais": "15"},
-            ),
-        )
-        assert r.status == "pass"
-
-    def test_pass_at_exactly_30h(self):
-        r = _invoke(
-            "siga_ch_simultaneos_30h",
-            _make_ctx(
-                siga={"estagios_ativos": [{"ch_semanal": 20}]},
-                vars={"horas_semanais": "10"},
-            ),
-        )
-        assert r.status == "pass"  # 30 is not > 30
-
-    def test_hard_block_over_30h(self):
-        r = _invoke(
-            "siga_ch_simultaneos_30h",
-            _make_ctx(
-                siga={"estagios_ativos": [{"ch_semanal": 20}]},
-                vars={"horas_semanais": "20"},
-            ),
-        )
-        assert r.status == "hard_block"
-        assert "40.0" in r.reason
-
-    def test_pass_with_no_existing_and_missing_hours(self):
-        r = _invoke(
-            "siga_ch_simultaneos_30h",
-            _make_ctx(siga={"estagios_ativos": []}, vars={}),
-        )
-        assert r.status == "pass"
-
-
-class TestSigaConcedenteDuplicada:
-    def test_pass_when_different_concedente(self):
-        r = _invoke(
-            "siga_concedente_duplicada",
-            _make_ctx(
-                siga={"estagios_ativos": [{"concedente": "Empresa A"}]},
-                vars={"nome_concedente": "Empresa B"},
-            ),
-        )
-        assert r.status == "pass"
-
-    def test_hard_block_when_same_concedente(self):
-        r = _invoke(
-            "siga_concedente_duplicada",
-            _make_ctx(
-                siga={"estagios_ativos": [{"concedente": "Empresa A"}]},
-                vars={"nome_concedente": "empresa a"},  # case-insensitive
-            ),
-        )
-        assert r.status == "hard_block"
-        assert "Lei 11.788" in r.reason
-
-    def test_hard_block_when_concedente_missing(self):
-        r = _invoke(
-            "siga_concedente_duplicada",
-            _make_ctx(siga={"estagios_ativos": []}, vars={}),
-        )
-        assert r.status == "hard_block"
-        assert "não extraído" in r.reason
+# ``TestSigaChSimultaneos30h`` e ``TestSigaConcedenteDuplicada`` removidos
+# em 2026-04-30 junto com os checkers correspondentes — verificacao de
+# estagio ativo / duplicado e responsabilidade do SEI cascade
+# (``sei_processo_vigente_duplicado`` cobre).
 
 
 # ---------------------------------------------------------------------------
@@ -363,6 +299,98 @@ class TestTceJornadaAntesMeioDia:
         # Missing horário is already a hard block in tce_jornada_sem_horario;
         # this checker must not duplicate the block.
         r = _invoke("tce_jornada_antes_meio_dia", _make_ctx(vars={}))
+        assert r.status == "pass"
+
+    # Excecao 2026-04-30: aluno com so TCC1/TCC2/Estagio Supervisionado
+    # pendentes pode estagiar de manha, ja que essas 3 disciplinas nao
+    # exigem aula presencial matinal.
+    def test_pass_before_noon_when_only_estagio_supervisionado_pending(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={"curriculo_integralizado": False, "nao_vencidas": ["OD501"]},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_pass_before_noon_when_only_tcc_and_estagio_pending(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "09:30"},
+                siga={
+                    "curriculo_integralizado": False,
+                    "nao_vencidas": ["OD501", "ODDA6", "ODDA7"],
+                },
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_pass_before_noon_when_only_tcc1_pending(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "10:00"},
+                siga={"curriculo_integralizado": False, "nao_vencidas": ["ODDA6"]},
+            ),
+        )
+        assert r.status == "pass"
+
+    def test_hard_block_before_noon_with_other_pending_alongside_tcc(self):
+        """OD501 + outra materia regular → ainda bloqueia (a outra exige
+        aula de manha)."""
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={
+                    "curriculo_integralizado": False,
+                    "nao_vencidas": ["OD501", "ODDA6", "OUTRA_MATERIA"],
+                },
+            ),
+        )
+        assert r.status == "hard_block"
+
+    def test_hard_block_before_noon_with_only_unrelated_pending(self):
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={
+                    "curriculo_integralizado": False,
+                    "nao_vencidas": ["MATERIA_QUALQUER"],
+                },
+            ),
+        )
+        assert r.status == "hard_block"
+
+    def test_hard_block_before_noon_with_empty_nao_vencidas_and_not_integralizado(self):
+        """nao_vencidas=[] + nao integralizado e estado contraditorio do
+        SIGA — nao acionamos a excecao por subset vazio (que seria subset
+        trivial). Bloqueia."""
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={"curriculo_integralizado": False, "nao_vencidas": []},
+            ),
+        )
+        assert r.status == "hard_block"
+
+    def test_case_insensitive_disciplina_codes(self):
+        """Codigos vindos do SIGA podem chegar lowercase ou misturados —
+        normalizar para uppercase antes de comparar."""
+        r = _invoke(
+            "tce_jornada_antes_meio_dia",
+            _make_ctx(
+                vars={"jornada_horario_inicio": "08:00"},
+                siga={
+                    "curriculo_integralizado": False,
+                    "nao_vencidas": ["od501", "odda6"],
+                },
+            ),
+        )
         assert r.status == "pass"
 
 

@@ -19,8 +19,6 @@ from ufpr_automation.siga import browser as siga_browser
 from ufpr_automation.siga.models import EligibilityResult, EnrollmentInfo, StudentStatus
 from ufpr_automation.utils.logging import logger
 
-MAX_WEEKLY_HOURS = 30
-
 # Disciplines that indicate >= 1 year remaining in the curriculum
 _ANNUAL_ESTAGIO = "OD501"  # Estágio Supervisionado (annual, 360h)
 _TCC1 = "ODDA6"  # TCC1 (prerequisite for TCC2)
@@ -426,7 +424,12 @@ class SIGAClient:
         - >2 reprovações total -> soft block (request justification)
         - Currículo integralizado -> hard block
         - Cannot graduate before internship ends (OD501/ODDA6 check)
-        - Weekly hours sum <= 30h
+
+        Note: verificação de estágios já ativos / concedente duplicada saiu
+        do SIGA em 2026-04-30 — responsabilidade do SEI cascade
+        (``_consult_sei_for_email`` + checker ``sei_processo_vigente_duplicado``).
+        Carga horária 30h/semana também não é mais validada aqui — substituída
+        pela regra de período em ``tce_jornada_antes_meio_dia``.
 
         Args:
             grr: Student registration number.

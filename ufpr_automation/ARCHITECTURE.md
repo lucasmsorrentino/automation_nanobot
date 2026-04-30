@@ -219,7 +219,7 @@ Os 24 intents legados continuam funcionando sem mudança — os novos campos tê
 
 **`procedures/checkers.py`** implementa um registry de funções de check com decorator `@register("id")` e modelo tri-state `pass | soft_block | hard_block`. Um `CheckSummary` agrega resultados; `.can_proceed` é `True` só quando não há bloqueios; `.needs_justification` sinaliza quando há soft blocks mas não hard blocks (usado pelo `agir_estagios` para decidir entre "criar processo" ou "pedir justificativa formal ao aluno"). Checkers ausentes do SIGA/SEI context caem em soft_block com `"SIGA não consultado — requer verificação manual"` ao invés de falharem silenciosamente.
 
-11 checkers registrados para o intent `estagio_nao_obrig_acuse_inicial`:
+10 checkers registrados para o intent `estagio_nao_obrig_acuse_inicial` (post-2026-04-30, removidos `siga_ch_simultaneos_30h` e `siga_concedente_duplicada` — verificação de estágio ativo / duplicado é responsabilidade do SEI cascade via `sei_processo_vigente_duplicado`):
 
 | Checker ID | Tipo | Condição |
 |---|---|---|
@@ -227,13 +227,12 @@ Os 24 intents legados continuam funcionando sem mudança — os novos campos tê
 | `siga_reprovacoes_ultimo_semestre` | SOFT | > 1 reprovação → exige justificativa formal |
 | `siga_reprovacao_por_falta` | HARD | Reprovação por falta (regra específica DG) |
 | `siga_curriculo_integralizado` | HARD | Currículo já integralizado (não pode estágio não-obrig.) |
-| `siga_ch_simultaneos_30h` | HARD | Soma das CHs de estágios ativos + novo TCE > 30h/semana |
-| `siga_concedente_duplicada` | HARD | Mesma concedente em dois estágios simultâneos |
 | `data_inicio_retroativa` | HARD | Data de início < hoje (homologação retroativa não permitida) |
 | `data_inicio_antecedencia_minima` | HARD | Antecedência < 2 dias úteis |
 | `tce_jornada_sem_horario` | HARD | TCE não especifica horário da jornada |
-| `tce_jornada_antes_meio_dia` | HARD (exceto se integralizado) | Jornada começa < 12h00 e aluno não cursou tudo |
+| `tce_jornada_antes_meio_dia` | HARD | Jornada começa < 12h00. Exceções: aluno integralizado OU pendentes ⊆ {OD501 (Estágio Sup.), ODDA6 (TCC1), ODDA7 (TCC2)} |
 | `sei_processo_vigente_duplicado` | HARD | Já existe processo SEI vigente do mesmo tipo para o aluno |
+| `supervisor_formacao_compativel` | SOFT | Formação do supervisor não afim a Design → exigir Declaração de Experiência (form PROGRAD) |
 
 ### SEI_DOC_CATALOG (`workspace/SEI_DOC_CATALOG.yaml`)
 

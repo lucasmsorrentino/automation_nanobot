@@ -5,7 +5,7 @@ Gmail, mas usa toda a cadeia real:
   1. fetch real do email + extracao de texto dos anexos
   2. cascade SEI (find_processes_by_grr filtrado por tipo)
   3. consult SIGA (matricula, integralizacao, reprovações)
-  4. ``agir_estagios`` -> 16 checkers + gerador de draft
+  4. ``agir_estagios`` -> checker registry + gerador de draft
 
 NAO salva draft no Gmail nem mexe no SEI live (o ``--once`` real faria
 isso). So imprime o draft que SERIA salvo + sumario dos checkers.
