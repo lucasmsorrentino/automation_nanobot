@@ -129,16 +129,18 @@ Smoke `scripts/smoke_agir_estagios.py --message-id CAA_UPeAvQMfoX4ssSbAqu9H-VqYY
 
 Com o smoke agora extraindo texto do PDF e o SIGA retornando o aluno certo, o output do smoke da Letícia revelou um **gap de cobertura adicional** no `_consult_siga_async`:
 
-- [ ] **🟡 SIGA context não popula chaves que os checkers esperam** — `_consult_siga_async` ([graph/nodes.py:1284](ufpr_automation/graph/nodes.py:1284)) só expõe `{grr, eligible, reasons, warnings, nome, situacao, curso}`, mas os checkers em `procedures/checkers.py` usam:
-  - `matricula_status` (não "situacao") — `siga_matricula_ativa`
-  - `reprovacoes_ultimo_semestre` — `siga_reprovacoes_ultimo_semestre`
-  - `reprovacao_por_falta_ultimo_semestre` — `siga_reprovacao_por_falta`
-  - `curriculo_integralizado` — `siga_curriculo_integralizado` (bool, não string)
-  - `nao_vencidas` (lista de siglas) — `tce_jornada_antes_meio_dia` (exceção pra alunos com só TCC/Estágio Supervisionado pendentes)
-  
-  Resultado: 4 soft_blocks "SIGA não consultado — requer verificação manual" disparam mesmo quando SIGA foi consultado com sucesso. Comportamento atual é "fail-safe" (gates SEI write op até humano verificar), mas reduz cobertura útil.
-  
-  **Fix proposto**: estender `EligibilityResult` em `siga/models.py` com `historico_data: dict` e `integralizacao_data: dict`; `validate_internship_eligibility` em `siga/client.py` já chama `get_historico()` e `get_integralizacao()` internamente — capturar e expor os dicts. `_consult_siga_async` mapeia pras chaves dos checkers (`matricula_status = student.situacao.upper()`, `curriculo_integralizado = integ["integralizado"]`, `nao_vencidas = integ["nao_vencidas"]`, `reprovacoes_total = historico["reprovacoes_total"]`). Para `reprovacoes_ultimo_semestre` e `reprovacao_por_falta_ultimo_semestre` precisa breakdown por semestre — adicionar query SIGA específica ou aceitar como soft_block "interno" até query existir.
+- [x] ~~**🟡 SIGA context não popula chaves que os checkers esperam**~~ — fix 2026-04-30:
+  - `EligibilityResult` em [siga/models.py](ufpr_automation/siga/models.py) estendido com `historico_data: dict` e `integralizacao_data: dict`.
+  - `validate_internship_eligibility` em [siga/client.py](ufpr_automation/siga/client.py) agora captura os dicts retornados por `get_historico()` e `get_integralizacao()` em vez de descartá-los após calcular as regras.
+  - Nova função pura `_eligibility_to_siga_context(grr, eligibility)` em [graph/nodes.py](ufpr_automation/graph/nodes.py) extraída de `_consult_siga_async` mapeia pras chaves dos checkers:
+    - `matricula_status` ← `_normalize_matricula_status(student.situacao)` (whitelist "ativ" → "ATIVA"; outros valores em uppercase)
+    - `curriculo_integralizado` ← `integ["integralizado"]` (bool)
+    - `nao_vencidas` ← `integ["nao_vencidas"]` (lista de siglas)
+    - `reprovacoes_total` ← `historico["reprovacoes_total"]`
+  - Fail-safe: `situacao=""` (extrator não achou Status na página) → `matricula_status` **não populada** → checker cai em soft_block "SIGA não consultado" em vez de hard-block falso "Matrícula  — estágio não permitido".
+  - Validado live no smoke da Letícia (2026-04-30 17:07): falsos hard_blocks de matricula_ativa + curriculo_integralizado eliminados; 11 disciplinas em `nao_vencidas` populadas corretamente; checker `tce_jornada_antes_meio_dia` agora pode aplicar a exceção quando o conjunto bater.
+  - **Restante**: `reprovacoes_ultimo_semestre` e `reprovacao_por_falta_ultimo_semestre` ainda exigem breakdown semestre-a-semestre que `get_historico` não fornece (`semesters=[]`). Esses 2 checkers continuam soft_block "SIGA não consultado" (fail-safe correto). Adicionar parsing semestral no `get_historico` é trabalho separado.
+  - Tests: 20 novos em [test_graph_nodes.py](ufpr_automation/tests/test_graph_nodes.py) (`TestNormalizeMatriculaStatus` × 11 + `TestEligibilityToSigaContext` × 10, incluindo regressão pra `situacao=""` fail-safe).
 
 - [x] ~~**Refatoração: estagio ativo / concedente duplicada saem do SIGA**~~ — 2026-04-30: removidos checkers `siga_ch_simultaneos_30h` e `siga_concedente_duplicada` (dependiam de `estagios_ativos` que nunca foi fetched do SIGA). Verificação de estágio ativo agora é responsabilidade exclusiva do SEI cascade — `_consult_sei_for_email` busca processos vigentes via Acompanhamento Especial e `sei_processo_vigente_duplicado` faz o block. Regra dos 30h/semana removida; substituída pela regra de **período**: `tce_jornada_antes_meio_dia` agora aceita exceção quando `nao_vencidas ⊆ {OD501, ODDA6, ODDA7}` (aluno só com TCC1/TCC2/Estágio Supervisionado pendentes pode estagiar de manhã, já que essas 3 não exigem aula matinal). Limpeza completa: `procedures/checkers.py`, `siga/client.py` (MAX_WEEKLY_HOURS), `tests/test_checkers.py`, `workspace/PROCEDURES.md`, `ARCHITECTURE.md`, `config/settings.py`.
 

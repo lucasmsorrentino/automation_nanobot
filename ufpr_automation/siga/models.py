@@ -33,10 +33,20 @@ class EnrollmentInfo:
 
 @dataclass
 class EligibilityResult:
-    """Result of internship eligibility check based on SOUL.md section 11 rules."""
+    """Result of internship eligibility check based on SOUL.md section 11 rules.
+
+    ``historico_data`` and ``integralizacao_data`` carry the **raw** payload
+    fetched from SIGA (``get_historico`` and ``get_integralizacao`` return
+    dicts). They exist so that downstream consumers — notably
+    ``_consult_siga_async`` in ``graph/nodes.py`` — can expose checker-friendly
+    keys (``matricula_status``, ``curriculo_integralizado``, ``nao_vencidas``,
+    ``reprovacoes_total``) without re-fetching from SIGA.
+    """
 
     eligible: bool = False
     reasons: list[str] = field(default_factory=list)  # Blocking reasons
     warnings: list[str] = field(default_factory=list)  # Non-blocking alerts
     student: StudentStatus | None = None
     enrollment: EnrollmentInfo | None = None
+    historico_data: dict = field(default_factory=dict)
+    integralizacao_data: dict = field(default_factory=dict)

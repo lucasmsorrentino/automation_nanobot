@@ -709,3 +709,218 @@ class TestRunAsyncSafe:
 
         with pytest.raises(ValueError, match="boom"):
             asyncio.run(_outer())
+
+
+# ----------------------------------------------------------------------
+# SIGA coverage gap fix (2026-04-30 part 3) — _consult_siga_async agora
+# expoe matricula_status / curriculo_integralizado / nao_vencidas /
+# reprovacoes_total derivados de EligibilityResult, ate aqui descartados.
+# ----------------------------------------------------------------------
+
+
+class TestNormalizeMatriculaStatus:
+    @pytest.mark.parametrize(
+        "siga_text",
+        [
+            "Ativa",
+            "Ativo",
+            "Registro ativo",
+            "MATRICULA ATIVA",
+            "ativa",  # lowercase
+        ],
+    )
+    def test_active_variants_map_to_ATIVA(self, siga_text):
+        from ufpr_automation.graph.nodes import _normalize_matricula_status
+
+        assert _normalize_matricula_status(siga_text) == "ATIVA"
+
+    @pytest.mark.parametrize(
+        "siga_text,expected",
+        [
+            ("Trancada", "TRANCADA"),
+            ("Cancelada", "CANCELADA"),
+            ("Abandonada", "ABANDONADA"),
+            ("Integralizada", "INTEGRALIZADA"),
+        ],
+    )
+    def test_blocking_variants_pass_through_uppercased(self, siga_text, expected):
+        from ufpr_automation.graph.nodes import _normalize_matricula_status
+
+        assert _normalize_matricula_status(siga_text) == expected
+
+    def test_empty_string_returns_empty(self):
+        from ufpr_automation.graph.nodes import _normalize_matricula_status
+
+        assert _normalize_matricula_status("") == ""
+
+    def test_none_returns_empty(self):
+        from ufpr_automation.graph.nodes import _normalize_matricula_status
+
+        # mypy-style: caller may pass None despite the type hint.
+        assert _normalize_matricula_status(None) == ""  # type: ignore[arg-type]
+
+
+class TestEligibilityToSigaContext:
+    """Funcao pura que mapeia EligibilityResult -> dict pra siga_contexts."""
+
+    def _make_eligibility(self, **overrides):
+        from ufpr_automation.siga.models import EligibilityResult, StudentStatus
+
+        student = overrides.pop(
+            "student",
+            StudentStatus(
+                grr="GRR20244602",
+                nome="LETICIA FONCECA RAMALHO",
+                curso="Design Grafico",
+                situacao="Registro ativo",
+            ),
+        )
+        return EligibilityResult(
+            eligible=overrides.pop("eligible", True),
+            reasons=overrides.pop("reasons", []),
+            warnings=overrides.pop("warnings", []),
+            student=student,
+            historico_data=overrides.pop("historico_data", {}),
+            integralizacao_data=overrides.pop("integralizacao_data", {}),
+        )
+
+    def test_basic_keys_always_present(self):
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context("GRR20244602", self._make_eligibility())
+
+        assert ctx["grr"] == "GRR20244602"
+        assert ctx["eligible"] is True
+        assert ctx["reasons"] == []
+        assert ctx["warnings"] == []
+        # student-derived keys
+        assert ctx["nome"] == "LETICIA FONCECA RAMALHO"
+        assert ctx["situacao"] == "Registro ativo"
+        assert ctx["curso"] == "Design Grafico"
+        assert ctx["matricula_status"] == "ATIVA"
+
+    def test_no_student_omits_student_keys(self):
+        """Student None (aluno nao encontrado) — nao popular nome/situacao etc."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602", self._make_eligibility(student=None, eligible=False)
+        )
+
+        for key in ("nome", "situacao", "curso", "matricula_status"):
+            assert key not in ctx
+
+    def test_empty_situacao_omits_matricula_status_for_failsafe(self):
+        """Quando ``_extract_info_gerais`` nao achou o campo Status na
+        pagina (situacao=""), nao popular ``matricula_status`` — checker
+        cai em soft_block "SIGA nao consultado" em vez de hard-block
+        falso. Bug visto no smoke da Leticia 2026-04-30."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+        from ufpr_automation.siga.models import StudentStatus
+
+        student = StudentStatus(grr="GRR20244602", nome="LETICIA", situacao="")
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602", self._make_eligibility(student=student)
+        )
+
+        assert "matricula_status" not in ctx
+        assert ctx["situacao"] == ""  # raw situacao ainda preservado pra log
+        assert ctx["nome"] == "LETICIA"
+
+    def test_curriculo_integralizado_exposed_from_integ_data(self):
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602",
+            self._make_eligibility(integralizacao_data={"integralizado": True}),
+        )
+
+        assert ctx["curriculo_integralizado"] is True
+
+    def test_curriculo_integralizado_false_exposed(self):
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602",
+            self._make_eligibility(integralizacao_data={"integralizado": False}),
+        )
+
+        assert ctx["curriculo_integralizado"] is False
+
+    def test_nao_vencidas_exposed_for_jornada_checker(self):
+        """``tce_jornada_antes_meio_dia`` precisa da lista pra aplicar a
+        excecao TCC/Estagio Supervisionado (2026-04-30)."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602",
+            self._make_eligibility(
+                integralizacao_data={
+                    "integralizado": False,
+                    "nao_vencidas": ["OD501", "ODDA6"],
+                }
+            ),
+        )
+
+        assert ctx["nao_vencidas"] == ["OD501", "ODDA6"]
+
+    def test_reprovacoes_total_exposed(self):
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602",
+            self._make_eligibility(historico_data={"reprovacoes_total": 5}),
+        )
+
+        assert ctx["reprovacoes_total"] == 5
+
+    def test_missing_integ_and_historico_omits_optional_keys(self):
+        """Sem dados de integralizacao/historico — nao popular as chaves
+        derivadas (faz checkers caırem em soft_block fail-safe)."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context("GRR20244602", self._make_eligibility())
+
+        for key in (
+            "curriculo_integralizado",
+            "nao_vencidas",
+            "reprovacoes_total",
+        ):
+            assert key not in ctx
+
+    def test_reasons_and_warnings_are_copied_not_aliased(self):
+        """Mutar o dict resultante nao deve mutar o EligibilityResult."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        elig = self._make_eligibility(
+            reasons=["aluno trancado"], warnings=["alerta"]
+        )
+        ctx = _eligibility_to_siga_context("GRR20244602", elig)
+        ctx["reasons"].append("MUTATION")
+        ctx["warnings"].append("MUTATION")
+
+        assert "MUTATION" not in elig.reasons
+        assert "MUTATION" not in elig.warnings
+
+    def test_full_letícia_payload_satisfies_jornada_exception(self):
+        """Smoke 2026-04-30: aluna real com pendentes ⊆ {OD501, ODDA6, ODDA7}.
+        O dict resultante precisa ter ``nao_vencidas`` populado pro
+        checker ``tce_jornada_antes_meio_dia`` aplicar a excecao."""
+        from ufpr_automation.graph.nodes import _eligibility_to_siga_context
+
+        ctx = _eligibility_to_siga_context(
+            "GRR20244602",
+            self._make_eligibility(
+                integralizacao_data={
+                    "integralizado": False,
+                    "nao_vencidas": ["OD501", "ODDA6", "ODDA7"],
+                },
+                historico_data={"reprovacoes_total": 0},
+            ),
+        )
+
+        # Sao as chaves que os checkers olham.
+        assert ctx["matricula_status"] == "ATIVA"
+        assert ctx["curriculo_integralizado"] is False
+        assert set(ctx["nao_vencidas"]) == {"OD501", "ODDA6", "ODDA7"}
+        assert ctx["reprovacoes_total"] == 0

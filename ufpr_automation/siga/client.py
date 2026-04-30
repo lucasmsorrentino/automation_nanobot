@@ -459,6 +459,7 @@ class SIGAClient:
 
         # Rule: currículo not yet completed
         integ = await self.get_integralizacao()
+        result.integralizacao_data = integ
         if integ.get("integralizado"):
             reasons.append(
                 "Curriculo ja integralizado — estagio nao obrigatorio vedado (SOUL.md secao 11)"
@@ -495,6 +496,7 @@ class SIGAClient:
 
         # Rule: >2 reprovações -> soft block (justification needed)
         historico = await self.get_historico()
+        result.historico_data = historico
         total_reprov = historico.get("reprovacoes_total", 0)
         if total_reprov > 2:
             warnings.append(

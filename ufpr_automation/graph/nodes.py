@@ -1254,6 +1254,85 @@ def consultar_siga(state: EmailState) -> dict[str, Any]:
     return {"siga_contexts": siga_results}
 
 
+def _normalize_matricula_status(situacao: str) -> str:
+    """Mapeia o texto de ``situacao`` do SIGA pro vocabulario que os
+    checkers usam.
+
+    O checker ``siga_matricula_ativa`` em ``procedures/checkers.py`` testa
+    ``str(status).upper() == "ATIVA"`` (whitelist). Mas o SIGA retorna
+    variantes como ``"Registro ativo"``, ``"Ativa"``, ``"Ativo"``. Sem
+    normalizacao, todas falham a comparacao literal.
+
+    Politica:
+    - Se contem "ativ" (case-insensitive) -> ``"ATIVA"``.
+    - Caso contrario, uppercase do texto original (cobre TRANCADA /
+      CANCELADA / ABANDONADA / INTEGRALIZADA, que o checker bloqueia
+      explicitamente).
+    - String vazia ou None -> string vazia (faz checker cair em soft_block
+      "SIGA nao consultado" -- fail-safe).
+    """
+    if not situacao:
+        return ""
+    s = situacao.lower()
+    if "ativ" in s:
+        return "ATIVA"
+    return situacao.upper()
+
+
+def _eligibility_to_siga_context(grr: str, eligibility) -> dict[str, Any]:
+    """Mapeia ``EligibilityResult`` pro dict que vai virar
+    ``state["siga_contexts"][stable_id]``.
+
+    Funcao pura (sem I/O), unicamente responsavel por traduzir o resultado
+    do SIGA pras chaves que os 16 checkers em ``procedures/checkers.py``
+    esperam. Antes desta funcao existir, o dict so tinha
+    ``{eligible, reasons, warnings, nome, situacao, curso}`` e checkers
+    como ``siga_matricula_ativa``, ``siga_curriculo_integralizado``,
+    ``tce_jornada_antes_meio_dia`` (que le ``nao_vencidas``) caiam em
+    soft_block "SIGA nao consultado" -- fail-safe correto, mas reduzia
+    cobertura util.
+
+    ``EligibilityResult.{historico_data, integralizacao_data}`` carregam
+    o payload bruto fetched internamente por
+    ``validate_internship_eligibility`` -- so re-expondo, sem custo extra
+    de I/O.
+    """
+    result: dict[str, Any] = {
+        "grr": grr,
+        "eligible": eligibility.eligible,
+        "reasons": list(eligibility.reasons),
+        "warnings": list(eligibility.warnings),
+    }
+    if eligibility.student:
+        result["nome"] = eligibility.student.nome
+        result["situacao"] = eligibility.student.situacao
+        result["curso"] = eligibility.student.curso
+        # So expor matricula_status quando temos algo concreto. String
+        # vazia = ``_extract_info_gerais`` nao achou o campo Status na
+        # pagina (pagina renderizada estranhamente, role diferente, etc.)
+        # — melhor o checker cair em soft_block "SIGA nao consultado"
+        # (fail-safe) do que disparar hard-block falso "Matricula  —
+        # estagio nao permitido" pelo unequal-comparison com vazio.
+        normalized = _normalize_matricula_status(eligibility.student.situacao)
+        if normalized:
+            result["matricula_status"] = normalized
+
+    integ = getattr(eligibility, "integralizacao_data", None) or {}
+    historico = getattr(eligibility, "historico_data", None) or {}
+    if "integralizado" in integ:
+        result["curriculo_integralizado"] = bool(integ["integralizado"])
+    if "nao_vencidas" in integ:
+        result["nao_vencidas"] = list(integ["nao_vencidas"])
+    if "reprovacoes_total" in historico:
+        result["reprovacoes_total"] = historico["reprovacoes_total"]
+    # ``reprovacoes_ultimo_semestre`` e ``reprovacao_por_falta_ultimo
+    # _semestre`` exigem breakdown semestre-a-semestre que
+    # ``get_historico`` ainda nao fornece (``semesters=[]``). Ate haver
+    # esse parsing, esses 2 checkers continuarao soft-block "SIGA nao
+    # consultado" -- comportamento fail-safe.
+    return result
+
+
 async def _consult_siga_async(candidates: dict[str, str]) -> dict[str, Any]:
     """Internal async implementation for SIGA consultations."""
     from ufpr_automation.config.settings import SIGA_URL
@@ -1282,17 +1361,7 @@ async def _consult_siga_async(candidates: dict[str, str]) -> dict[str, Any]:
         client = SIGAClient(page)
         for stable_id, grr in candidates.items():
             eligibility = await client.validate_internship_eligibility(grr)
-            result_data: dict[str, Any] = {
-                "grr": grr,
-                "eligible": eligibility.eligible,
-                "reasons": eligibility.reasons,
-                "warnings": eligibility.warnings,
-            }
-            if eligibility.student:
-                result_data["nome"] = eligibility.student.nome
-                result_data["situacao"] = eligibility.student.situacao
-                result_data["curso"] = eligibility.student.curso
-            results[stable_id] = result_data
+            results[stable_id] = _eligibility_to_siga_context(grr, eligibility)
     except Exception as e:
         logger.error("SIGA: erro durante consultas: %s", e)
     finally:
