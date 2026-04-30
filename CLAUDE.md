@@ -235,25 +235,30 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 
 > Este projeto roda em **2 PCs** (Lucas — casa + trabalho). Cada PC tem o RAG store e o Neo4j **localmente**; `G:/Meu Drive/ufpr_rag/store/` (Google Drive) é apenas o **canal de sincronização** entre eles, não o path operacional. `RAG_STORE_DIR` no `.env` deve apontar pra um diretório local — o que está no `.env` neste momento pode estar stale (copiado do outro PC).
 
-**Antes de começar QUALQUER trabalho que toque RAG ou Neo4j**, verifique se G: tem versão mais recente que o local:
+### Scripts prontos (preferir aos comandos manuais)
 
-```bash
-# Compare timestamps
-ls -la "G:/Meu Drive/ufpr_rag/store/ufpr.lance/_versions/" | tail -3
-ls -la "$RAG_STORE_DIR/ufpr.lance/_versions/" | tail -3
+```powershell
+# Antes de começar trabalho — puxa G: → local + re-seeda Neo4j + compara manifest:
+powershell -ExecutionPolicy Bypass -File scripts\sync_from_drive.ps1
 
-# Se G: for mais novo: sincronize G: → local
-robocopy "G:\Meu Drive\ufpr_rag\store\ufpr.lance" "<RAG_STORE_DIR>\ufpr.lance" /E /COPY:DAT /R:3 /W:5
-
-# Re-seede o Neo4j local (Neo4j é derivado do RAG via graphrag.seed):
-.venv/Scripts/python.exe -m ufpr_automation.graphrag.seed --clear
-.venv/Scripts/python.exe -m ufpr_automation.graphrag.enrich
+# Depois de re-ingest / seed --clear / enrich / qualquer modificação — empurra local → G: + atualiza manifest:
+powershell -ExecutionPolicy Bypass -File scripts\sync_to_drive.ps1
 ```
 
-**Depois de QUALQUER modificação em RAG ou Neo4j** (re-ingest, `seed --clear`, `enrich`, novos PDFs ingeridos, schema novo, etc.), sincronize **local → G:** imediatamente — o outro PC depende disso pra ver as mudanças:
+`sync_from_drive.ps1` faz: `robocopy /MIR G:→local` → `seed --clear` → `enrich` → gera `MANIFEST.json` local → compara contadores (chunks LanceDB, nós/rels Neo4j) com `G:/MANIFEST.json` e imprime `OK`/`DIFF` por linha. `sync_to_drive.ps1` faz o caminho inverso e atualiza ambos os manifests. Ambos leem `RAG_STORE_DIR` do `.env` local — não hardcoded.
+
+**Manifest schema** (`G:\Meu Drive\ufpr_rag\store\MANIFEST.json`): `{schema_version, timestamp, machine, git_sha, lancedb: {total_chunks, store_size_mb, tables}, neo4j: {total_nodes, total_relationships, nodes_by_label, rels_by_type, normas_with_emissor}}`. Comparação é estrita em `total_chunks`/`total_nodes`/`total_relationships` — drift em qualquer um sinaliza re-seed pulado, edição manual no Neo4j Browser, ou dois PCs ingerindo em paralelo.
+
+### Comandos brutos (fallback)
 
 ```bash
-robocopy "<RAG_STORE_DIR>\ufpr.lance" "G:\Meu Drive\ufpr_rag\store\ufpr.lance" /E /COPY:DAT /R:3 /W:5
+# G: → local
+robocopy "G:\Meu Drive\ufpr_rag\store\ufpr.lance" "<RAG_STORE_DIR>\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5
+.venv/Scripts/python.exe -m ufpr_automation.graphrag.seed --clear
+.venv/Scripts/python.exe -m ufpr_automation.graphrag.enrich
+
+# local → G:
+robocopy "<RAG_STORE_DIR>\ufpr.lance" "G:\Meu Drive\ufpr_rag\store\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5
 ```
 
 Não copie o binário do Neo4j — o outro PC re-seeda localmente do RAG sincronizado (mais simples e mais robusto que copiar o data dir do Neo4j Desktop).
