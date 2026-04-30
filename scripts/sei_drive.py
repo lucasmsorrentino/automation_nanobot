@@ -62,7 +62,7 @@ _ENUMERATE_JS = r"""
   const takeOptions = (el) => {
     if (el.tagName !== 'SELECT') return null;
     try {
-      return Array.from(el.options).slice(0, 50).map(o => ({
+      return Array.from(el.options).slice(0, 1000).map(o => ({
         value: trim(o.value, 80),
         text: trim((o.textContent || '').trim(), 80),
         selected: o.selected,
@@ -1282,6 +1282,243 @@ async def target_ae_keyword_search(page, out_dir: Path, context) -> None:
         logger.warning("anchor dump failed: %s", e)
 
 
+async def target_pesquisa_geral(page, out_dir: Path, context) -> None:
+    """Navigate to 'Pesquisa' (geral/avancada) menu and capture the form,
+    including the 'Tipo do Processo' field and the search action selectors.
+
+    Targets the SEI feature that lets you filter by tipo BEFORE searching by
+    GRR/name. Output is consumed by SEIClient.find_processes_by_grr_filtered.
+
+    Steps:
+      1. ensure_logged_in
+      2. click main 'Pesquisa' menu link
+      3. snapshot form
+      4. enumerate every input/select/button — write to raw/pesquisa_geral_form.json
+      5. (optional) fill Tipo='Estagios nao Obrigatorios' + Pesquisa=GRR + submit
+         when env PESQUISA_GERAL_GRR is set; capture results
+
+    READ-ONLY (search returns a list, no mutation).
+    """
+    import os
+
+    grr = os.getenv("PESQUISA_GERAL_GRR", "").strip()
+    tipo = os.getenv(
+        "PESQUISA_GERAL_TIPO",
+        "Graduação/Ensino Técnico: Estágios não Obrigatórios",
+    ).strip()
+    nome = os.getenv("PESQUISA_GERAL_NOME", "").strip()
+    logger.info(
+        "pesquisa_geral: grr=%r nome=%r tipo=%r", grr, nome, tipo
+    )
+
+    await _ensure_logged_in(page, context)
+    await snapshot(page, out_dir, "pesquisa_home", also_frames=True)
+
+    # 1) Achar o link 'Pesquisa' no menu lateral. Em SEI UFPR costuma ser
+    # 'a[href*="pesquisa_processo"]' ou 'a:has-text("Pesquisa")'.
+    # 'protocolo_pesquisar' eh o link real da Pesquisa de Processos do SEI
+    # UFPR (validado 2026-04-30). 'base_conhecimento_pesquisar' eh outra
+    # funcionalidade (wiki interno) e nao deve ser clicada.
+    menu_candidates = [
+        'a[href*="protocolo_pesquisar"]',
+        'a[href*="procedimento_pesquisar"]',
+    ]
+    chosen_sel = None
+    chosen_frame = None
+    for frame in [page.main_frame, *page.frames]:
+        for sel in menu_candidates:
+            try:
+                loc = frame.locator(sel).first
+                if await loc.count() > 0:
+                    chosen_sel = sel
+                    chosen_frame = frame
+                    break
+            except Exception:
+                pass
+        if chosen_sel is not None:
+            break
+
+    if chosen_sel is None:
+        await snapshot(page, out_dir, "pesquisa_menu_not_found", also_frames=True)
+        raise RuntimeError("'Pesquisa' menu link not found")
+
+    logger.info(
+        "pesquisa_geral: clicking menu sel=%s frame=%s",
+        chosen_sel,
+        chosen_frame.name or "(main)",
+    )
+    await chosen_frame.locator(chosen_sel).first.click()
+    await page.wait_for_load_state("networkidle", timeout=15000)
+    await snapshot(page, out_dir, "pesquisa_form", also_frames=True)
+
+    # 2) Enumerar TODOS os inputs/selects/buttons da página de pesquisa.
+    # Saída pra raw/pesquisa_geral_form.json — esse é o "mapa" pro caller
+    # ajustar SEIClient.
+    form_frame = None
+    for frame in [page.main_frame, *page.frames]:
+        try:
+            elements = await frame.evaluate(_ENUMERATE_JS)
+        except Exception:
+            continue
+        if elements and any(
+            "tipoproc" in (e.get("name") or "").lower()
+            or "tipoproc" in (e.get("id") or "").lower()
+            or "tipo" in (e.get("label") or "").lower()
+            for e in elements
+        ):
+            form_frame = frame
+            (out_dir / "raw" / "pesquisa_geral_form.json").write_text(
+                json.dumps(elements, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info(
+                "pesquisa_geral: form em frame=%s — %d elementos dumped",
+                frame.name or "(main)",
+                len(elements),
+            )
+            break
+
+    if form_frame is None:
+        # Fallback: dump elementos do main frame mesmo assim
+        try:
+            elements = await page.main_frame.evaluate(_ENUMERATE_JS)
+            (out_dir / "raw" / "pesquisa_geral_form.json").write_text(
+                json.dumps(elements, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            form_frame = page.main_frame
+            logger.warning(
+                "pesquisa_geral: 'tipo' campo nao detectado, dump do main frame "
+                "mesmo assim (%d elementos)",
+                len(elements),
+            )
+        except Exception as e:
+            logger.error("dump do main frame falhou: %s", e)
+            raise RuntimeError("Pesquisa form not found")
+
+    # 3) Se nao ha GRR/nome em env, parar aqui — o objetivo desta corrida e
+    # so capturar selectors do form.
+    if not grr and not nome:
+        logger.info(
+            "pesquisa_geral: sem PESQUISA_GERAL_GRR/NOME — capture-only mode. "
+            "Form dumped em raw/pesquisa_geral_form.json"
+        )
+        return
+
+    # 4) Selectors REAIS validados 2026-04-30 contra https://sei.ufpr.br/
+    # acao=protocolo_pesquisar:
+    #   - Tipo do Processo:    <select id="selTipoProcedimentoPesquisa">
+    #   - Texto para Pesquisa: <input  id="q" name="q">
+    #   - Submit:              <button id="sbmPesquisar">
+    #   - Radio "Processos":   <input id="optProcessos" name="rdoPesquisarEm">
+    #
+    # Tipos importantes (validados):
+    #   value=478        -> "Graduação/Ensino Técnico: Estágios não Obrigatórios"
+    #   value=100000767  -> "Graduação/Ensino Técnico: Estágio Obrigatório"
+    #   value=100000768  -> "Graduação/Ensino Técnico: Estágio no Exterior"
+    tipo_value_map = {
+        "Graduação/Ensino Técnico: Estágios não Obrigatórios": "478",
+        "Graduação/Ensino Técnico: Estágio Obrigatório": "100000767",
+        "Graduação/Ensino Técnico: Estágio no Exterior": "100000768",
+    }
+    tipo_value = tipo_value_map.get(tipo)
+    try:
+        if tipo_value:
+            await form_frame.locator("#selTipoProcedimentoPesquisa").select_option(
+                value=tipo_value
+            )
+            logger.info("pesquisa_geral: Tipo selecionado via value=%s", tipo_value)
+        else:
+            await form_frame.locator("#selTipoProcedimentoPesquisa").select_option(
+                label=tipo
+            )
+            logger.info("pesquisa_geral: Tipo selecionado via label=%r", tipo)
+        await snapshot(page, out_dir, "pesquisa_tipo_selecionado", also_frames=True)
+    except Exception as e:
+        logger.warning("pesquisa_geral: select_option Tipo falhou: %s", e)
+
+    # 5) Preencher campo "Texto para Pesquisa" (input#q name=q)
+    search_term = grr or nome
+    try:
+        await form_frame.locator("#q").fill(search_term)
+        logger.info("pesquisa_geral: q=%r preenchido", search_term)
+    except Exception as e:
+        logger.warning("pesquisa_geral: fill #q falhou: %s", e)
+        return
+
+    await snapshot(page, out_dir, "pesquisa_termo_filled", also_frames=True)
+
+    # 6) Submit via #sbmPesquisar
+    try:
+        await form_frame.locator("#sbmPesquisar").click()
+        logger.info("pesquisa_geral: submit via #sbmPesquisar")
+    except Exception as e:
+        logger.warning("pesquisa_geral: submit falhou: %s", e)
+        return
+
+    await page.wait_for_load_state("networkidle", timeout=20000)
+    await snapshot(page, out_dir, "pesquisa_results", also_frames=True)
+
+    # 7) Dump da estrutura dos resultados — sao tipicamente <li>/<div> com
+    # texto 'TIPO: SUBTIPO Nº NUMERO - DOC (ID)'. Capturar o HTML cru pra
+    # a gente parsear o regex correto.
+    try:
+        results_html = await form_frame.evaluate(
+            r"""() => {
+              const main = document.querySelector('#divInfraAreaTabela')
+                || document.querySelector('#divInfraAreaDados')
+                || document.querySelector('#divInfraConteudo')
+                || document.body;
+              return main.outerHTML.slice(0, 400000);
+            }"""
+        )
+        (out_dir / "raw" / "pesquisa_results.html").write_text(
+            results_html, encoding="utf-8"
+        )
+        logger.info(
+            "pesquisa_geral: results HTML dumped (%d chars)", len(results_html)
+        )
+    except Exception as e:
+        logger.warning("results dump falhou: %s", e)
+
+    # 8) Tambem extrai linhas estruturadas — cada hit costuma ter uma
+    # ancora pro processo. Tipo + numero estao no texto adjacente.
+    try:
+        lines = await form_frame.evaluate(
+            r"""() => {
+              // SEI UFPR pesquisa: cada hit eh um <td class="pesquisaTituloEsquerda">
+              // contendo <a class="arvore"> com title cheio
+              // ("TIPO Nº NUM - DOC (DOC_ID)") + spans + <a class="protocoloNormal">
+              // com texto do numero de processo.
+              const procRe = /(\d{5}\.\d{6}\/\d{4}-\d{2})/;
+              const titleRe = /^(.*?)\s+Nº\s+(\d{5}\.\d{6}\/\d{4}-\d{2})(?:\s+-\s+(.*?)\s+\((\d+)\))?\s*$/;
+              const cells = Array.from(document.querySelectorAll('td.pesquisaTituloEsquerda'));
+              return cells.slice(0, 50).map(td => {
+                const arvore = td.querySelector('a.arvore img.arvore, a.arvore img');
+                const titleAttr = arvore ? (arvore.getAttribute('title') || arvore.getAttribute('alt') || '') : '';
+                const protLink = td.querySelector('a.protocoloNormal[href*="procedimento_trabalhar"]');
+                const docLink = protLink && protLink.nextElementSibling
+                  ? td.querySelector('a.protocoloNormal[href*="documento_visualizar"]') : null;
+                const numero = protLink ? (protLink.textContent || '').trim() : '';
+                const tm = titleAttr.match(titleRe);
+                return {
+                  numero: numero || (titleAttr.match(procRe) || [null, null])[1],
+                  tipo: tm ? tm[1].trim() : '',
+                  doc_nome: tm ? (tm[3] || '').trim() : '',
+                  doc_id: tm ? (tm[4] || '').trim() : '',
+                  title_full: titleAttr.slice(0, 200),
+                  href_processo: protLink ? protLink.getAttribute('href') : null,
+                  href_doc: docLink ? docLink.getAttribute('href') : null,
+                };
+              });
+            }"""
+        )
+        (out_dir / "raw" / "pesquisa_results_lines.json").write_text(
+            json.dumps(lines, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("pesquisa_geral: %d result lines dumped", len(lines))
+    except Exception as e:
+        logger.warning("result lines dump falhou: %s", e)
+
+
 TARGETS = {
     "login": target_login,
     "iniciar_processo": target_iniciar_processo,
@@ -1294,6 +1531,7 @@ TARGETS = {
     "acompanhamento_especial_processo": target_acompanhamento_especial_processo,
     "acompanhamento_novo_grupo_modal": target_acompanhamento_novo_grupo_modal,
     "ae_keyword_search": target_ae_keyword_search,
+    "pesquisa_geral": target_pesquisa_geral,
 }
 
 

@@ -86,55 +86,162 @@ class SEIClient:
             logger.error("SEI: falha ao buscar processo %s: %s", numero_processo, e)
             return None
 
-    async def find_processes_by_grr(
-        self, grr: str, *, max_results: int = 20
-    ) -> list[ProcessoSEI]:
-        """Search SEI for processes by student GRR via ``#txtPesquisaRapida``.
+    # IDs do <select id="selTipoProcedimentoPesquisa"> — validados live
+    # contra https://sei.ufpr.br em 2026-04-30 via scripts/sei_drive.py.
+    # Usar value (numerico, estavel) ao inves de label porque o texto pode
+    # mudar de versao de SEI.
+    TIPO_ESTAGIO_NAO_OBRIGATORIO = "478"
+    TIPO_ESTAGIO_OBRIGATORIO = "100000767"
+    TIPO_ESTAGIO_NO_EXTERIOR = "100000768"
 
-        Returns all matches (may be empty, 1, or many — a student can have
-        several internship processes across semesters). Caller should use
-        :func:`select_best_processo` to disambiguate when len > 1.
+    async def _navigate_to_pesquisa_geral(self) -> bool:
+        """Click 'Pesquisa' menu link → carrega o form de pesquisa avancada.
 
-        Note: SEI's quick-search auto-navigates to the process detail page
-        when there's exactly one match, so for N=1 results we fall through
-        to extract metadata from the detail view and return a single-item
-        list. For N>1 we parse the results table.
+        Idempotente: se ja esta no form, no-op.
         """
-        numero_busca = grr.strip()
-        if not numero_busca:
+        # Se o form ja esta visivel (selTipoProcedimentoPesquisa presente),
+        # nao precisa navegar.
+        if await self._page.locator("#selTipoProcedimentoPesquisa").count() > 0:
+            return True
+        menu = self._page.locator('a[href*="protocolo_pesquisar"]').first
+        if await menu.count() == 0:
+            logger.warning("SEI: menu 'Pesquisa' (protocolo_pesquisar) nao encontrado")
+            return False
+        await menu.click()
+        await self._page.wait_for_load_state("networkidle", timeout=15000)
+        return await self._page.locator("#selTipoProcedimentoPesquisa").count() > 0
+
+    async def find_processes_by_keyword_filtered(
+        self,
+        keyword: str,
+        *,
+        tipo_value: str | None = None,
+        max_results: int = 20,
+    ) -> list[ProcessoSEI]:
+        """Pesquisa Geral filtrada por tipo + keyword (GRR ou nome).
+
+        Selectors validados live 2026-04-30 contra ``https://sei.ufpr.br``:
+
+        - menu link:    ``a[href*="protocolo_pesquisar"]``
+        - tipo:         ``#selTipoProcedimentoPesquisa`` (option value=478 = estagio nao obrig)
+        - texto busca:  ``#q``
+        - submit:       ``#sbmPesquisar``
+        - resultados:   ``td.pesquisaTituloEsquerda`` -> ``a.arvore img[title]``
+                        com formato "TIPO Nº NUMERO - DOC (DOC_ID)"
+
+        Resultados deduplicados por numero (cada processo aparece 1x mesmo
+        quando a busca retorna varios documentos do mesmo processo).
+        Restringido a UFPR (prefixo 23075.*).
+
+        Args:
+            keyword: GRR (preferido — exact match) ou nome do aluno.
+            tipo_value: ID do tipo de processo. Default: estagio nao obrigatorio.
+            max_results: limite de processos unicos retornados.
+        """
+        keyword = keyword.strip()
+        if not keyword:
             return []
+        tipo_value = tipo_value or self.TIPO_ESTAGIO_NAO_OBRIGATORIO
         try:
-            logger.info("SEI: buscando processos por GRR %s", numero_busca)
-            search_input = self._page.locator(
-                'input#txtPesquisaRapida, input[name="txtPesquisaRapida"], '
-                'input[placeholder*="Pesquisa"]'
-            )
-            if await search_input.count() == 0:
-                logger.warning("SEI: campo de pesquisa rapida nao encontrado")
+            if not await self._navigate_to_pesquisa_geral():
                 return []
-            await search_input.first.fill(numero_busca)
-            await search_input.first.press("Enter")
-            await self._page.wait_for_load_state("domcontentloaded", timeout=15000)
-
-            # Detect whether we landed on a results list or directly on a
-            # process detail page.
-            if await self._page.locator("#divArvore").count() > 0:
-                # Single-result auto-navigation — SEI opened the process tree.
-                numero = await self._extract_numero_from_detail() or numero_busca
-                processo = ProcessoSEI(numero=numero)
-                processo.documentos = await self._extract_documents()
-                return [processo]
-
-            results = await self._parse_search_results_table(max_results=max_results)
+            await self._page.locator("#selTipoProcedimentoPesquisa").select_option(
+                value=tipo_value
+            )
+            await self._page.locator("#q").fill(keyword)
+            await self._page.locator("#sbmPesquisar").click()
+            await self._page.wait_for_load_state("networkidle", timeout=20000)
+            results = await self._parse_pesquisa_geral_results(max_results=max_results)
             logger.info(
-                "SEI: %d processo(s) retornado(s) para GRR %s",
+                "SEI: pesquisa geral filtrada (tipo=%s) por %r -> %d processo(s)",
+                tipo_value,
+                keyword,
                 len(results),
-                numero_busca,
             )
             return results
         except Exception as e:
-            logger.error("SEI: find_processes_by_grr(%s) falhou: %s", numero_busca, e)
+            logger.error(
+                "SEI: find_processes_by_keyword_filtered(%s, tipo=%s) falhou: %s",
+                keyword,
+                tipo_value,
+                e,
+            )
             return []
+
+    async def _parse_pesquisa_geral_results(
+        self, *, max_results: int = 20
+    ) -> list[ProcessoSEI]:
+        """Parse das linhas da Pesquisa Geral (acao=protocolo_pesquisar).
+
+        Cada hit eh um documento; deduplicamos por numero de processo. O
+        ``title`` do ``<img class='arvore'>`` traz o formato cheio:
+        ``"TIPO Nº NUMERO - DOC_NOME (DOC_ID)"``. Restringimos a UFPR
+        (prefixo 23075.) pra evitar contaminacao IFPR/MEC.
+        """
+        title_re = re.compile(
+            r"^(.*?)\s+Nº\s+(23075\.\d{6}/\d{4}-\d{2})"
+        )
+        cells = self._page.locator("td.pesquisaTituloEsquerda")
+        count = await cells.count()
+        seen: dict[str, ProcessoSEI] = {}
+        # 4 docs por processo eh comum (despacho 68, 149, etc.) entao
+        # iteramos ate ~4x max_results pra garantir que pegamos
+        # max_results processos unicos.
+        for i in range(min(count, max_results * 4)):
+            try:
+                cell = cells.nth(i)
+                img = cell.locator("a.arvore img").first
+                if await img.count() == 0:
+                    continue
+                title = (await img.get_attribute("title")) or ""
+                m = title_re.match(title)
+                if not m:
+                    continue
+                tipo = m.group(1).strip()
+                numero = m.group(2)
+                if numero in seen:
+                    continue
+                seen[numero] = ProcessoSEI(numero=numero, tipo=tipo)
+                if len(seen) >= max_results:
+                    break
+            except Exception:
+                continue
+        return list(seen.values())
+
+    async def find_processes_by_grr(
+        self,
+        grr: str,
+        *,
+        max_results: int = 20,
+        tipo_value: str | None = None,
+    ) -> list[ProcessoSEI]:
+        """Search SEI por GRR via Pesquisa Geral filtrada por tipo.
+
+        Refactor 2026-04-30: usa ``find_processes_by_keyword_filtered`` com
+        ``#selTipoProcedimentoPesquisa`` em vez do ``#txtPesquisaRapida``
+        antigo. A pesquisa rapida nao filtra por tipo, devolvia processos
+        AGTIC/declaracoes/etc. associados ao GRR e o cascade ficava errado.
+        """
+        return await self.find_processes_by_keyword_filtered(
+            grr, tipo_value=tipo_value, max_results=max_results
+        )
+
+    async def find_processes_by_nome(
+        self,
+        nome: str,
+        *,
+        max_results: int = 20,
+        tipo_value: str | None = None,
+    ) -> list[ProcessoSEI]:
+        """Search SEI por nome do aluno via Pesquisa Geral filtrada por tipo.
+
+        Util quando o GRR nao da hit (aluno antigo, processo arquivado,
+        cadastro inconsistente). Risco de homonimo — caller deve filtrar
+        por GRR no resultado se possivel.
+        """
+        return await self.find_processes_by_keyword_filtered(
+            nome, tipo_value=tipo_value, max_results=max_results
+        )
 
     async def find_in_acompanhamento_especial(
         self, keyword: str, *, max_results: int = 20
@@ -680,6 +787,20 @@ def select_best_processo(
     """
     if not candidates:
         return None, 0.0
+
+    # Fase 0 — guard de tipo: descarta processos que claramente nao sao de
+    # estagio (AGTIC eleicao, declaracoes diversas, colacao de grau, etc.)
+    # antes de scorear. Sem este guard o cascade ja pegou processos errados
+    # ao vivo (Leticia 2026-04-30: AGTIC '23075.059255/2025-77' aparecia
+    # como "best" e o agir_estagios o tratava como SEI de estagio existente).
+    # Match permissivo: aceita qualquer variante de "Estagio(s) Obrig/Nao Obrig"
+    # com ou sem acento; quando o ``tipo`` nao foi extraido (parser SEI nao
+    # encontrou a coluna), preserva o candidato — o caller fica responsavel
+    # por re-pesquisar com filtro de tipo no formulario do SEI.
+    _ESTAGIO_TIPO_RE = re.compile(r"est[áa]gios?", re.IGNORECASE)
+    typed = [c for c in candidates if not c.tipo or _ESTAGIO_TIPO_RE.search(c.tipo)]
+    if typed:
+        candidates = typed
 
     # Fase 1 — filtrar por ano mais recente
     with_year = [(c, extract_year_from_numero(c.numero) or 0) for c in candidates]
