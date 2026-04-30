@@ -155,7 +155,7 @@ sources:
   - "SOUL.md §7, §8.1, §11, §12, §14.1, §15.1"
   - "base_conhecimento/manual_sei.txt §Estágio Não Obrigatório"
   - "base_conhecimento/estagios/GUIA_ESTAGIOS_DG.txt §SUPERVISOR"
-last_update: "2026-04-22"
+last_update: "2026-04-30"
 confidence: 0.90
 
 # Email de acuse ao aluno — usado APÓS o processo SEI ter sido criado e
@@ -236,7 +236,7 @@ sources:
   - "Resolução 46/10-CEPE"
   - "Lei 11.788/2008 Art. 11"
   - "SOUL.md §8.2"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.88
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -310,7 +310,7 @@ sources:
   - "Resolução 46/10-CEPE"
   - "SOUL.md §8.3"
   - "SOUL.md §15.4"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.88
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -375,7 +375,7 @@ sources:
   - "Lei 11.788/2008 Art. 9º §1º"
   - "Resolução 46/10-CEPE"
   - "IN 01/12-CEPE"
-last_update: "2026-04-29"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -425,7 +425,7 @@ llm_extraction_fields:
 sources:
   - "Resolução 46/10-CEPE"
   - "SOUL.md §15.5"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.82
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -467,7 +467,7 @@ sources:
   - "Regulamento de Estágio do Curso de Design Gráfico (2024)"
   - "PPC Design Gráfico — Currículos 2016 e 2020"
   - "manual_sei.txt §Estágio Obrigatório"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -516,7 +516,7 @@ required_fields:
 sources:
   - "Resolução 92/13-CEPE (alterada pela Resolução 39/18-CEPE)"
   - "manual_sei.txt §Dispensa/Isenção/Aproveitamento de disciplinas"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.87
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -562,7 +562,7 @@ required_fields:
 sources:
   - "Resolução 92/13-CEPE (alterada pela 39/18-CEPE)"
   - "manual_siga.txt §5.2 Equivalências"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -604,7 +604,7 @@ required_fields:
 sources:
   - "PPC do Curso de Design Gráfico"
   - "Resolução 92/13-CEPE"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -653,7 +653,7 @@ required_fields:
 sources:
   - "Resolução 70/04-CEPE (Atividades Formativas)"
   - "manual_sei.txt §Voluntariado Acadêmico (42 processos)"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -705,7 +705,7 @@ sources:
   - "Instrução Normativa 01/16-PROGRAD"
   - "manual_sei.txt §Trancamento/Destrancamento"
   - "manual_siga.txt §2.3 Trancamentos de Curso"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.86
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -752,7 +752,7 @@ required_fields:
 sources:
   - "Instrução Normativa 01/16-PROGRAD"
   - "manual_sei.txt §Trancamento/Destrancamento"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -793,7 +793,7 @@ required_fields:
 sources:
   - "manual_sei.txt §Cancelamento por Abandono de Curso"
   - "Instrução Normativa 01/16-PROGRAD"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.83
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -839,7 +839,7 @@ required_fields:
 sources:
   - "manual_sei.txt §Cancelamento de Registro Acadêmico"
   - "Regimento Geral da UFPR"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.83
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -887,7 +887,7 @@ required_fields:
 sources:
   - "manual_sei.txt §Colação de Grau com Solenidade"
   - "manual_siga.txt §5.4 Colações de Grau"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.86
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -931,7 +931,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_sei.txt §Colação de Grau sem Solenidade / Antecipação"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.84
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -979,7 +979,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_sei.txt §Registro de Diplomas (62) + Expedição (23)"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1024,7 +1024,7 @@ required_fields:
 sources:
   - "manual_sei.txt §Matrículas / Matrícula em curso"
   - "manual_siga.txt §2.2 Gerenciar Matrículas"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.80
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1067,7 +1067,7 @@ required_fields:
   - nome_aluno
 sources:
   - "Art. 11 da Lei 11.788/2008"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1099,7 +1099,7 @@ required_fields:
 sources:
   - "Resolução 46/10-CEPE"
   - "Lei 11.788/2008 Art. 11"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1136,7 +1136,7 @@ required_fields:
 sources:
   - "Lei 11.788/2008"
   - "Resolução 46/10-CEPE"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.94
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1167,7 +1167,7 @@ required_fields:
 sources:
   - "Lei 11.788/2008"
   - "Resolução 46/10-CEPE"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1199,7 +1199,7 @@ required_fields:
 sources:
   - "Orientação Normativa 02/2016-MPOG"
   - "Decreto 8.654/2010 (PR)"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.94
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1230,7 +1230,7 @@ required_fields:
 sources:
   - "PPC do Curso de Design Gráfico"
   - "Resolução 46/10-CEPE"
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1270,7 +1270,7 @@ categoria: "Correio Lixo"
 action: "Arquivar"
 required_fields: []
 sources: []
-last_update: "2026-04-09"
+last_update: "2026-04-30"
 confidence: 0.98
 template: ""
 ```
@@ -1301,7 +1301,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_siga.txt §Declarações"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1334,7 +1334,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_siga.txt §Declarações"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.90
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1386,7 +1386,7 @@ required_fields:
 sources:
   - "manual_siga.txt §Documentos / Declarações"
   - "Procedimento SIGA-Secretaria (descrito pelo coordenador, 2026-04-27)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.90
 template: |
   **[INSTRUÇÃO PARA O REVISOR]** Se o(a) aluno(a) ainda tem **matrícula
@@ -1440,7 +1440,7 @@ required_fields:
   - nome_aluno
 sources:
   - "Resolução 70/04-CEPE (regime acadêmico)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1500,7 +1500,7 @@ sources:
   - "manual_siga.txt §Documentos / Histórico"
   - "Procedimento PROGRAD — atendimento@ufpr.br"
   - "Orientação do coordenador (4 cenários, 2026-04-27)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.90
 template: |
   **[INSTRUÇÃO PARA O REVISOR]** Identificar a situação do remetente antes
@@ -1610,7 +1610,7 @@ required_fields: []
 sources:
   - "Orientação do coordenador (2026-04-27): certificado de conclusão descontinuado pelo Diploma Digital"
   - "Procedimento PROGRAD — atendimento@ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.88
 template: |
   **[INSTRUÇÃO PARA O REVISOR]** Identificar a situação do remetente. Só o
@@ -1719,7 +1719,7 @@ sources:
   - "https://prograp.ufpr.br/udip/ (PROGRAP/UDIP — portal Diploma Digital UFPR)"
   - "Tutorial-Diploma-Digital-Perfil-Egresso.pdf (PROGRAP/UDIP, 2023)"
   - "Orientação do coordenador (2026-04-27)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Olá!
@@ -1773,7 +1773,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_sei.txt §Registro de Diplomas"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.90
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -1808,7 +1808,7 @@ action: "Redigir Resposta"
 required_fields: []
 sources:
   - "FichaDoCurso.txt §Atendimento"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Olá!
@@ -1837,7 +1837,7 @@ action: "Redigir Resposta"
 required_fields: []
 sources:
   - "FichaDoCurso.txt §Endereço"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Olá!
@@ -1884,7 +1884,7 @@ required_fields: []
 sources:
   - "Atribuições dos Departamentos — gestão de disciplinas"
   - "PPC do Curso de Design Gráfico (Currículos 2016 e 2020)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 # A engine atual nao tem campo `email_cc` nativo no Intent. Enquanto isso nao
 # for wirado, deixamos uma instrucao visivel no topo do template para o revisor
@@ -1946,7 +1946,7 @@ action: "Redigir Resposta"
 required_fields: []
 sources:
   - "FichaDoCurso.txt §Coordenação"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.95
 template: |
   Olá!
@@ -1988,7 +1988,7 @@ required_fields:
   - nome_aluno
 sources:
   - "https://prae.ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.93
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2023,7 +2023,7 @@ required_fields:
   - nome_aluno
 sources:
   - "https://internacional.ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2062,7 +2062,7 @@ required_fields:
 sources:
   - "Resolução 70/04-CEPE (AFC)"
   - "https://prppg.ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.90
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2099,7 +2099,7 @@ required_fields:
   - nome_aluno
 sources:
   - "Resolução 36/14-CEPE (Programa de Monitoria)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.88
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2136,7 +2136,7 @@ required_fields:
   - nome_aluno
 sources:
   - "https://www.portal.ufpr.br/sibi.html"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2170,7 +2170,7 @@ required_fields:
   - nome_aluno
 sources:
   - "https://prae.ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2215,7 +2215,7 @@ required_fields: []
 sources:
   - "Atribuições do Departamento de Design (DDESIGN)"
   - "FichaDoCurso.txt §Estrutura departamental"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.92
 # A engine atual nao tem campo `email_cc` nativo no Intent. Enquanto isso nao
 # for wirado, deixamos uma instrucao visivel no topo do template para o revisor
@@ -2259,7 +2259,7 @@ required_fields:
   - nome_aluno
 sources:
   - "https://prae.ufpr.br/saude"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.94
 template: |
   Olá [NOME_ALUNO],
@@ -2328,7 +2328,7 @@ sources:
   - "Resolução 46/10-CEPE"
   - "Regulamento de Estágio do Curso de Design Gráfico (2024)"
   - "PPC Design Gráfico — Currículos 2016 e 2020"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.86
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2390,7 +2390,7 @@ required_attachments:
 sources:
   - "Lei 11.788/2008 Art. 9º §1º"
   - "Resolução 46/10-CEPE"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2430,7 +2430,7 @@ required_fields:
 sources:
   - "Regulamento de Estágio do Curso de Design Gráfico (2024)"
   - "PPC Design Gráfico — Currículos 2016 e 2020"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.84
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2464,7 +2464,7 @@ required_fields:
   - nome_aluno
 sources:
   - "manual_siga.txt §Lançamento de Notas"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.83
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2508,7 +2508,7 @@ required_attachments:
 sources:
   - "PPC do Curso de Design Gráfico"
   - "Resolução 46/10-CEPE"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.82
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2571,7 +2571,7 @@ required_fields:
   - nome_aluno
 sources:
   - "Resolução 37/97-CEPE (Aluno em Disciplina Isolada)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.83
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2611,7 +2611,7 @@ required_fields:
 sources:
   - "manual_siga.txt §Gerenciar Matrículas"
   - "Calendário Acadêmico vigente"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.85
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2653,7 +2653,7 @@ required_fields:
 sources:
   - "https://internacional.ufpr.br"
   - "manual_siga.txt §Matrícula Especial"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.82
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2691,7 +2691,7 @@ required_fields:
   - nome_aluno
 sources:
   - "Resolução 91/14-CEPE (PROVAR)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.80
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2743,7 +2743,7 @@ required_fields:
 sources:
   - "PPC Design Gráfico — Currículos 2016 e 2020"
   - "Regulamento de TCC do Curso de Design Gráfico"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.84
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2791,7 +2791,7 @@ required_fields:
 sources:
   - "Resolução 70/04-CEPE (alterada pela 21/18)"
   - "https://sacod.ufpr.br/coordesign/atividades-formativas-complementares-dg/"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.88
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2839,7 +2839,7 @@ required_fields:
 sources:
   - "PPC Design Gráfico — Currículos 2016 e 2020"
   - "Resolução do Colegiado do Curso (matriz de equivalência)"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.82
 template: |
   Prezado(a) [NOME_ALUNO],
@@ -2885,7 +2885,7 @@ action: "Redigir Resposta"
 required_fields: []
 sources:
   - "https://prograp.ufpr.br/calendarios/"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.94
 template: |
   Olá!
@@ -2922,7 +2922,7 @@ sources:
   - "Lei 10.861/2004 (SINAES)"
   - "Edital INEP/ENADE do ano corrente"
   - "https://prograp.ufpr.br"
-last_update: "2026-04-27"
+last_update: "2026-04-30"
 confidence: 0.86
 template: |
   Prezado(a) [NOME_ALUNO],
