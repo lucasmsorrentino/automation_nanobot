@@ -261,8 +261,16 @@ class GmailClient:
     # ------------------------------------------------------------------
 
     def _connect_imap(self) -> imaplib.IMAP4_SSL:
-        """Open an authenticated IMAP connection."""
-        conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        """Open an authenticated IMAP connection.
+
+        ``timeout=120`` aplica ao socket TCP — sem ele, ``imaplib`` herda o
+        default do Python (None = bloqueio infinito), e o pipeline trava se
+        o servidor parar de responder no meio de um FETCH (visto live em
+        2026-04-30 — pipeline ficou 1h+ em ``recv_into`` sem progresso).
+        2 min cobre operacoes legitimamente lentas (anexos grandes) sem
+        permitir hang indefinido.
+        """
+        conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=120)
         conn.login(self.email_addr, self.app_password)
         return conn
 
