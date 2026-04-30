@@ -231,10 +231,38 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 - **`docker-compose.yml`** — Two services: `nanobot-gateway` (port 18790, 1 CPU) and `nanobot-cli`.
 - **`nanobot/templates/`** — Default config templates copied during `nanobot onboard`.
 
+## Sincronização entre PCs (RAG + Neo4j) — LEIA ANTES DE TOCAR EM RAG/NEO4J
+
+> Este projeto roda em **2 PCs** (Lucas — casa + trabalho). Cada PC tem o RAG store e o Neo4j **localmente**; `G:/Meu Drive/ufpr_rag/store/` (Google Drive) é apenas o **canal de sincronização** entre eles, não o path operacional. `RAG_STORE_DIR` no `.env` deve apontar pra um diretório local — o que está no `.env` neste momento pode estar stale (copiado do outro PC).
+
+**Antes de começar QUALQUER trabalho que toque RAG ou Neo4j**, verifique se G: tem versão mais recente que o local:
+
+```bash
+# Compare timestamps
+ls -la "G:/Meu Drive/ufpr_rag/store/ufpr.lance/_versions/" | tail -3
+ls -la "$RAG_STORE_DIR/ufpr.lance/_versions/" | tail -3
+
+# Se G: for mais novo: sincronize G: → local
+robocopy "G:\Meu Drive\ufpr_rag\store\ufpr.lance" "<RAG_STORE_DIR>\ufpr.lance" /E /COPY:DAT /R:3 /W:5
+
+# Re-seede o Neo4j local (Neo4j é derivado do RAG via graphrag.seed):
+.venv/Scripts/python.exe -m ufpr_automation.graphrag.seed --clear
+.venv/Scripts/python.exe -m ufpr_automation.graphrag.enrich
+```
+
+**Depois de QUALQUER modificação em RAG ou Neo4j** (re-ingest, `seed --clear`, `enrich`, novos PDFs ingeridos, schema novo, etc.), sincronize **local → G:** imediatamente — o outro PC depende disso pra ver as mudanças:
+
+```bash
+robocopy "<RAG_STORE_DIR>\ufpr.lance" "G:\Meu Drive\ufpr_rag\store\ufpr.lance" /E /COPY:DAT /R:3 /W:5
+```
+
+Não copie o binário do Neo4j — o outro PC re-seeda localmente do RAG sincronizado (mais simples e mais robusto que copiar o data dir do Neo4j Desktop).
+
+**`RAG_DOCS_DIR`, `FEEDBACK_DATA_DIR`, `PROCEDURES_DATA_DIR`** ficam em `G:/Meu Drive/ufpr_rag/…` (compartilhamento nativo), não precisam de sync manual.
+
 ## Windows notes
 
-- **RAG store on Google Drive**: `RAG_STORE_DIR=G:/Meu Drive/ufpr_rag/store`. Requires Google Drive for Desktop installed and running (mounts at `G:` by default). First access to a file may trigger on-demand download.
-- **RAG ingest workaround — não rodar `ingest.py` direto em G:**. LanceDB faz commit atômico renomeando `_versions/*.manifest`, e o Google Drive Desktop retorna `Função incorreta (os error 1)` nessa operação, abortando o ingest depois que todos os chunks já foram embedados. Fluxo correto validado em 2026-04-20: (1) copiar `G:\...\store\ufpr.lance` → `C:\Users\<user>\rag_store_local\` com `cp -r`; (2) rodar ingest com `RAG_STORE_DIR=C:/Users/<user>/rag_store_local` (env override); (3) ao terminar, espelhar de volta com `robocopy "<local>\ufpr.lance" "G:\...\store\ufpr.lance" /E /COPY:DAT /R:3 /W:5` (bash MSYS: prefixar `MSYS_NO_PATHCONV=1` para não quebrar flags com `/`). Robocopy lida com Drive sync; LanceDB não.
+- **RAG ingest — não rodar `ingest.py` apontando direto para G:**. LanceDB faz commit atômico renomeando `_versions/*.manifest`, e o Google Drive Desktop retorna `Função incorreta (os error 1)` nessa operação, abortando o ingest depois que todos os chunks já foram embedados. Fluxo correto validado em 2026-04-20: rodar ingest com `RAG_STORE_DIR=<path local>` e, ao terminar, espelhar local → G: com `robocopy "<local>\ufpr.lance" "G:\...\store\ufpr.lance" /E /COPY:DAT /R:3 /W:5` (bash MSYS: prefixar `MSYS_NO_PATHCONV=1` para não quebrar flags com `/`). Robocopy lida com Drive sync; LanceDB não. Ver seção "Sincronização entre PCs" acima.
 - **HuggingFace offline mode**: the `multilingual-e5-large` model is cached at `~/.cache/huggingface/hub/`. To avoid 429 rate-limit errors from HuggingFace on repeated RAG queries, set before running any `ufpr_automation.rag.*` command:
   ```bash
   export HF_HUB_OFFLINE=1

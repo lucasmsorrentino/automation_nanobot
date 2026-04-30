@@ -34,6 +34,7 @@ ufpr_automation/feedback_data/
 ufpr_automation/graph_data/
 ufpr_automation/procedures_data/
 ufpr_automation/logs/
+/logs/
 ufpr_automation/dspy_modules/optimized/
 ufpr_automation/aflow/reports/
 
