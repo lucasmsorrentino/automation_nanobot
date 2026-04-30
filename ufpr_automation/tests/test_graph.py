@@ -225,6 +225,7 @@ class TestRagRetrieve:
         with (
             patch("ufpr_automation.graph.nodes._get_retriever", return_value=mock_retriever),
             patch("ufpr_automation.graph.nodes._get_reflexion_context", return_value={}),
+            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
         ):
             result = rag_retrieve({"emails": [email]})
 
@@ -253,9 +254,12 @@ class TestRagRetrieve:
 
         email = _make_email()
 
-        with patch(
-            "ufpr_automation.graph.nodes._get_retriever",
-            side_effect=Exception("LanceDB not found"),
+        with (
+            patch(
+                "ufpr_automation.graph.nodes._get_retriever",
+                side_effect=Exception("LanceDB not found"),
+            ),
+            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
         ):
             result = rag_retrieve({"emails": [email]})
 
