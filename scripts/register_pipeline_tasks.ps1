@@ -1,9 +1,15 @@
 # Registra Windows Scheduled Task para rodar o pipeline UFPR 3x/dia.
 # 1 task com 3 triggers (08:00, 13:00, 17:00) em vez de 3 tasks separadas.
-# Uso: clicar com o botao direito > "Run with PowerShell" OU executar:
-#   powershell -ExecutionPolicy Bypass -File scripts\register_pipeline_tasks.ps1
-# Sera pedida a senha do usuario Windows uma unica vez (necessaria para
-# "run whether user is logged on or not").
+#
+# Modo padrao: -LogonType Interactive (sem senha; task roda quando usuario
+# esta logado). Suficiente para PC pessoal onde voce loga diariamente.
+#
+# Para "run whether user is logged on or not" (precisa senha):
+#   powershell -ExecutionPolicy Bypass -File scripts\register_pipeline_tasks.ps1 -WithPassword
+
+param(
+    [switch]$WithPassword
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -15,8 +21,10 @@ if (-not (Test-Path $wrapperPath)) {
     exit 1
 }
 
-# Pede senha do usuario Windows (cifrada em memoria, nao salva em disco).
-$cred = Get-Credential -UserName $env:USERNAME -Message "Senha do Windows (necessaria para rodar a task com usuario deslogado)"
+# Username canonico com prefixo da maquina (LogonUser exige isso em algumas
+# situacoes; sem prefixo o Register-ScheduledTask pode rejeitar a senha mesmo
+# quando ela esta correta).
+$qualifiedUser = "$env:COMPUTERNAME\$env:USERNAME"
 
 $action = New-ScheduledTaskAction -Execute $wrapperPath -WorkingDirectory $projectRoot
 
@@ -32,23 +40,52 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -MultipleInstances IgnoreNew
 
-Register-ScheduledTask `
-    -TaskName "UFPR_Pipeline" `
-    -Description "Pipeline UFPR (perceber -> agir): 08:00, 13:00, 17:00. Wrapper em scripts\run_scheduled_once.bat. Logs em logs\scheduler.log e logs\task_scheduler_wrapper.log." `
-    -Action $action `
-    -Trigger $triggers `
-    -Settings $settings `
-    -User $env:USERNAME `
-    -Password $cred.GetNetworkCredential().Password `
-    -RunLevel Limited `
-    -Force | Out-Null
+if ($WithPassword) {
+    Write-Host ""
+    Write-Host "Senha do Windows do usuario $qualifiedUser"
+    Write-Host "  (task vai rodar mesmo com voce deslogado;"
+    Write-Host "   nao e salva em disco, fica apenas em memoria)"
+    $securePass = Read-Host -Prompt "Senha" -AsSecureString
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass)
+    $plainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
-Write-Host ""
-Write-Host "OK - Task 'UFPR_Pipeline' criada com 3 triggers diarios (08:00, 13:00, 17:00)."
+    Register-ScheduledTask `
+        -TaskName "UFPR_Pipeline" `
+        -Description "Pipeline UFPR (perceber -> agir): 08:00, 13:00, 17:00 (run whether logged on or not)" `
+        -Action $action `
+        -Trigger $triggers `
+        -Settings $settings `
+        -User $qualifiedUser `
+        -Password $plainPass `
+        -RunLevel Limited `
+        -Force | Out-Null
+
+    Write-Host ""
+    Write-Host "OK - Task 'UFPR_Pipeline' criada (run whether logged on or not)."
+} else {
+    # Interactive logon: roda apenas quando o usuario esta logado. Sem senha.
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId $qualifiedUser `
+        -LogonType Interactive `
+        -RunLevel Limited
+
+    Register-ScheduledTask `
+        -TaskName "UFPR_Pipeline" `
+        -Description "Pipeline UFPR (perceber -> agir): 08:00, 13:00, 17:00 (only when user is logged in)" `
+        -Action $action `
+        -Trigger $triggers `
+        -Settings $settings `
+        -Principal $principal `
+        -Force | Out-Null
+
+    Write-Host ""
+    Write-Host "OK - Task 'UFPR_Pipeline' criada (so roda quando voce esta logado)."
+    Write-Host "    Para upgrade para 'run whether logged on or not', re-rodar o script com -WithPassword."
+}
+
 Write-Host ""
 Write-Host "Comandos uteis:"
 Write-Host "  Listar status:  schtasks /query /tn UFPR_Pipeline /fo LIST"
 Write-Host "  Disparar agora: schtasks /run /tn UFPR_Pipeline"
-Write-Host "  Atualizar senha (apos trocar senha do Windows):"
-Write-Host "                  schtasks /change /tn UFPR_Pipeline /rp <nova_senha>"
 Write-Host "  Remover:        schtasks /delete /tn UFPR_Pipeline /f"
