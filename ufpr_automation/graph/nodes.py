@@ -1162,6 +1162,23 @@ async def _consult_sei_async(
                 continue
 
             if processo:
+                # Lista de processos "vigentes" pra checkers
+                # ``sei_processo_tce_existente`` /
+                # ``sei_processo_vigente_duplicado`` que iteram sobre
+                # ``ctx.sei_context['processos_vigentes']`` checando tipo.
+                # Usa todos os candidatos do cascade quando disponivel
+                # (cascade ja filtra por tipo, entao todos sao do tipo
+                # alvo); cai para [processo] no path mode='numero' onde
+                # all_candidates nao e populado.
+                vigentes_source = all_candidates if all_candidates else [processo]
+                processos_vigentes = [
+                    {
+                        "numero": p.numero,
+                        "status": p.status or "",
+                        "tipo": p.tipo or "",
+                    }
+                    for p in vigentes_source
+                ]
                 results[stable_id] = {
                     "numero": processo.numero,
                     "status": processo.status,
@@ -1173,6 +1190,7 @@ async def _consult_sei_async(
                     "lookup_value": value,
                     "lookup_confidence": confidence,
                     "lookup_candidates_count": len(all_candidates) if all_candidates else 1,
+                    "processos_vigentes": processos_vigentes,
                 }
             elif all_candidates:
                 # Tied candidates — let agir_estagios route to human review.
