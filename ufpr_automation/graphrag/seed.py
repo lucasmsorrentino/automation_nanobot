@@ -161,9 +161,7 @@ def _seed_orgaos(client: Neo4jClient) -> int:
 
     // Órgão externo (federal) — emissor de leis aplicáveis (Lei 11.788/2008 etc.)
     MERGE (mec:Orgao {sigla: 'MEC', nome: 'Ministério da Educação',
-           descricao: 'Órgão federal — não está subordinado à Reitoria, '
-                      'mas é citado como emissor de leis aplicáveis (Lei de Estágios, '
-                      'Diretrizes Curriculares Nacionais, ENADE/SINAES)'})
+           descricao: 'Órgão federal — não está subordinado à Reitoria, mas é citado como emissor de leis aplicáveis (Lei de Estágios, Diretrizes Curriculares Nacionais, ENADE/SINAES)'})
 
     // Hierarchical relationships
     MERGE (prograp)-[:SUBORDINADO_A]->(reitoria)
