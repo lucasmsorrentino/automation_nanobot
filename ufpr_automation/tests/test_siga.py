@@ -501,3 +501,275 @@ class TestEnsureLoggedInGuard:
         result = await client.get_integralizacao(grr="GRR20191234")
         assert result == {}
         client._navigate_to_student.assert_not_called()
+
+
+# ----------------------------------------------------------------------
+# Regression tests for the SIGA wrong-student bug (smoke 2026-04-30)
+# ----------------------------------------------------------------------
+#
+# Bug: ``_navigate_to_student("GRR20244602")`` retornou silenciosamente
+# ``LOUIE PEDROSA DE SOUZA`` (GRR20231692) — a 1ª linha da tabela inteira,
+# não a linha filtrada pelo GRR. Fix em 2 camadas:
+#  - row-level locator (``tbody tr:has-text('GRR…')``) em vez de
+#    ``tbody tr a:first``;
+#  - defensive guard pós-click: extrair GRR do header ``<h2>Discente</h2>``
+#    e abortar se diferente do solicitado.
+
+
+class _FakeLocator:
+    """Minimal Playwright Locator stand-in for unit tests.
+
+    Each instance corresponds to a (page, selector chain) pair and reads
+    its canned response from ``page._selectors``. Supports ``.first``
+    (returns self), ``count()``, ``text_content()``, ``all_text_contents()``,
+    ``fill()``, ``click()``, ``select_option()``, ``wait_for()``, and
+    nested ``.locator()`` calls (the nested key is ``"<parent> >> <child>"``).
+    """
+
+    def __init__(self, page: "_FakePage", selector: str):
+        self._page = page
+        self._selector = selector
+
+    @property
+    def first(self):
+        return self
+
+    def locator(self, selector: str):
+        return _FakeLocator(self._page, f"{self._selector} >> {selector}")
+
+    def _spec(self):
+        return self._page._selectors.get(self._selector, {})
+
+    async def count(self):
+        return self._spec().get("count", 0)
+
+    async def text_content(self):
+        return self._spec().get("text_content", "")
+
+    async def all_text_contents(self):
+        return self._spec().get("all_text_contents", [])
+
+    async def fill(self, value):
+        return None
+
+    async def click(self):
+        self._page.click_log.append(self._selector)
+
+    async def select_option(self, value):
+        self._page.selected[self._selector] = value
+
+    async def wait_for(self, state="visible", timeout=8000):
+        if self._spec().get("wait_for_raises"):
+            raise Exception("locator.wait_for timeout (mock)")
+        return None
+
+    async def is_visible(self):
+        return self._spec().get("visible", True)
+
+
+class _FakePage:
+    """Minimal Playwright Page stand-in.
+
+    Tests configure selector responses via ``page.configure(selector, **spec)``
+    where ``spec`` may include ``count``, ``text_content``,
+    ``all_text_contents``, ``wait_for_raises``, ``visible``.
+    """
+
+    def __init__(self):
+        self._selectors: dict[str, dict] = {}
+        self.click_log: list[str] = []
+        self.selected: dict[str, str] = {}
+
+    def configure(self, selector: str, **spec):
+        self._selectors[selector] = spec
+
+    def locator(self, selector: str):
+        return _FakeLocator(self, selector)
+
+    async def wait_for_load_state(self, state="load", timeout=None):
+        return None
+
+
+def _stage_navigation_path(
+    page: _FakePage,
+    expected_grr: str,
+    *,
+    target_row_visible: bool = True,
+    target_row_has_link: bool = True,
+    header_grr: str | None = None,
+    header_text_override: str | None = None,
+):
+    """Configure ``page`` so the navigation path resolves with the given outcome.
+
+    - ``target_row_visible``: whether ``tbody tr:has-text(<expected>)`` is found.
+    - ``target_row_has_link``: whether the row contains an ``<a>`` to click.
+    - ``header_grr``: GRR shown in the page header **after** the click.
+      ``None`` = no header on the page (header.count == 0).
+    - ``header_text_override``: full header text (when set, overrides the
+      auto-built ``"Discente - NOME - <GRR>"`` template).
+    """
+    page.configure("a:has-text('Discentes')", count=1)
+    page.configure("a:has-text('Consultar')", count=1)
+    page.configure("select", count=1, all_text_contents=[])
+    page.configure("input[placeholder*='Nome ou Documento']", count=1)
+
+    grr_clean = expected_grr.replace("GRR", "")
+    grr_selector = f"table tbody tr:has-text('{expected_grr}')"
+    digits_selector = f"table tbody tr:has-text('{grr_clean}')"
+
+    if target_row_visible:
+        page.configure(grr_selector, count=1)
+        page.configure(
+            f"{grr_selector} >> a",
+            count=1 if target_row_has_link else 0,
+        )
+    else:
+        page.configure(grr_selector, wait_for_raises=True)
+        page.configure(digits_selector, wait_for_raises=True)
+
+    if header_text_override is not None:
+        page.configure(
+            "h2:has-text('Discente')",
+            count=1,
+            text_content=header_text_override,
+        )
+    elif header_grr is not None:
+        page.configure(
+            "h2:has-text('Discente')",
+            count=1,
+            text_content=f"Discente - NOME COMPLETO - {header_grr}",
+        )
+    else:
+        page.configure("h2:has-text('Discente')", count=0)
+
+
+class TestNavigateToStudentGuard:
+    @pytest.mark.asyncio
+    async def test_happy_path_grr_matches_returns_true(self):
+        page = _FakePage()
+        _stage_navigation_path(page, "GRR20244602", header_grr="GRR20244602")
+
+        client = SIGAClient(page=page)
+        ok = await client._navigate_to_student("GRR20244602")
+
+        assert ok is True
+        # Sanity: o link da row alvo foi clicado, nao um link arbitrario.
+        assert any(
+            "table tbody tr:has-text('GRR20244602') >> a" in c for c in page.click_log
+        )
+
+    @pytest.mark.asyncio
+    async def test_grr_mismatch_after_click_aborts(self):
+        """**Regression test for the smoke 2026-04-30 bug**.
+
+        Filter aceitou alguma row e o click foi disparado, mas o header da
+        pagina aberta corresponde a outro aluno (LOUIE/GRR20231692). O
+        defensive guard precisa retornar False — NUNCA retornar True com
+        identidade trocada (que era o comportamento bugado original).
+        """
+        page = _FakePage()
+        _stage_navigation_path(
+            page,
+            "GRR20244602",
+            header_grr="GRR20231692",  # SIGA cuspiu o aluno errado
+        )
+
+        client = SIGAClient(page=page)
+        ok = await client._navigate_to_student("GRR20244602")
+
+        assert ok is False, "guard deveria abortar quando GRR do header != solicitado"
+
+    @pytest.mark.asyncio
+    async def test_target_row_not_visible_returns_false(self):
+        """Filter client-side nao listou a row alvo (aluno fora do perfil
+        atual ou paginacao acima de 300). Deve retornar False sem clicar
+        em nenhum link ‘at large’.
+        """
+        page = _FakePage()
+        _stage_navigation_path(
+            page,
+            "GRR99999999",
+            target_row_visible=False,
+        )
+
+        client = SIGAClient(page=page)
+        ok = await client._navigate_to_student("GRR99999999")
+
+        assert ok is False
+        # Nenhum click em row de alunos.
+        row_clicks = [c for c in page.click_log if "tbody tr" in c]
+        assert row_clicks == []
+
+    @pytest.mark.asyncio
+    async def test_target_row_has_no_link_returns_false(self):
+        """Edge: tbody tr matcha o GRR mas nao tem <a>. DOM mudou, melhor
+        abortar que adivinhar.
+        """
+        page = _FakePage()
+        _stage_navigation_path(
+            page,
+            "GRR20244602",
+            target_row_has_link=False,
+            header_grr="GRR20244602",
+        )
+
+        client = SIGAClient(page=page)
+        ok = await client._navigate_to_student("GRR20244602")
+
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_no_header_after_click_does_not_abort(self):
+        """Header ``<h2>Discente</h2>`` ausente na pagina pos-click — guard
+        nao tem informacao pra comparar; politica: best-effort, nao aborta.
+        Logs `debug` mas retorna True.
+        """
+        page = _FakePage()
+        _stage_navigation_path(
+            page,
+            "GRR20244602",
+            header_grr=None,  # sem header
+        )
+
+        client = SIGAClient(page=page)
+        ok = await client._navigate_to_student("GRR20244602")
+
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_extract_grr_from_header_returns_pattern(self):
+        page = _FakePage()
+        page.configure(
+            "h2:has-text('Discente')",
+            count=1,
+            text_content="Discente - LETICIA FONCECA RAMALHO - GRR20244602 - 2024",
+        )
+
+        client = SIGAClient(page=page)
+        grr = await client._extract_grr_from_header()
+
+        assert grr == "GRR20244602"
+
+    @pytest.mark.asyncio
+    async def test_extract_grr_from_header_returns_none_when_absent(self):
+        page = _FakePage()
+        page.configure("h2:has-text('Discente')", count=0)
+
+        client = SIGAClient(page=page)
+        grr = await client._extract_grr_from_header()
+
+        assert grr is None
+
+    @pytest.mark.asyncio
+    async def test_extract_grr_from_header_returns_none_when_no_grr_pattern(self):
+        page = _FakePage()
+        page.configure(
+            "h2:has-text('Discente')",
+            count=1,
+            text_content="Discente - aluno sem GRR detectavel",
+        )
+
+        client = SIGAClient(page=page)
+        grr = await client._extract_grr_from_header()
+
+        assert grr is None

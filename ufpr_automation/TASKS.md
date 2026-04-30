@@ -103,6 +103,43 @@ Cascade em 4 níveis — os 3 primeiros implementados e validados ao vivo:
 - [x] ~~**Tier 0 HIT não consulta SEI antes de `agir_estagios`**~~ — corrigido: novo node `consultar_tier0_sei_siga` em `graph/nodes.py` entre `prewarm_sessions` e o conditional `dispatch_tier1`. Para cada Tier 0 HIT cuja intent declara `sei_action != "none"` (aditivo/conclusão/rescisão/novo TCE), roda `_consult_sei_for_email` + `_consult_siga_for_email` (os mesmos helpers que o Fleet sub-agent usa) e popula `sei_contexts` / `siga_contexts` antes do `agir_estagios`. Emails não-eligíveis (Outros, sei_action=none) são no-op. Falhas per-email são isoladas (SEI exception não quebra SIGA do mesmo email, tampouco de outros emails). 7 testes em `test_consultar_tier0_sei_siga.py` cobrindo no-op vazio, caminho completo (SEI+SIGA populam), skip de sei_action="none", skip de não-Estágios, isolamento de falha, None não polui dict, integração com o graph compilado.
 - [ ] **Tesseract não empacotado** — OCR de PDFs escaneados exige binário Tesseract (UB-Mannheim 5.4.0) instalado manualmente pelo user em `C:\Program Files\Tesseract-OCR\` + `pytesseract`+`Pillow` no venv. Download do mirror oficial (`digi.bib.uni-mannheim.de`) está bloqueado na rede UFPR — GitHub release mirror (`github.com/UB-Mannheim/tesseract/releases`) funciona. Instalação silenciosa no user-profile falhou por UAC; precisa admin interativo. Validado ao vivo 2026-04-23: sem OCR a Paloma caía em Tier 1 com required_fields ausentes; com Tesseract+`por.traineddata` ela bateu Tier 0 HIT (keyword 1.00, `estagio_nao_obrig_aditivo`). Sem pendência de código — nota apenas para reprodução do ambiente.
 
+### Bugs descobertos no smoke 2026-04-30 (Letícia / GRR20244602)
+
+Smoke `scripts/smoke_agir_estagios.py --message-id CAA_UPeAvQMfoX4ssSbAqu9H-VqYY8D3FeUrYNyMBTLGr1NF_cQ@mail.gmail.com` rodado pra validar agir_estagios fim-a-fim. Resultado: `HARD BLOCK — 4 hard + 6 soft → draft unificado`. Inspeção da saída revelou 2 bugs.
+
+- [ ] **🔴 SIGA `_navigate_to_student` retornando aluno errado** — `siga/client.py:68` consultou `GRR20244602` (Letícia Fonceca, confirmado pelo user) e retornou `nome="LOUIE PEDROSA DE SOUZA"` cujo GRR real é `GRR20231692`. Bug de **integridade de identidade**: todos os checkers que dependem de `siga_data["nome"]` viram lixo (`siga_concedente_duplicada`, `supervisor_formacao_compativel`, etc.) e SEI ops live (`add_to_acompanhamento_especial`) podem ser disparadas contra a pessoa errada. Hipóteses (em ordem de probabilidade):
+  1. Filtro client-side `input[placeholder*='Nome ou Documento']` não escopa por GRR-only — `select_option(300)` foi bem-sucedido mas o filter não aplicou; `table tbody tr a:first` cai na 1ª linha da tabela inteira.
+  2. `await asyncio.sleep(2)` insuficiente — Vue.js SPA, filter assíncrono; precisa esperar até DOM da tabela mudar (esperar `tbody tr` count <= 1 ou que o GRR procurado apareça em alguma row).
+  3. 2+ `<a>` em `table tbody tr a`; `.first` clica no errado (botão de ação vs link de perfil).
+  4. Placeholder do campo de busca mudou no SIGA, locator falha silencioso.
+  
+  **Fix mínimo (defensivo, baixo custo)**: depois de `_navigate_to_student`, `_extract_info_gerais` já extrai `info["grr"]` do header (`re.search(r"GRR\d+", txt)`); adicionar **assert** entre GRR consultado e GRR retornado em `check_student_status`/`get_historico`/`get_integralizacao`/`validate_internship_eligibility` — se diferente, retornar `None` e logar `ERROR` com ambos os GRRs. Isso para o sangramento.
+  
+  **Fix de raiz**: substituir `table tbody tr a:first` por seletor que escolhe a row cujo cell de GRR bate com `grr_clean`. Considerar `await self._page.wait_for_function(...)` esperando até a tabela estar filtrada (count de tbody rows estável).
+
+- [x] ~~**🟡 Anexos PDF retornando `extracted_text=0 chars`**~~ — investigação 2026-04-30 fechou: era gap do **smoke**, não bug de produção. `GmailClient.list_unread` só baixa anexos; quem chama `extract_text_from_attachment` é o node `perceber_gmail` em [graph/nodes.py:60-61](ufpr_automation/graph/nodes.py:60). O smoke chamava só `list_unread`, então `att.extracted_text` ficava vazio → checkers viam falsos hard_blocks. Verificado: pytesseract 0.3.13, PIL 12.2.0, Tesseract 5.5.0 no PATH, `_is_tesseract_available() → True`. Fix: smoke agora chama o extractor após o fetch ([scripts/smoke_agir_estagios.py:fetch_email_by_msgid](scripts/smoke_agir_estagios.py)).
+
+- [x] ~~**🔴 SIGA `_navigate_to_student` retornando aluno errado**~~ — fix 2026-04-30 em 2 camadas:
+  1. **Raiz**: `table tbody tr a:first` (1ª row de toda a tabela) substituído por `table tbody tr:has-text('GRR…')` + fallback `:has-text('<digits>')`, com `wait_for(state="visible", timeout=8000)` em vez de `asyncio.sleep(2)` fixo. Click agora vai pro link **dentro da row específica do GRR**, não pra `.first` global.
+  2. **Defensivo (rede de segurança)**: novo helper `_extract_grr_from_header()` extrai `GRR\d+` do header `<h2>Discente</h2>` da página de detalhes. Após o click, `_navigate_to_student` confere `actual_grr == expected_grr` — se diferente (cache/race/filtro furado/SIGA bug), loga `ERROR` e retorna `False`. Cobre todos os 4 call sites (`check_student_status`, `get_historico`, `get_integralizacao`, `validate_internship_eligibility` indireto).
+  
+  Validado ao vivo no smoke da Letícia (2026-04-30 16:24): `_navigate_to_student("GRR20244602")` agora retorna corretamente `LETICIA FONCECA RAMALHO` (era `LOUIE PEDROSA DE SOUZA`/`GRR20231692` antes).
+
+### Bugs descobertos no smoke 2026-04-30 (parte 2 — pós-fix-SIGA)
+
+Com o smoke agora extraindo texto do PDF e o SIGA retornando o aluno certo, o output do smoke da Letícia revelou um **gap de cobertura adicional** no `_consult_siga_async`:
+
+- [ ] **🟡 SIGA context não popula chaves que os checkers esperam** — `_consult_siga_async` ([graph/nodes.py:1284](ufpr_automation/graph/nodes.py:1284)) só expõe `{grr, eligible, reasons, warnings, nome, situacao, curso}`, mas os checkers em `procedures/checkers.py` usam:
+  - `matricula_status` (não "situacao") — `siga_matricula_ativa`
+  - `reprovacoes_ultimo_semestre` — `siga_reprovacoes_ultimo_semestre`
+  - `reprovacao_por_falta_ultimo_semestre` — `siga_reprovacao_por_falta`
+  - `curriculo_integralizado` — `siga_curriculo_integralizado` (bool, não string)
+  - `estagios_ativos` (lista) — `siga_ch_simultaneos_30h`, `siga_concedente_duplicada`
+  
+  Resultado: 4 soft_blocks "SIGA não consultado — requer verificação manual" disparam mesmo quando SIGA foi consultado com sucesso. Comportamento atual é "fail-safe" (gates SEI write op até humano verificar), mas reduz cobertura útil.
+  
+  **Fix proposto**: estender `EligibilityResult` em `siga/models.py` com `historico_data: dict` e `integralizacao_data: dict`; `validate_internship_eligibility` em `siga/client.py` já chama `get_historico()` e `get_integralizacao()` internamente — capturar e expor os dicts. `_consult_siga_async` mapeia pras chaves dos checkers (`matricula_status = student.situacao.upper()`, `curriculo_integralizado = integ["integralizado"]`, `reprovacoes_total = historico["reprovacoes_total"]`). Para `reprovacoes_ultimo_semestre` e `reprovacao_por_falta_ultimo_semestre` (precisa breakdown por semestre) + `estagios_ativos` (ainda não fetcheado de SIGA): adicionar query SIGA específica ou aceitar como soft_block "interno" até query existir.
+
 ### Validação manual em produção
 - [ ] Validar login automático no SEI com sessão ativa e credenciais reais
 - [ ] Validar login automático no SIGA com sessão ativa e credenciais reais

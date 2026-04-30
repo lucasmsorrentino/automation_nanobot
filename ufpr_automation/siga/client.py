@@ -66,23 +66,32 @@ class SIGAClient:
         return False
 
     async def _navigate_to_student(self, grr: str) -> bool:
-        """Navigate sidebar Discentes > Consultar, search by GRR, click first result.
+        """Navigate sidebar Discentes > Consultar, search by GRR, click matching row.
 
         **Fix 2026-04-22**: a lista de discentes usa paginação server-side
         (default: 20 por página) e o campo ``input[placeholder='Nome ou
         Documento']`` filtra **client-side** apenas sobre a página carregada
-        — se o aluno estiver além da 20ª linha, o filtro não acha.
+        — se o aluno estiver além da 20ª linha, o filtro não acha. Mitigação:
+        bumpar o combo ``Items por página`` para 300 antes do filter.
 
-        Mitigação: antes do filter, bumpar o combo de ``Items por página``
-        para 300 (máximo observado ao vivo). 300 cobre o volume de DG
-        (~163 ativos + egressos) com folga. Também tenta trocar o combo
-        ``comboAcesso`` no topo da página: o SIGA persiste o último valor
-        de sessão para sessão, e alunos de outros contextos podem ficar
-        ocultos. Se trocar profile não for seguro (pode quebrar outras
-        telas), mantemos o profile atual e só ajustamos a paginação.
+        **Fix 2026-04-30**: o smoke da Letícia (GRR20244602) retornou silenciosamente
+        ``LOUIE PEDROSA DE SOUZA`` (GRR20231692) — bug de **identidade trocada**.
+        Causa: ``table tbody tr a:first`` pegava a 1ª linha **da tabela inteira**,
+        não filtrada (filtro client-side com debounce não estabilizou em 2s; ou
+        outras causas). Fix:
+          1. Esperar até a row com o GRR alvo aparecer (com fallback pra row
+             contendo só os dígitos sem "GRR"). Sem timeout-feliz, returna False.
+          2. Clicar no link **dentro daquela row específica**, não em ``.first``
+             global.
+          3. Defensive guard pós-click: extrair o GRR do header da página de
+             detalhes; se diferente do solicitado, logar ERROR e retornar False.
+             Esse guard é a rede de segurança final que protege todos os 4
+             call sites (``check_student_status``, ``get_historico``,
+             ``get_integralizacao``, ``validate_internship_eligibility``).
         """
         grr_clean = re.sub(r"[^0-9]", "", grr)
-        logger.info("SIGA: consultando aluno GRR%s", grr_clean)
+        expected_grr = f"GRR{grr_clean}"
+        logger.info("SIGA: consultando aluno %s", expected_grr)
 
         discentes = self._page.locator("a:has-text('Discentes')").first
         await discentes.click()
@@ -109,20 +118,80 @@ class SIGAClient:
 
         search_field = self._page.locator("input[placeholder*='Nome ou Documento']").first
         await search_field.fill(grr_clean)
-        await asyncio.sleep(2)
 
-        first_link = self._page.locator("table tbody tr a").first
-        if await first_link.count() == 0:
+        # Esperar até a row com o GRR alvo ficar visível (filter client-side
+        # com debounce; sleep fixo de 2s era unreliable). Tentamos primeiro
+        # com prefixo "GRR" no texto da row; alguns SIGA layouts mostram só
+        # os dígitos no cell, então fallback para grr_clean puro.
+        target_row = self._page.locator(
+            f"table tbody tr:has-text('{expected_grr}')"
+        ).first
+        try:
+            await target_row.wait_for(state="visible", timeout=8000)
+        except Exception:
+            target_row = self._page.locator(
+                f"table tbody tr:has-text('{grr_clean}')"
+            ).first
+            try:
+                await target_row.wait_for(state="visible", timeout=4000)
+            except Exception:
+                logger.warning(
+                    "SIGA: aluno %s nao encontrado apos filter — "
+                    "filtro client-side nao listou a row, ou aluno nao "
+                    "esta no profile/perfil atual",
+                    expected_grr,
+                )
+                return False
+
+        link_in_target_row = target_row.locator("a").first
+        if await link_in_target_row.count() == 0:
             logger.warning(
-                "SIGA: aluno GRR%s nao encontrado (verificar comboAcesso — "
-                "profile atual pode nao conter este aluno)",
-                grr_clean,
+                "SIGA: row com %s nao tem link clicavel — DOM mudou?",
+                expected_grr,
             )
             return False
 
-        await first_link.click()
+        await link_in_target_row.click()
         await self._page.wait_for_load_state("domcontentloaded", timeout=15000)
+
+        # Defensive guard: confirmar que a pagina aberta corresponde ao GRR
+        # pedido. Se diferente, ABORTAR — nao retornar o aluno errado pra
+        # cima da call chain, onde checkers e SEI ops podem ser disparadas
+        # contra a pessoa errada.
+        actual_grr = await self._extract_grr_from_header()
+        if actual_grr and actual_grr != expected_grr:
+            logger.error(
+                "SIGA: identidade trocada apos navegacao — pediu %s, pagina mostra %s. "
+                "Abortando consulta. (provavel bug no filter client-side ou "
+                "race no debounce do search field)",
+                expected_grr,
+                actual_grr,
+            )
+            return False
+        if not actual_grr:
+            # Header sem GRR detectavel — nao abortamos (header pode ter
+            # markup inesperado), mas logamos pra debug futuro.
+            logger.debug(
+                "SIGA: nao consegui extrair GRR do header pos-navegacao para %s; "
+                "guard de identidade desativado para esta consulta",
+                expected_grr,
+            )
+
         return True
+
+    async def _extract_grr_from_header(self) -> str | None:
+        """Extract the GRR shown in the student detail page header.
+
+        Returns ``GRR<digits>`` or None if header is missing/malformed.
+        Used by ``_navigate_to_student`` as a post-navigation safety check
+        and by ``_extract_info_gerais`` to populate ``info["grr"]``.
+        """
+        header = self._page.locator("h2:has-text('Discente')").first
+        if await header.count() == 0:
+            return None
+        txt = (await header.text_content() or "").strip()
+        m = re.search(r"GRR\d+", txt)
+        return m.group() if m else None
 
     async def _click_tab(self, tab_text: str, pane_id: str) -> None:
         """Click a student detail tab and wait for its content to load."""
@@ -145,12 +214,12 @@ class SIGAClient:
             if await el.count() > 0:
                 info[key] = (await el.first.text_content() or "").strip()
 
+        grr_from_header = await self._extract_grr_from_header()
+        if grr_from_header:
+            info["grr"] = grr_from_header
         header = self._page.locator("h2:has-text('Discente')").first
         if await header.count() > 0:
             txt = (await header.text_content() or "").strip()
-            m = re.search(r"GRR\d+", txt)
-            if m:
-                info["grr"] = m.group()
             parts = txt.split(" - ")
             if len(parts) >= 2:
                 info["nome"] = parts[1].strip().split(" - ")[0].strip()

@@ -728,9 +728,10 @@ _SUPERVISOR_AREAS_AFINS_DESIGN = {
     "artes visuais",
     "artes plasticas",
     "comunicacao visual",
-    "comunicacao social",       # publicidade, jornalismo etc.
-    "publicidade",
-    "propaganda",
+    "comunicacao social",        # cobre Comunicacao Social com qualquer habilitacao
+    "publicidade",               # cobre Publicidade isolada ou em habilitacao
+    "propaganda",                # cobre Propaganda isolada ou em habilitacao
+    "publicidade e propaganda",  # forma literal mais comum em diplomas (PUCPR, etc.)
     "marketing",
     "multimidia",
     "producao cultural",
