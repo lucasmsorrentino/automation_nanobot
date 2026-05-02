@@ -88,18 +88,6 @@ python -m ufpr_automation.graphrag.seed
 python -m ufpr_automation.graphrag.seed --clear
 ```
 
-### 7. AFlow topology eval
-
-```bash
-# Rodar todas as topologias contra eval set
-python -m ufpr_automation.aflow.cli --topologies all --limit 20
-
-# Forçar uma topologia específica em runtime
-AFLOW_TOPOLOGY=baseline        python -m ufpr_automation --channel gmail --langgraph
-AFLOW_TOPOLOGY=no_self_refine  python -m ufpr_automation --channel gmail --langgraph
-AFLOW_TOPOLOGY=fleet_no_siga   python -m ufpr_automation --channel gmail --langgraph
-```
-
 ## Convenções do repositório
 
 - **Testes:** suite deve ficar verde. Mocks em nível de uso (cascaded_completion

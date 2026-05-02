@@ -28,7 +28,6 @@ O sistema **nunca envia e-mails automaticamente** — sempre salva como rascunho
 | **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback). DSPy via `USE_DSPY=auto` (ativa quando há prompt compilado) |
 | **Otimização** | `dspy_modules/` — DSPy Signatures, GEPA / MIPROv2; gate `_should_use_dspy()` em `graph/nodes.py` |
 | **Orquestrador** | `graph/` — LangGraph StateGraph + SQLite checkpointing. **`fleet.py`** paraleliza Tier 1 via `Send` API + reducers `Annotated[..., _merge_dict]`. **`browser_pool.py`** compartilha pages Playwright. |
-| **Topology evaluator** | `aflow/` — 5 topologias hand-authored (baseline, fleet, ablations) + evaluator + CLI. Selecionável via `AFLOW_TOPOLOGY`. |
 | **Sistemas legados (read)** | `sei/client.py`, `siga/client.py` — Playwright, read-only |
 | **SEI write ops** | `sei/writer.py` — `SEIWriter` com APENAS `attach_document` + `save_despacho_draft`. **Sem** `sign()`/`send()`/`protocol()` (safety arquitetural + 6 testes regressivos + `_FORBIDDEN_SELECTORS` runtime guard). |
 | **Procedimentos** | `procedures/store.py` — log JSONL para aprendizado contínuo |
@@ -71,8 +70,8 @@ python -m ufpr_automation --schedule
 # Ingerir documentos (PDF → chunks → embeddings → LanceDB)
 python -m ufpr_automation.rag.ingest [--subset estagio | --dry-run | --ocr-only]
 
-# Construir RAPTOR hierárquico
-python -m ufpr_automation.rag.raptor [--max-levels 3]
+# Construir RAPTOR hierárquico (opt-in — só usado se a tabela existir)
+python -m ufpr_automation.rag.advanced.raptor [--max-levels 3]
 
 # Buscar via CLI
 python -m ufpr_automation.rag.retriever "prazo de estágio obrigatório" --conselho cepe --top-k 5
@@ -133,20 +132,6 @@ FLEET_BROWSER_POOL_SIZE=5 python -m ufpr_automation --channel gmail
 #   Skip automático se nenhum email menciona SEI/GRR/23075.
 PREWARM_SESSIONS_ENABLED=true python -m ufpr_automation --channel gmail
 PREWARM_SESSIONS_MAX_AGE_H=4 python -m ufpr_automation --channel gmail
-```
-
-### AFlow — topology evaluator (Marco III)
-
-```bash
-# Avaliar todas as 5 topologias contra o feedback set (ou synthetic se vazio)
-python -m ufpr_automation.aflow.cli --topologies all --limit 20
-
-# Avaliar apenas baseline vs fleet
-python -m ufpr_automation.aflow.cli --topologies baseline,fleet --limit 10
-
-# Forçar topologia específica em runtime
-AFLOW_TOPOLOGY=baseline python -m ufpr_automation --channel gmail
-AFLOW_TOPOLOGY=fleet    python -m ufpr_automation --channel gmail   # default
 ```
 
 ### SEI write ops (Marco III + Marco IV)
@@ -256,11 +241,6 @@ FLEET_BROWSER_POOL_SIZE=3
 # Default OFF. Ativar quando race de login for dor real em produção.
 PREWARM_SESSIONS_ENABLED=false   # true|1|yes|on para habilitar
 PREWARM_SESSIONS_MAX_AGE_H=6     # idade máxima (horas) da session file antes de re-login
-
-# AFlow topology dispatcher (Marco III)
-AFLOW_TOPOLOGY=fleet             # fleet | baseline | skip_rag_high_tier0 | no_self_refine | fleet_no_siga
-AFLOW_METRIC=composite
-AFLOW_EVAL_LIMIT=20
 
 # SEI write artifacts (Marco III)
 SEI_WRITE_ARTIFACTS_DIR=         # opcional, default: procedures_data/sei_writes

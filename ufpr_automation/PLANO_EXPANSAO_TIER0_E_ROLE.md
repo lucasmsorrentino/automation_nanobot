@@ -453,7 +453,7 @@ python -m ufpr_automation.graphrag.enrich
    - Cypher: `MATCH (t:Template)-[:EMITIDO_POR]->(o {sigla:'CCDG'}) RETURN t` retorna 3 templates de despacho.
 
 4. **Bench global**:
-   - `python -m ufpr_automation.aflow.cli --topologies fleet --limit 20` antes vs depois — accuracy não regride, latência média melhora.
+   - Comparar accuracy + latência média do Fleet antes vs depois das mudanças via logs de runs agendados (08h/13h/17h). AFlow CLI removido em 2026-05-02 — métricas hoje vêm do `procedures_data/` (logs JSONL) e dos drafts gerados.
 
 ---
 
@@ -516,7 +516,7 @@ python -m ufpr_automation.graphrag.enrich
    - Cypher: `MATCH (t:Template)-[:EMITIDO_POR]->(o:Orgao {sigla:'CCDG'}) RETURN count(t)` → todos os templates.
 
 ### Próximos passos sugeridos (fora deste sprint)
-- **Bench A/B**: rodar `python -m ufpr_automation.aflow.cli --topologies fleet --limit 20` antes (linha de base já está nos logs) vs depois das operações; medir se `tier0_hits/total` subiu para ≥0.85 e se zero drafts contêm "procure a Coordenação".
+- **Bench A/B**: comparar `tier0_hits/total` antes vs depois das operações usando logs de runs agendados (procedures_data/ JSONL); meta: razão ≥0.85 e zero drafts contendo "procure a Coordenação". (AFlow CLI removido em 2026-05-02.)
 - **Recompilar DSPy** com prompts atualizados (`python -m ufpr_automation.dspy_modules.optimize --strategy gepa`) quando houver corpus de feedback ≥20.
 - **Fixtures por intent novo**: criar 1–2 emails reais em `ufpr_automation/tests/fixtures/tier0_emails/` para os 25 intents novos e adicionar testes `test_intent_<nome>_routes_correctly` em `test_playbook.py`.
 

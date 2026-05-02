@@ -44,12 +44,10 @@ graph TB
         SEI_M["📁 SEI Client (read) ✅<br/>+ SEIWriter (attach + draft) ✅<br/>sem sign/send/protocol"]
         SIGA_M["🎓 SIGA Client (read-only) ✅<br/>Playwright + elegibilidade"]
         FLEET["🚀 LangGraph Fleet ✅<br/>Send API + reducers<br/>+ BrowserPagePool"]
-        AFLOW["📊 AFlow ✅<br/>5 topology variants<br/>+ evaluator + CLI"]
 
         NEO4J --> SEI_M
         NEO4J --> SIGA_M
         NEO4J --> FLEET
-        FLEET --> AFLOW
     end
 
     PHASE1 ==>|"Evolução"| PHASE2
@@ -103,15 +101,7 @@ graph LR
     AGIR --> REGISTRAR[registrar_procedimento]
 ```
 
-A topologia é selecionável via `AFLOW_TOPOLOGY`. Variantes registradas em `aflow/topologies.py`:
-
-| Topologia | Descrição |
-|---|---|
-| `fleet` (default) | Fan-out via `Send` API — paraleliza Tier 1 |
-| `baseline` | Pipeline linear pré-Fleet (sequencial) — para AFlow ablations |
-| `skip_rag_high_tier0` | Variante baseline ablation (alias no MVP) |
-| `no_self_refine` | Variante fleet ablation (alias no MVP) |
-| `fleet_no_siga` | Variante fleet sem consulta SIGA (alias no MVP) |
+Topologia única: Fleet (fan-out via `Send` API paraleliza Tier 1). O AFlow topology evaluator (registry hand-authored + evaluator + CLI) foi removido em 2026-05-02 — nunca foi exercitado em produção e as 4 variantes não-`fleet` eram CLI-only ablation study sem função de avaliação implementada. Restauração via `git show <pre-removal>:ufpr_automation/aflow/`.
 
 ## RAG — Pipeline de ingestão e busca
 
@@ -274,6 +264,3 @@ Busca despachos do Neo4j com cache in-memory. Substitui as constantes hardcoded 
 - `"on"` → DSPy obrigatório (raise se `dspy` ausente ou se não houver `gepa_optimized.json`/`mipro_optimized.json`)
 - `"auto"` (default) → DSPy se importável e prompt compilado existe, senão LiteLLM com log INFO
 
-### AFlow (`aflow/`)
-
-Topology evaluator mínimo. **Não é busca neural** — é um registry de topologias hand-authored + evaluator + CLI. `aflow/topologies.py` registra 5 variantes (atualmente 3 são aliases para futura implementação de ablations reais). `aflow/evaluator.py:evaluate()` roda cada topologia contra um eval set (vindo de `feedback_data/` ou synthetic do `optimize.py`) com `metric_fn` e `invoke_fn` plugáveis (stub-friendly para testes). `aflow/optimizer.py:pick_best_topology()` retorna a melhor por (accuracy, -latency, -errors) e escreve report JSON. CLI: `python -m ufpr_automation.aflow.cli --topologies all --limit 20`.
