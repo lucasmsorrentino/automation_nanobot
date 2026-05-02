@@ -287,11 +287,3 @@ SEI_WRITE_MODE = os.getenv("SEI_WRITE_MODE", "live").lower()
 FLEET_MAX_CONCURRENT_SUBAGENTS = int(os.getenv("FLEET_MAX_CONCURRENT_SUBAGENTS", "2"))
 
 
-# ============================================================================
-# AFlow — topology evaluator (Marco III)
-# ============================================================================
-AFLOW_TOPOLOGY = os.getenv("AFLOW_TOPOLOGY", "fleet").lower()
-# Valid: "fleet" (default — Wave 2 parallel sub-agents), "baseline" (legacy
-# sequential), "skip_rag_high_tier0", "no_self_refine", "fleet_no_siga"
-AFLOW_METRIC = os.getenv("AFLOW_METRIC", "composite").lower()
-AFLOW_EVAL_LIMIT = int(os.getenv("AFLOW_EVAL_LIMIT", "20"))

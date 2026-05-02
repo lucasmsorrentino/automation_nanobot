@@ -42,30 +42,6 @@ def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     Returns:
         Compiled StateGraph ready to invoke.
     """
-    # AFlow topology dispatch — when AFLOW_TOPOLOGY is set to anything other
-    # than "fleet" (the default Fleet-based topology built below), delegate
-    # to the AFlow variant registry. The "fleet" guard is critical to avoid
-    # a circular import/recursion: aflow.topologies.topology_fleet calls
-    # build_graph() again, so we must short-circuit here for that case.
-    from ufpr_automation.config import settings as _settings
-
-    topology_override = _settings.AFLOW_TOPOLOGY
-    if topology_override and topology_override != "fleet":
-        try:
-            from ufpr_automation.aflow.topologies import get_topology
-
-            factory = get_topology(topology_override)
-            if factory.__name__ != "topology_fleet":
-                return factory(channel=channel, checkpointer=checkpointer)
-        except (KeyError, ImportError) as e:
-            import logging as _logging
-
-            _logging.getLogger(__name__).warning(
-                "AFLOW_TOPOLOGY=%s invalid (%s); using default fleet topology",
-                topology_override,
-                e,
-            )
-
     graph = StateGraph(EmailState)
 
     # Add nodes
