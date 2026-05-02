@@ -21,7 +21,7 @@ delete this module and restore direct ``SentenceTransformer(name)`` calls
 in the ``__init__`` / ``_ensure_loaded`` methods of
 :class:`ufpr_automation.rag.retriever.Retriever`,
 :class:`ufpr_automation.feedback.reflexion.ReflexionMemory`, and
-:class:`ufpr_automation.rag.raptor.RaptorRetriever`.
+:class:`ufpr_automation.rag.advanced.raptor.RaptorRetriever`.
 """
 
 from __future__ import annotations

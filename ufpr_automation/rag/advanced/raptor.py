@@ -12,9 +12,9 @@ Retrieval uses "collapsed tree" search: query searches ALL levels
 simultaneously and returns the most relevant nodes regardless of level.
 
 Usage:
-    python -m ufpr_automation.rag.raptor              # build RAPTOR tree
-    python -m ufpr_automation.rag.raptor --max-levels 3
-    python -m ufpr_automation.rag.raptor --dry-run     # show cluster stats only
+    python -m ufpr_automation.rag.advanced.raptor              # build RAPTOR tree
+    python -m ufpr_automation.rag.advanced.raptor --max-levels 3
+    python -m ufpr_automation.rag.advanced.raptor --dry-run     # show cluster stats only
 
 Reference:
     Sarthi et al., "RAPTOR: Recursive Abstractive Processing for

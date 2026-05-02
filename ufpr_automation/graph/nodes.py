@@ -559,7 +559,11 @@ def _get_retriever():
     try:
         import lancedb
 
-        from ufpr_automation.rag.raptor import RAPTOR_TABLE, STORE_DIR, RaptorRetriever
+        from ufpr_automation.rag.advanced.raptor import (
+            RAPTOR_TABLE,
+            STORE_DIR,
+            RaptorRetriever,
+        )
 
         db_path = STORE_DIR / "ufpr.lance"
         if db_path.exists():
