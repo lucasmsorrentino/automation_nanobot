@@ -41,6 +41,8 @@ from typing import Any
 
 import yaml
 
+from ufpr_automation._guard_selectors import is_forbidden as _guard_is_forbidden
+
 # Must match siga/client.py read-only policy. Any attempt to load a
 # manifest whose leaf selector matches one of these raises immediately.
 # Grounder output is validated against this list before being written.
@@ -170,8 +172,11 @@ def _validate_schema(data: dict[str, Any], path: Path) -> None:
 
 
 def _is_forbidden(sel: str) -> bool:
-    low = sel.lower()
-    return any(f.lower() in low for f in _FORBIDDEN_SELECTORS)
+    """Thin wrapper around the shared substring guard, pinning the
+    SIGA-specific forbidden-token tuple. Kept as a module-level function
+    so internal callers (and any external imports) keep working unchanged.
+    """
+    return _guard_is_forbidden(sel, _FORBIDDEN_SELECTORS)
 
 
 def _validate_no_forbidden_selectors(data: dict[str, Any], path: Path) -> None:
