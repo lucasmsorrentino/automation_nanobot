@@ -34,6 +34,7 @@ Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Ex
   7. CLAUDE.md → remover seção AFlow (linhas ~98-101 + bloco tabela 106-115)
   8. ARCHITECTURE.md → remover linha 47 (caixinha AFLOW) + seção 277+
   9. Junto: deletar legacy batch nodes em nodes.py (`rag_retrieve` 597-690, `classificar` 842-890, `consultar_sei` 1000-1070, `consultar_siga` 1215-1254 — ~360 LOC). Existem só pra `baseline`, com AFlow morto ficam órfãos.
+  10. Junto (desbloqueado pela #9): mover `rag/raptor.py` → `rag/advanced/raptor.py` (deveria ter ido na Onda 1.4 mas estava bloqueado pelo `rag_retrieve` em `nodes.py:562` que importava lazy). Atualizar CLI command em README/CLAUDE.md (`python -m ufpr_automation.rag.advanced.raptor`). Mover `tests/test_raptor.py` se necessário pra refletir o novo path.
 - **Verificação**: `pytest -q` (espera ~1050 passing); smoke Letícia produz mesmo output; 1 run agendado real (08h/13h/17h) com pelo menos 5 emails.
 
 **Onda 3 — Deletar DSPy modules** (~240 LOC, 2-3h, risco médio)

@@ -129,9 +129,6 @@ pip install -e ".[marco3]"
 python -m ufpr_automation.graphrag.seed                         # populate base knowledge graph
 python -m ufpr_automation.graphrag.seed --clear                 # clear graph + re-seed
 python -m ufpr_automation.graphrag.seed --dry-run               # show connection + stats only
-python -m ufpr_automation.graphrag.enrich                       # extract norms from RAG → Neo4j (with lineage)
-python -m ufpr_automation.graphrag.enrich --dry-run             # extract only, print stats
-python -m ufpr_automation.graphrag.enrich --conselho cepe       # filter by conselho
 
 # Model cascading (Marco III) — set in .env:
 # LLM_CLASSIFY_MODEL=ollama/qwen3:8b     # local model for classification
@@ -263,7 +260,6 @@ powershell -ExecutionPolicy Bypass -File scripts\sync_to_drive.ps1
 # G: → local
 robocopy "G:\Meu Drive\ufpr_rag\store\ufpr.lance" "<RAG_STORE_DIR>\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5
 .venv/Scripts/python.exe -m ufpr_automation.graphrag.seed --clear
-.venv/Scripts/python.exe -m ufpr_automation.graphrag.enrich
 
 # local → G:
 robocopy "<RAG_STORE_DIR>\ufpr.lance" "G:\Meu Drive\ufpr_rag\store\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5

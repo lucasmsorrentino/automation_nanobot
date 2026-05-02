@@ -111,13 +111,14 @@ python -m ufpr_automation.graphrag.seed
 python -m ufpr_automation.graphrag.seed --clear       # limpar e re-popular
 python -m ufpr_automation.graphrag.seed --dry-run     # apenas testar conexão
 
-# 2. Enriquecer com normas do RAG vetorial
-python -m ufpr_automation.graphrag.enrich             # extrair + inserir tudo
-python -m ufpr_automation.graphrag.enrich --dry-run   # apenas extrair, sem inserir
-python -m ufpr_automation.graphrag.enrich --conselho cepe  # filtrar por conselho
-
-# 3. O retriever é usado automaticamente pelo pipeline LangGraph
+# 2. O retriever é usado automaticamente pelo pipeline LangGraph
 # (integrado em graph/nodes.py:rag_retrieve)
+#
+# Nota: ``graphrag.enrich`` (extração de normas do RAG vetorial via
+# regex de Resoluções CEPE/CONSU) foi removido em 2026-04-30 — nunca
+# foi rodado em produção e ``:Norma`` nodes nunca foram populados.
+# Se a feature for ressuscitada, restaurar de ``git show <pre-removal>:
+# ufpr_automation/graphrag/enrich.py``.
 ```
 
 ### Queries Cypher Úteis
