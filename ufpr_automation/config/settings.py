@@ -244,15 +244,6 @@ LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
 
 
 # ============================================================================
-# DSPy — prompt optimization (Marco II)
-# ============================================================================
-USE_DSPY = os.getenv("USE_DSPY", "auto").lower()
-# "auto" = use DSPy only if dspy_modules/optimized/gepa_optimized.json exists
-# "1" / "true" / "on" = force DSPy (raises if no compiled file)
-# "0" / "false" / "off" = force litellm path (skip DSPy entirely)
-
-
-# ============================================================================
 # SEI write operations (Marco III) — attach + draft only, NO sign/send
 # ============================================================================
 SEI_WRITE_ARTIFACTS_DIR = Path(
