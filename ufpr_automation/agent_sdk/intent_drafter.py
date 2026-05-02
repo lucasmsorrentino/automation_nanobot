@@ -264,6 +264,117 @@ def _load_soul_excerpt() -> str:
     return "\n---\n".join(sections) if sections else text[:3000]
 
 
+def _process_cluster(
+    cluster: EmailCluster,
+    existing_names: set[str],
+    soul: str,
+    dry_run: bool,
+    existing_hashes: set[str],
+) -> tuple[str | None, str]:
+    """Generate a candidate intent block for a single cluster.
+
+    Returns ``(candidate_block, status)`` where ``status`` is one of:
+
+    - ``"candidate"`` — new candidate produced (block is the comment +
+      fenced YAML to append to ``CANDIDATES.md``).
+    - ``"candidate_expansion"`` — same as above, but the LLM proposed an
+      expansion of an existing intent (so callers bump the ``expansions``
+      counter alongside ``candidates``).
+    - ``"dry_run_marker"`` — dry-run only; block is a ``DRY_RUN: …``
+      comment so the candidates file still records the analysis.
+    - ``"skipped"`` — content hash already in ``existing_hashes``.
+    - ``"failed"`` — claude failed, YAML missing, or YAML invalid; nothing
+      to write.
+
+    The outer ``run_intent_drafter`` is then a thin orchestrator that
+    aggregates statuses into a stats dict.
+    """
+    from ufpr_automation.agent_sdk.runner import run_claude_oneshot
+
+    prompt = build_cluster_prompt(cluster, existing_names, soul)
+    content_hash = _content_hash(f"{cluster.categoria}|{cluster.pattern}|{cluster.count}")
+
+    if content_hash in existing_hashes:
+        logger.info(
+            "Intent Drafter: cluster '%s/%s' já processado (hash %s), skip",
+            cluster.categoria,
+            cluster.pattern,
+            content_hash,
+        )
+        return None, "skipped"
+
+    if dry_run:
+        logger.info(
+            "Intent Drafter [DRY_RUN]: cluster '%s/%s' (%d emails) — prompt %d chars",
+            cluster.categoria,
+            cluster.pattern,
+            cluster.count,
+            len(prompt),
+        )
+        block = (
+            f"<!-- DRY_RUN: cluster {cluster.categoria}/{cluster.pattern} "
+            f"({cluster.count} emails)\n"
+            f"     Hash: {content_hash} -->"
+        )
+        return block, "dry_run_marker"
+
+    result = run_claude_oneshot(
+        task="intent_drafter",
+        prompt=prompt,
+        output_format="text",
+        timeout_s=120,
+    )
+
+    if not result.success:
+        logger.warning(
+            "Intent Drafter: claude falhou para cluster '%s/%s': %s",
+            cluster.categoria,
+            cluster.pattern,
+            result.error or result.stderr,
+        )
+        return None, "failed"
+
+    yaml_match = re.search(r"```(?:yaml|intent)?\s*\n(.*?)```", result.output_text, re.DOTALL)
+    if not yaml_match:
+        logger.warning(
+            "Intent Drafter: nenhum bloco YAML na resposta para '%s/%s'",
+            cluster.categoria,
+            cluster.pattern,
+        )
+        return None, "failed"
+
+    yaml_block = yaml_match.group(1).strip()
+
+    try:
+        import yaml as _yaml
+
+        data = _yaml.safe_load(yaml_block)
+        Intent.model_validate(data)
+    except Exception as e:
+        logger.warning(
+            "Intent Drafter: YAML inválido para '%s/%s': %s",
+            cluster.categoria,
+            cluster.pattern,
+            e,
+        )
+        return None, "failed"
+
+    is_expansion = "EXPANSÃO DE:" in result.output_text.split("```")[0]
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    header = (
+        f"<!-- Candidato gerado por agent_sdk/intent_drafter em {now_str}\n"
+        f"     Baseado em {cluster.count} emails Tier 1"
+        f" (categoria: {cluster.categoria})\n"
+        f'     Cluster: "{cluster.pattern}"\n'
+        f"     Samples: {cluster.sample_subjects[:3]}\n"
+        f"     Hash: {content_hash}\n"
+        f"     Para promover: revise abaixo e mova o bloco para PROCEDURES.md -->\n"
+    )
+    block = f"\n{header}\n```intent\n{yaml_block}\n```\n"
+    return block, "candidate_expansion" if is_expansion else "candidate"
+
+
 def run_intent_drafter(
     last_days: int = 14,
     min_frequency: int = 5,
@@ -278,7 +389,7 @@ def run_intent_drafter(
     Returns a summary dict with counts of clusters analysed, candidates
     generated, duplicates skipped, and expansions proposed.
     """
-    from ufpr_automation.agent_sdk.runner import is_claude_available, run_claude_oneshot
+    from ufpr_automation.agent_sdk.runner import is_claude_available
 
     cand_path = candidates_path or CANDIDATES_MD
 
@@ -320,97 +431,23 @@ def run_intent_drafter(
     candidate_blocks: list[str] = []
 
     for cluster in clusters:
-        prompt = build_cluster_prompt(cluster, existing_names, soul_excerpt)
-        content_hash = _content_hash(f"{cluster.categoria}|{cluster.pattern}|{cluster.count}")
-
-        if content_hash in existing_hashes:
-            logger.info(
-                "Intent Drafter: cluster '%s/%s' já processado (hash %s), skip",
-                cluster.categoria,
-                cluster.pattern,
-                content_hash,
-            )
+        block, status = _process_cluster(
+            cluster, existing_names, soul_excerpt, dry_run, existing_hashes
+        )
+        if status == "skipped":
             stats["skipped"] += 1
-            continue
-
-        if dry_run:
-            logger.info(
-                "Intent Drafter [DRY_RUN]: cluster '%s/%s' (%d emails) — prompt %d chars",
-                cluster.categoria,
-                cluster.pattern,
-                cluster.count,
-                len(prompt),
-            )
+        elif status == "dry_run_marker":
             stats["candidates"] += 1
-            candidate_blocks.append(
-                f"<!-- DRY_RUN: cluster {cluster.categoria}/{cluster.pattern} "
-                f"({cluster.count} emails)\n"
-                f"     Hash: {content_hash} -->"
-            )
-            continue
+            if block is not None:
+                candidate_blocks.append(block)
+        elif status in ("candidate", "candidate_expansion"):
+            stats["candidates"] += 1
+            if status == "candidate_expansion":
+                stats["expansions"] += 1
+            if block is not None:
+                candidate_blocks.append(block)
+        # status == "failed" → no stats bump, no block
 
-        result = run_claude_oneshot(
-            task="intent_drafter",
-            prompt=prompt,
-            output_format="text",
-            timeout_s=120,
-        )
-
-        if not result.success:
-            logger.warning(
-                "Intent Drafter: claude falhou para cluster '%s/%s': %s",
-                cluster.categoria,
-                cluster.pattern,
-                result.error or result.stderr,
-            )
-            continue
-
-        # Extract YAML block from output
-        yaml_match = re.search(r"```(?:yaml|intent)?\s*\n(.*?)```", result.output_text, re.DOTALL)
-        if not yaml_match:
-            logger.warning(
-                "Intent Drafter: nenhum bloco YAML na resposta para '%s/%s'",
-                cluster.categoria,
-                cluster.pattern,
-            )
-            continue
-
-        yaml_block = yaml_match.group(1).strip()
-
-        # Validate the proposed intent
-        try:
-            import yaml as _yaml
-
-            data = _yaml.safe_load(yaml_block)
-            Intent.model_validate(data)
-        except Exception as e:
-            logger.warning(
-                "Intent Drafter: YAML inválido para '%s/%s': %s",
-                cluster.categoria,
-                cluster.pattern,
-                e,
-            )
-            continue
-
-        is_expansion = "EXPANSÃO DE:" in result.output_text.split("```")[0]
-        if is_expansion:
-            stats["expansions"] += 1
-
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        header = (
-            f"<!-- Candidato gerado por agent_sdk/intent_drafter em {now_str}\n"
-            f"     Baseado em {cluster.count} emails Tier 1"
-            f" (categoria: {cluster.categoria})\n"
-            f'     Cluster: "{cluster.pattern}"\n'
-            f"     Samples: {cluster.sample_subjects[:3]}\n"
-            f"     Hash: {content_hash}\n"
-            f"     Para promover: revise abaixo e mova o bloco para PROCEDURES.md -->\n"
-        )
-        block = f"\n{header}\n```intent\n{yaml_block}\n```\n"
-        candidate_blocks.append(block)
-        stats["candidates"] += 1
-
-    # Write candidates to file
     if candidate_blocks:
         _append_candidates(cand_path, candidate_blocks)
         logger.info(
