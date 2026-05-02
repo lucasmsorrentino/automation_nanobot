@@ -165,7 +165,6 @@ class TestSubagentSemaphore:
                     "ufpr_automation.graph.nodes._get_reflexion_context_single",
                     return_value="",
                 ),
-                patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
                 patch(
                     "ufpr_automation.graph.nodes._classify_with_litellm",
                     side_effect=_slow_classify,
@@ -235,7 +234,6 @@ class TestSubagentSemaphore:
                     "ufpr_automation.graph.nodes._get_reflexion_context_single",
                     return_value="",
                 ),
-                patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
                 patch(
                     "ufpr_automation.graph.nodes._classify_with_litellm",
                     side_effect=_slow_classify,
