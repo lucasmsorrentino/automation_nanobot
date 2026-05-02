@@ -282,7 +282,12 @@ _GRR_RE = re.compile(
     r"(?:\bGRR\s*[:\-]?\s*|\bMatr[ií]cula\s*[:\-]?\s*)(\d{6,10})\b",
     re.IGNORECASE,
 )
-_DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
+from ufpr_automation.utils.dates import (
+    DATE_EXTENSO_RE as _DATE_EXTENSO_RE,
+    DATE_RE as _DATE_RE,
+    MESES_PT as _MESES_PT,
+    parse_br_date_to_str as _parse_br_date,
+)
 
 # TCE-specific regex — operate on attachment text (PDFs digitalized into the email)
 # TCE PDFs use various labels for the company: "Concedente:", "Empresa:",
@@ -342,31 +347,6 @@ _ADITIVO_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Portuguese-language month names → numeric. Keys are lowercased and have
-# accents stripped so lookup from the regex capture normalizes cleanly.
-_MESES_PT: dict[str, int] = {
-    "janeiro": 1,
-    "fevereiro": 2,
-    "marco": 3,
-    "abril": 4,
-    "maio": 5,
-    "junho": 6,
-    "julho": 7,
-    "agosto": 8,
-    "setembro": 9,
-    "outubro": 10,
-    "novembro": 11,
-    "dezembro": 12,
-}
-
-_DATE_EXTENSO_RE = re.compile(
-    r"\b(\d{1,2})\s+de\s+"
-    r"(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|"
-    r"agosto|setembro|outubro|novembro|dezembro)"
-    r"\s+de\s+(\d{4})\b",
-    re.IGNORECASE,
-)
-
 # Matches phrases that introduce the *new* end date in an aditivo — e.g.
 # "nova vigência até DD/MM/YYYY", "fica prorrogado até 30 de junho de 2026".
 # The capture is a raw date string that must be normalized via _parse_br_date.
@@ -381,28 +361,6 @@ _DATA_TERMINO_NOVO_RE = re.compile(
     r"(\d{1,2}/\d{1,2}/\d{4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})",
     re.IGNORECASE,
 )
-
-
-def _parse_br_date(text: str) -> Optional[str]:
-    """Normalize a Brazilian date (numeric or extenso) to ``DD/MM/YYYY``.
-
-    Returns ``None`` if no recognizable date is found. Used when extracting
-    ``data_termino_novo`` from aditivo PDFs that sometimes spell dates out
-    ("30 de junho de 2026") rather than use DD/MM/YYYY.
-    """
-    if not text:
-        return None
-    m = _DATE_RE.search(text)
-    if m:
-        return m.group(1)
-    m = _DATE_EXTENSO_RE.search(text)
-    if m:
-        day = int(m.group(1))
-        mes_key = m.group(2).lower().replace("ç", "c")
-        mes = _MESES_PT.get(mes_key)
-        if mes:
-            return f"{day:02d}/{mes:02d}/{int(m.group(3))}"
-    return None
 
 
 # LLM extraction prompts per field. Each prompt must instruct the model to

@@ -30,10 +30,15 @@ Adding a new check:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional
 
+from ufpr_automation.utils.dates import (
+    parse_br_date_to_date as _parse_br_date,
+    working_days_between as _working_days_between,
+)
 from ufpr_automation.utils.logging import logger
+from ufpr_automation.utils.text import strip_accents_lower as _strip_accents_lower
 
 if TYPE_CHECKING:
     from ufpr_automation.core.models import EmailData
@@ -169,31 +174,6 @@ def run_checks(intent: "Intent", ctx: CheckContext) -> CheckSummary:
 # ============================================================================
 # Helpers
 # ============================================================================
-
-
-def _parse_br_date(s: str) -> Optional[date]:
-    """Parse DD/MM/YYYY into a ``date`` or return ``None``."""
-    if not s:
-        return None
-    try:
-        return datetime.strptime(s.strip(), "%d/%m/%Y").date()
-    except ValueError:
-        return None
-
-
-def _working_days_between(start: date, end: date) -> int:
-    """Count working days (Mon-Fri) between two dates, exclusive of start,
-    inclusive of end. Does NOT account for national/academic holidays.
-    """
-    if end <= start:
-        return 0
-    days = 0
-    cur = start + timedelta(days=1)
-    while cur <= end:
-        if cur.weekday() < 5:  # 0=Mon .. 4=Fri
-            days += 1
-        cur += timedelta(days=1)
-    return days
 
 
 def _siga_val(ctx: CheckContext, key: str, default: Any = None) -> Any:
@@ -726,17 +706,6 @@ _SUPERVISOR_AREAS_AFINS_DESIGN = {
     "midias digitais",
     "tecnologia em design",
 }
-
-
-def _strip_accents_lower(s: str) -> str:
-    """Normalize a Portuguese string for keyword matching: remove diacritics,
-    lowercase, collapse whitespace.
-    """
-    import unicodedata
-
-    norm = unicodedata.normalize("NFD", s or "")
-    stripped = "".join(c for c in norm if unicodedata.category(c) != "Mn")
-    return " ".join(stripped.lower().split())
 
 
 @register("supervisor_formacao_compativel")
