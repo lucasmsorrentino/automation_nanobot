@@ -430,37 +430,8 @@ class TestSeed:
 
 
 class TestGraphNodeIntegration:
-    """Test that rag_retrieve integrates GraphRAG when available."""
-
-    @patch("ufpr_automation.graphrag.retriever.GraphRetriever")
-    @patch("ufpr_automation.graph.nodes._get_retriever")
-    def test_rag_retrieve_includes_graph_context(self, mock_get_retriever, mock_graph_cls):
-        from ufpr_automation.core.models import EmailData
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        # Mock vector retriever
-        mock_retriever = MagicMock()
-        mock_retriever.search_formatted.return_value = "Vector RAG context"
-        mock_get_retriever.return_value = mock_retriever
-
-        # Mock graph retriever
-        mock_graph = MagicMock()
-        mock_graph.get_context_for_email.return_value = "Graph context: workflow steps"
-        mock_graph_cls.return_value = mock_graph
-
-        email = EmailData(
-            stable_id="test-123",
-            sender="aluno@ufpr.br",
-            subject="TCE Estágio",
-            preview="Gostaria de iniciar estágio",
-        )
-        state = {"emails": [email]}
-        result = rag_retrieve(state)
-
-        assert "test-123" in result["rag_contexts"]
-        ctx = result["rag_contexts"]["test-123"]
-        assert "Vector RAG context" in ctx
-        assert "Graph context" in ctx
+    """GraphRAG fallback tests — ``rag_retrieve`` legacy batch removido em
+    2026-05-02 (Onda 2.3); Fleet ``process_one_email`` cobre o caminho real."""
 
     def test_rag_retrieve_works_without_graphrag(self):
         """GraphRAG should gracefully degrade when Neo4j is not available."""

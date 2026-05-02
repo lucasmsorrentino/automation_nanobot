@@ -594,78 +594,6 @@ def _get_graph_context(email) -> str:
         return ""
 
 
-def rag_retrieve(state: EmailState) -> dict[str, Any]:
-    """Fetch RAG context for each email from the vector store and knowledge graph.
-
-    Combines three context sources:
-    1. Vector RAG (RAPTOR/flat) — semantic search over institutional documents
-    2. GraphRAG (Neo4j) — structured knowledge: workflows, norms, templates, hierarchy
-    3. Reflexion — past error reflections for self-improvement
-    """
-    emails = state.get("emails", [])
-    if not emails:
-        return {"rag_contexts": {}}
-
-    # Skip Tier 0 hits — they were already classified by tier0_lookup
-    # without paying the RAG retrieval cost. Only Tier 1 emails need RAG.
-    tier0_hits = set(state.get("tier0_hits", []))
-    tier1_emails = [e for e in emails if e.stable_id not in tier0_hits]
-
-    if not tier1_emails:
-        logger.info("RAG: todos os e-mails atendidos pelo Tier 0 — pulando RAG")
-        return {"rag_contexts": {}}
-
-    try:
-        retriever = _get_retriever()
-    except Exception as e:
-        logger.debug("RAG nao disponivel: %s", e)
-        retriever = None
-
-    from ufpr_automation.gmail.thread import split_reply_and_quoted
-
-    contexts: dict[str, str] = {}
-    for email in tier1_emails:
-        parts: list[str] = []
-        # Use only the new reply (not the quoted history) for RAG retrieval.
-        # The quoted history is noise that drags the query off-topic toward
-        # whatever the previous message was about.
-        split = split_reply_and_quoted(email.body or email.preview)
-        query_body = split.new_reply or (email.body or email.preview)
-        query = f"{email.subject} {query_body[:300]}"
-
-        # Vector RAG
-        if retriever:
-            try:
-                ctx = retriever.search_formatted(query, top_k=5)
-                if ctx and ctx != "Nenhum documento relevante encontrado.":
-                    parts.append(ctx)
-            except Exception as e:
-                logger.debug("RAG falhou para '%s': %s", email.subject[:40], e)
-
-        # GraphRAG (Neo4j)
-        graph_ctx = _get_graph_context(email)
-        if graph_ctx:
-            parts.append(graph_ctx)
-
-        if parts:
-            contexts[email.stable_id] = "\n\n".join(parts)
-
-    # Append Reflexion (past error) contexts — Tier 1 emails only
-    reflexion_contexts = _get_reflexion_context(tier1_emails)
-    for sid, ref_ctx in reflexion_contexts.items():
-        if sid in contexts:
-            contexts[sid] += f"\n\n{ref_ctx}"
-        else:
-            contexts[sid] = ref_ctx
-
-    logger.info(
-        "RAG: contexto recuperado para %d/%d e-mail(s) Tier 1",
-        len(contexts),
-        len(tier1_emails),
-    )
-    return {"rag_contexts": contexts}
-
-
 def _compiled_prompt_paths() -> list:
     """Return candidate compiled prompt paths for DSPy.
     Imports OPTIMIZED_DIR lazily so settings reloads / monkeypatches work in tests.
@@ -811,57 +739,6 @@ def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
     return _run_async_safe(_classify_all())
 
 
-def classificar(state: EmailState) -> dict[str, Any]:
-    """Classify emails using LLM with RAG context and Self-Refine.
-
-    Uses DSPy modules if available (pip install dspy), otherwise falls back
-    to direct LiteLLM calls. Model cascading routes classification to a
-    cheaper/local model when configured (see llm/router.py).
-
-    Tier 0 hits (already classified by ``tier0_lookup``) are preserved
-    untouched. Only emails missing from ``state['classifications']`` are
-    sent to the LLM. The two sets are merged before being returned to the
-    state, since LangGraph replaces dict values rather than merging them.
-    """
-    from ufpr_automation.llm.router import log_cascade_config
-
-    emails = state.get("emails", [])
-    rag_contexts = state.get("rag_contexts", {})
-    existing = dict(state.get("classifications") or {})
-
-    if not emails:
-        return {"classifications": existing}
-
-    # Tier 1 = emails not yet classified by Tier 0
-    tier1_emails = [e for e in emails if e.stable_id not in existing]
-
-    if not tier1_emails:
-        logger.info(
-            "Classificar: %d e-mail(s) atendido(s) pelo Tier 0 — pulando LLM",
-            len(existing),
-        )
-        return {"classifications": existing}
-
-    log_cascade_config()
-
-    if _should_use_dspy():
-        logger.info("Classificar: usando DSPy modules (compiled prompt)")
-        new_results = _classify_with_dspy(tier1_emails, rag_contexts)
-    else:
-        logger.info("Classificar: usando LiteLLM direto (no DSPy)")
-        new_results = _classify_with_litellm(tier1_emails, rag_contexts)
-
-    merged = {**existing, **new_results}
-    logger.info(
-        "Classificar: %d Tier 0 + %d Tier 1 = %d/%d total",
-        len(existing),
-        len(new_results),
-        len(merged),
-        len(emails),
-    )
-    return {"classifications": merged}
-
-
 def rotear(state: EmailState) -> dict[str, Any]:
     """Route emails by confidence score into auto/review/escalation buckets."""
     classifications = state.get("classifications", {})
@@ -967,79 +844,6 @@ def registrar_feedback(state: EmailState) -> dict[str, Any]:
 
     logger.info("Feedback: %d classificacao(oes) registrada(s)", recorded)
     return {"feedback_recorded": recorded}
-
-
-def consultar_sei(state: EmailState) -> dict[str, Any]:
-    """Consult SEI for emails classified as Estágios — cascade fallback.
-
-    Cascata por custo/precisão crescente:
-    1. Nº SEI explícito no texto (raríssimo — usuário confirmou 2026-04-22)
-    2. GRR em ``find_in_acompanhamento_especial`` (AE do unit — curado,
-       descarta IFPR/MEC/arquivados)
-    3. GRR em ``find_processes_by_grr`` (Pesquisa Rápida geral) — fallback
-       quando AE não tem o processo + ``select_best_processo`` (desambig
-       por ano/status/tipo/data)
-    4. (Futuro) Nome do aluno → pesquisa rápida geral
-
-    READ-ONLY. Failures são não-fatais (retorna dict vazio para o email).
-    """
-    emails = state.get("emails", [])
-    classifications = state.get("classifications", {})
-    if not emails:
-        return {"sei_contexts": {}}
-
-    from ufpr_automation.sei.client import (
-        extract_candidate_names,
-        extract_grr,
-        extract_sei_process_number,
-    )
-
-    # stable_id -> {"mode": "numero" | "grr" | "names", "value": str, "names": list[str]}
-    candidates: dict[str, dict] = {}
-    for email in emails:
-        cls = classifications.get(email.stable_id)
-        if not cls or cls.categoria != "Estágios":
-            continue
-        texto = f"{email.subject} {email.body or email.preview}"
-        for att in email.attachments:
-            if att.extracted_text:
-                texto += f"\n{att.extracted_text[:4000]}"
-        proc_num = extract_sei_process_number(texto)
-        if proc_num:
-            candidates[email.stable_id] = {"mode": "numero", "value": proc_num}
-            continue
-        grr = extract_grr(texto)
-        names = extract_candidate_names(texto)
-        if grr:
-            candidates[email.stable_id] = {
-                "mode": "grr",
-                "value": grr,
-                "names": names,
-            }
-        elif names:
-            # No GRR but we have name candidates — try AE by name only.
-            candidates[email.stable_id] = {
-                "mode": "names",
-                "value": names[0],
-                "names": names,
-            }
-
-    if not candidates:
-        return {"sei_contexts": {}}
-
-    try:
-        from ufpr_automation.sei.browser import has_credentials as sei_has_credentials
-    except ImportError:
-        logger.info("SEI: playwright nao instalado, pulando consultas")
-        return {"sei_contexts": {}}
-
-    if not sei_has_credentials():
-        logger.info("SEI: credenciais nao configuradas, pulando consultas")
-        return {"sei_contexts": {}}
-
-    sei_results = _run_async_safe(_consult_sei_async(candidates))
-    logger.info("SEI: %d consulta(s) realizadas", len(sei_results))
-    return {"sei_contexts": sei_results}
 
 
 async def _consult_sei_async(
@@ -1182,48 +986,6 @@ async def _consult_sei_async(
         await browser.close()
         await pw.stop()
     return results
-
-
-def consultar_siga(state: EmailState) -> dict[str, Any]:
-    """Consult SIGA for emails that mention a student GRR.
-
-    Only runs for emails classified as 'Estagios' that contain a GRR pattern.
-    READ-ONLY: no data is submitted. Validates internship eligibility.
-    """
-    emails = state.get("emails", [])
-    classifications = state.get("classifications", {})
-    if not emails:
-        return {"siga_contexts": {}}
-
-    from ufpr_automation.sei.client import extract_grr
-
-    # Identify emails that need SIGA consultation
-    siga_candidates: dict[str, str] = {}  # stable_id -> GRR
-    for email in emails:
-        cls = classifications.get(email.stable_id)
-        if not cls or cls.categoria != "Estágios":
-            continue
-        text = f"{email.subject} {email.body or email.preview}"
-        grr = extract_grr(text)
-        if grr:
-            siga_candidates[email.stable_id] = grr
-
-    if not siga_candidates:
-        return {"siga_contexts": {}}
-
-    try:
-        from ufpr_automation.siga.browser import has_credentials as siga_has_credentials
-    except ImportError:
-        logger.info("SIGA: playwright nao instalado, pulando consultas")
-        return {"siga_contexts": {}}
-
-    if not siga_has_credentials():
-        logger.info("SIGA: credenciais nao configuradas, pulando consultas")
-        return {"siga_contexts": {}}
-
-    siga_results = _run_async_safe(_consult_siga_async(siga_candidates))
-    logger.info("SIGA: %d consulta(s) realizadas", len(siga_results))
-    return {"siga_contexts": siga_results}
 
 
 def _normalize_matricula_status(situacao: str) -> str:
