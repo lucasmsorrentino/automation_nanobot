@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Last updated: 2026-05-01. Major recent changes: SIGA wrong-student bug fix + checker registry refactor (estagio ativo movido pro SEI cascade; jornada matinal aceita exceção pra alunos só com TCC/OD501). Refator em curso na branch `refactor/codebase-simplification` — ver `ufpr_automation/TASKS.md` "Refator (branch refactor/codebase-simplification)".
+
 ## Commands
 
 ```bash
