@@ -112,6 +112,104 @@ def perceber_owa(state: EmailState) -> dict[str, Any]:
         }
 
 
+def _tier0_lookup_one_email(email, playbook):
+    """Apply the Tier 0 playbook to a single email.
+
+    Returns a 4-tuple ``(stable_id_if_hit, classification, near_miss_score,
+    fallback_reason)`` where exactly one of the first two slots is populated
+    when ``fallback_reason == "hit"``, and ``classification`` is ``None``
+    otherwise. ``fallback_reason`` is one of:
+
+    - ``"hit"`` — Tier 0 produced a fully-formed classification.
+    - ``"no_match"`` — playbook found no intent above threshold.
+    - ``"stale"`` — match found, but ``intent.last_update`` is older than
+      the RAG store mtime; force Tier 1 fallback.
+    - ``"missing_fields"`` — match found, but required variables couldn't
+      be extracted from the email; force Tier 1 fallback.
+
+    ``near_miss_score`` is the best semantic score (below threshold) when
+    the lookup misses, ``None`` otherwise. The outer ``tier0_lookup`` is a
+    thin loop that aggregates these per-email outcomes into the state
+    update.
+    """
+    from ufpr_automation.core.models import EmailClassification
+    from ufpr_automation.gmail.thread import split_reply_and_quoted
+    from ufpr_automation.procedures.playbook import (
+        extract_variables,
+        missing_required_fields,
+    )
+
+    # Use only the new reply (not the quoted history) so the lookup
+    # query reflects what the sender is asking *now*.
+    split = split_reply_and_quoted(email.body or email.preview)
+    query_body = split.new_reply or (email.body or email.preview)
+    query = f"{email.subject} {query_body[:500]}"
+
+    match = playbook.lookup(query)
+    if match is None:
+        # Record the best semantic score (below threshold) for
+        # ablations / diagnostics. Cheap — reuses precomputed embeddings.
+        near_miss = None
+        try:
+            score = playbook.best_semantic_score(query)
+            if score > 0:
+                near_miss = score
+        except Exception as e:
+            logger.debug(
+                "Tier 0: could not compute near-miss for %s: %s", email.stable_id[:8], e
+            )
+        return None, None, near_miss, "no_match"
+
+    if playbook.is_stale(match.intent):
+        logger.info(
+            "Tier 0: intent '%s' STALE (last_update=%s) — fallback Tier 1",
+            match.intent.intent_name,
+            match.intent.last_update,
+        )
+        return None, None, None, "stale"
+
+    variables = extract_variables(email, match.intent)
+    missing = missing_required_fields(match.intent, variables)
+    if missing:
+        logger.info(
+            "Tier 0: intent '%s' faltando %s — fallback Tier 1",
+            match.intent.intent_name,
+            ", ".join(missing),
+        )
+        return None, None, None, "missing_fields"
+
+    draft = playbook.fill(match.intent, variables)
+    # Confidence = intent.confidence × match score (semantic ≤ 1.0).
+    # Keyword matches keep the intent's declared confidence intact.
+    confianca = max(0.0, min(1.0, match.intent.confidence * match.score))
+
+    try:
+        cls = EmailClassification(
+            categoria=match.intent.categoria,
+            resumo=f"Tier 0 ({match.method}): {match.intent.intent_name}",
+            acao_necessaria=match.intent.action,
+            sugestao_resposta=draft,
+            confianca=confianca,
+        )
+    except Exception as e:
+        logger.warning(
+            "Tier 0: classificacao invalida para intent '%s': %s",
+            match.intent.intent_name,
+            e,
+        )
+        return None, None, None, "missing_fields"
+
+    logger.info(
+        "Tier 0 HIT [%s/%.2f] '%s' -> %s (%s)",
+        match.method,
+        match.score,
+        email.subject[:40],
+        match.intent.intent_name,
+        match.intent.categoria,
+    )
+    return email.stable_id, cls, None, "hit"
+
+
 def tier0_lookup(state: EmailState) -> dict[str, Any]:
     """Route each email through the Tier 0 playbook (Hybrid Memory).
 
@@ -133,17 +231,10 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
         return {"tier0_hits": [], "classifications": {}}
 
     try:
-        from ufpr_automation.procedures.playbook import (
-            extract_variables,
-            get_playbook,
-            missing_required_fields,
-        )
+        from ufpr_automation.procedures.playbook import get_playbook
     except Exception as e:  # pragma: no cover - import-time failures only
         logger.warning("Tier 0: playbook indisponivel: %s", e)
         return {"tier0_hits": [], "classifications": {}}
-
-    from ufpr_automation.core.models import EmailClassification
-    from ufpr_automation.gmail.thread import split_reply_and_quoted
 
     playbook = get_playbook()
     if not playbook.intents:
@@ -157,78 +248,16 @@ def tier0_lookup(state: EmailState) -> dict[str, Any]:
     missing_count = 0
 
     for email in emails:
-        # Use only the new reply (not the quoted history) so the lookup
-        # query reflects what the sender is asking *now*.
-        split = split_reply_and_quoted(email.body or email.preview)
-        query_body = split.new_reply or (email.body or email.preview)
-        query = f"{email.subject} {query_body[:500]}"
-
-        match = playbook.lookup(query)
-        if match is None:
-            # Record the best semantic score (below threshold) for
-            # ablations / diagnostics. Cheap — reuses precomputed embeddings.
-            try:
-                score = playbook.best_semantic_score(query)
-                if score > 0:
-                    near_miss_scores[email.stable_id] = score
-            except Exception as e:
-                logger.debug(
-                    "Tier 0: could not compute near-miss for %s: %s", email.stable_id[:8], e
-                )
-            continue
-
-        if playbook.is_stale(match.intent):
-            logger.info(
-                "Tier 0: intent '%s' STALE (last_update=%s) — fallback Tier 1",
-                match.intent.intent_name,
-                match.intent.last_update,
-            )
+        stable_id, cls, near_miss, reason = _tier0_lookup_one_email(email, playbook)
+        if reason == "hit":
+            hits.append(stable_id)
+            classifications[stable_id] = cls
+        elif reason == "stale":
             stale_count += 1
-            continue
-
-        # Extract variables and validate required fields
-        variables = extract_variables(email, match.intent)
-        missing = missing_required_fields(match.intent, variables)
-        if missing:
-            logger.info(
-                "Tier 0: intent '%s' faltando %s — fallback Tier 1",
-                match.intent.intent_name,
-                ", ".join(missing),
-            )
+        elif reason == "missing_fields":
             missing_count += 1
-            continue
-
-        draft = playbook.fill(match.intent, variables)
-        # Confidence = intent.confidence × match score (semantic ≤ 1.0).
-        # Keyword matches keep the intent's declared confidence intact.
-        confianca = max(0.0, min(1.0, match.intent.confidence * match.score))
-
-        try:
-            cls = EmailClassification(
-                categoria=match.intent.categoria,
-                resumo=f"Tier 0 ({match.method}): {match.intent.intent_name}",
-                acao_necessaria=match.intent.action,
-                sugestao_resposta=draft,
-                confianca=confianca,
-            )
-        except Exception as e:
-            logger.warning(
-                "Tier 0: classificacao invalida para intent '%s': %s",
-                match.intent.intent_name,
-                e,
-            )
-            continue
-
-        classifications[email.stable_id] = cls
-        hits.append(email.stable_id)
-        logger.info(
-            "Tier 0 HIT [%s/%.2f] '%s' -> %s (%s)",
-            match.method,
-            match.score,
-            email.subject[:40],
-            match.intent.intent_name,
-            match.intent.categoria,
-        )
+        elif reason == "no_match" and near_miss is not None:
+            near_miss_scores[email.stable_id] = near_miss
 
     logger.info(
         "Tier 0: %d hit(s) | %d stale | %d missing fields | %d -> Tier 1",
