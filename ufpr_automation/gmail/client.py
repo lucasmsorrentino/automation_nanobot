@@ -12,11 +12,13 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import email
 import email.header
 import email.utils
 import imaplib
 import re
+from collections.abc import Iterator
 from email.mime.text import MIMEText
 from typing import Optional
 
@@ -271,6 +273,34 @@ class GmailClient:
         conn.login(self.email_addr, self.app_password)
         return conn
 
+    @contextlib.contextmanager
+    def _imap_session(
+        self,
+        *,
+        select: str | None = None,
+        readonly: bool = False,
+    ) -> Iterator[imaplib.IMAP4_SSL]:
+        """Open IMAP, optionally select a folder, yield the conn, logout on exit.
+
+        Consolidates the ``conn = self._connect_imap(); try: ...; finally:
+        conn.logout()`` boilerplate that was duplicated across every Gmail
+        IMAP method. Logout swallows any exception (matches prior behavior:
+        most callers wrapped logout in their own try/except, the few that
+        didn't were on cleanup paths where a failed logout is non-fatal).
+        Tests that monkey-patch ``_connect_imap`` keep working — this helper
+        is layered ON TOP of it.
+        """
+        conn = self._connect_imap()
+        try:
+            if select is not None:
+                conn.select(select, readonly=readonly)
+            yield conn
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
     # ------------------------------------------------------------------
     # Read emails
     # ------------------------------------------------------------------
@@ -293,9 +323,7 @@ class GmailClient:
         Returns:
             List of EmailData with body populated.
         """
-        conn = self._connect_imap()
-        try:
-            conn.select(folder, readonly=True)
+        with self._imap_session(select=folder, readonly=True) as conn:
             # Exclude anything already labeled with the pipeline marker —
             # durable across sessions even if ``\Seen`` is reset (e.g. when
             # the user opens the email on Gmail web). ``X-GM-RAW`` is
@@ -364,8 +392,6 @@ class GmailClient:
                 )
 
             return emails
-        finally:
-            conn.logout()
 
     # ------------------------------------------------------------------
     # Mark as read
@@ -396,34 +422,33 @@ class GmailClient:
         """
         if not gmail_msg_id or not labels:
             return False
-        conn = self._connect_imap()
         try:
-            conn.select(folder)
-            for label in labels:
-                try:
-                    conn.create(f'"{label}"')
-                except Exception:
-                    pass  # already exists — IMAP CREATE is idempotent-by-error
-            # Build space-separated, double-quoted label list:
-            #   ("ufpr/processado" "ufpr/estagios")
-            quoted = " ".join(f'"{label}"' for label in labels)
-            typ, resp = conn.uid(
-                "STORE",
-                gmail_msg_id.encode(),
-                "+X-GM-LABELS",
-                f"({quoted})",
-            )
-            if typ != "OK":
-                logger.warning(
-                    "Gmail: STORE +X-GM-LABELS retornou %s para uid=%s labels=%s (%r)",
-                    typ,
-                    gmail_msg_id,
-                    labels,
-                    resp,
+            with self._imap_session(select=folder) as conn:
+                for label in labels:
+                    try:
+                        conn.create(f'"{label}"')
+                    except Exception:
+                        pass  # already exists — IMAP CREATE is idempotent-by-error
+                # Build space-separated, double-quoted label list:
+                #   ("ufpr/processado" "ufpr/estagios")
+                quoted = " ".join(f'"{label}"' for label in labels)
+                typ, resp = conn.uid(
+                    "STORE",
+                    gmail_msg_id.encode(),
+                    "+X-GM-LABELS",
+                    f"({quoted})",
                 )
-                return False
-            logger.debug("Gmail: aplicou labels=%s em uid=%s", labels, gmail_msg_id)
-            return True
+                if typ != "OK":
+                    logger.warning(
+                        "Gmail: STORE +X-GM-LABELS retornou %s para uid=%s labels=%s (%r)",
+                        typ,
+                        gmail_msg_id,
+                        labels,
+                        resp,
+                    )
+                    return False
+                logger.debug("Gmail: aplicou labels=%s em uid=%s", labels, gmail_msg_id)
+                return True
         except Exception as e:
             logger.warning(
                 "Gmail: falha ao aplicar labels=%s em uid=%s: %s",
@@ -432,11 +457,6 @@ class GmailClient:
                 e,
             )
             return False
-        finally:
-            try:
-                conn.logout()
-            except Exception:
-                pass
 
     def mark_read(self, gmail_msg_id: str, folder: str = "INBOX") -> bool:
         """Mark a specific email as read (Seen) by its IMAP UID.
@@ -446,25 +466,22 @@ class GmailClient:
         hits the exact message even after INBOX has changed between the
         two sessions.
         """
-        conn = self._connect_imap()
         try:
-            conn.select(folder)
-            typ, resp = conn.uid("STORE", gmail_msg_id.encode(), "+FLAGS", "\\Seen")
-            if typ != "OK":
-                logger.warning(
-                    "Gmail: STORE +Seen retornou %s para uid=%s (%r)",
-                    typ,
-                    gmail_msg_id,
-                    resp,
-                )
-                return False
-            logger.debug("Gmail: marcou uid=%s como lido.", gmail_msg_id)
-            return True
+            with self._imap_session(select=folder) as conn:
+                typ, resp = conn.uid("STORE", gmail_msg_id.encode(), "+FLAGS", "\\Seen")
+                if typ != "OK":
+                    logger.warning(
+                        "Gmail: STORE +Seen retornou %s para uid=%s (%r)",
+                        typ,
+                        gmail_msg_id,
+                        resp,
+                    )
+                    return False
+                logger.debug("Gmail: marcou uid=%s como lido.", gmail_msg_id)
+                return True
         except Exception as e:
             logger.warning("Gmail: falha ao marcar uid=%s como lido: %s", gmail_msg_id, e)
             return False
-        finally:
-            conn.logout()
 
     # ------------------------------------------------------------------
     # Send reply (save as draft or send directly)
@@ -528,32 +545,30 @@ class GmailClient:
             msg["In-Reply-To"] = in_reply_to
             msg["References"] = in_reply_to
 
-        conn = self._connect_imap()
         try:
-            # Best-effort: remove existing drafts for the same thread so the
-            # reviewer doesn't see stacks of half-written replies from
-            # previous pipeline runs.
-            deleted = 0
-            if in_reply_to:
-                try:
-                    deleted = self._delete_existing_drafts(conn, in_reply_to, to_addr)
-                except Exception as e:
-                    logger.debug("Gmail: falha limpando drafts antigos: %s", e)
+            with self._imap_session() as conn:
+                # Best-effort: remove existing drafts for the same thread so the
+                # reviewer doesn't see stacks of half-written replies from
+                # previous pipeline runs.
+                deleted = 0
+                if in_reply_to:
+                    try:
+                        deleted = self._delete_existing_drafts(conn, in_reply_to, to_addr)
+                    except Exception as e:
+                        logger.debug("Gmail: falha limpando drafts antigos: %s", e)
 
-            conn.append("[Gmail]/Drafts", "\\Draft", None, msg.as_bytes())
-            logger.info(
-                "Gmail: rascunho salvo para %s%s — %s%s",
-                to_addr,
-                f" (cc {cc})" if cc else "",
-                subject[:50],
-                f" [substituiu {deleted} antigo(s)]" if deleted else "",
-            )
-            return True
+                conn.append("[Gmail]/Drafts", "\\Draft", None, msg.as_bytes())
+                logger.info(
+                    "Gmail: rascunho salvo para %s%s — %s%s",
+                    to_addr,
+                    f" (cc {cc})" if cc else "",
+                    subject[:50],
+                    f" [substituiu {deleted} antigo(s)]" if deleted else "",
+                )
+                return True
         except Exception as e:
             logger.error("Gmail: falha ao salvar rascunho: %s", e)
             return False
-        finally:
-            conn.logout()
 
     def _delete_existing_drafts(
         self,
@@ -658,39 +673,29 @@ class GmailClient:
         if not message_id:
             return ""
         try:
-            conn = self._connect_imap()
-        except Exception as e:
-            logger.warning("Gmail: thread_last_sender — falha no IMAP: %s", e)
-            return ""
-        try:
-            conn.select(ALL_MAIL_FOLDER, readonly=True)
-            _thrid, msns = self._resolve_thread(conn, message_id)
-            if not msns:
-                return ""
-            latest_ts = -1.0
-            latest_sender = ""
-            for msn in msns:
-                _, hdr = conn.fetch(msn, "(BODY.PEEK[HEADER.FIELDS (FROM DATE)])")
-                if not hdr or not hdr[0]:
-                    continue
-                payload = hdr[0][1] if isinstance(hdr[0], tuple) else hdr[0]
-                msg = email.message_from_bytes(payload)
-                try:
-                    ts = email.utils.parsedate_to_datetime(msg.get("Date", "")).timestamp()
-                except (TypeError, ValueError, AttributeError):
-                    ts = 0.0
-                if ts >= latest_ts:
-                    latest_ts = ts
-                    latest_sender = _parse_address(_decode_header(msg.get("From", "")))
-            return latest_sender
+            with self._imap_session(select=ALL_MAIL_FOLDER, readonly=True) as conn:
+                _thrid, msns = self._resolve_thread(conn, message_id)
+                if not msns:
+                    return ""
+                latest_ts = -1.0
+                latest_sender = ""
+                for msn in msns:
+                    _, hdr = conn.fetch(msn, "(BODY.PEEK[HEADER.FIELDS (FROM DATE)])")
+                    if not hdr or not hdr[0]:
+                        continue
+                    payload = hdr[0][1] if isinstance(hdr[0], tuple) else hdr[0]
+                    msg = email.message_from_bytes(payload)
+                    try:
+                        ts = email.utils.parsedate_to_datetime(msg.get("Date", "")).timestamp()
+                    except (TypeError, ValueError, AttributeError):
+                        ts = 0.0
+                    if ts >= latest_ts:
+                        latest_ts = ts
+                        latest_sender = _parse_address(_decode_header(msg.get("From", "")))
+                return latest_sender
         except Exception as e:
             logger.warning("Gmail: thread_last_sender — exceção (%s)", e)
             return ""
-        finally:
-            try:
-                conn.logout()
-            except Exception:
-                pass
 
     def copy_thread_to_label(self, message_id: str, label: str) -> tuple[int, str]:
         """Copy every message in the Gmail thread to ``label``.
@@ -704,39 +709,34 @@ class GmailClient:
         if not message_id or not label:
             return 0, ""
         try:
-            conn = self._connect_imap()
-        except Exception as e:
-            logger.warning("Gmail: copy_thread_to_label — falha no IMAP: %s", e)
-            return 0, ""
-        try:
-            # Ensure label exists; ignore "already exists" errors.
-            try:
-                conn.create(f'"{label}"')
-            except Exception:
-                pass
+            with self._imap_session(select=ALL_MAIL_FOLDER, readonly=False) as conn:
+                # Ensure label exists; ignore "already exists" errors.
+                try:
+                    conn.create(f'"{label}"')
+                except Exception:
+                    pass
 
-            conn.select(ALL_MAIL_FOLDER, readonly=False)
-            thrid, msns = self._resolve_thread(conn, message_id)
-            if not msns:
-                return 0, thrid
+                thrid, msns = self._resolve_thread(conn, message_id)
+                if not msns:
+                    return 0, thrid
 
-            uid_set = b",".join(msns)
-            status, _ = conn.copy(uid_set, f'"{label}"')
-            if status != "OK":
-                logger.warning(
-                    "Gmail: copy_thread_to_label — status %s para thread %s label '%s'",
-                    status,
+                uid_set = b",".join(msns)
+                status, _ = conn.copy(uid_set, f'"{label}"')
+                if status != "OK":
+                    logger.warning(
+                        "Gmail: copy_thread_to_label — status %s para thread %s label '%s'",
+                        status,
+                        thrid,
+                        label,
+                    )
+                    return 0, thrid
+                logger.info(
+                    "Gmail: thread %s (%d msg) copiada para label '%s'",
                     thrid,
+                    len(msns),
                     label,
                 )
-                return 0, thrid
-            logger.info(
-                "Gmail: thread %s (%d msg) copiada para label '%s'",
-                thrid,
-                len(msns),
-                label,
-            )
-            return len(msns), thrid
+                return len(msns), thrid
         except Exception as e:
             logger.warning(
                 "Gmail: copy_thread_to_label — exceção (message_id=%s, label=%s): %s",
@@ -745,8 +745,3 @@ class GmailClient:
                 e,
             )
             return 0, ""
-        finally:
-            try:
-                conn.logout()
-            except Exception:
-                pass
