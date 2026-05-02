@@ -16,6 +16,8 @@ from ufpr_automation.core.models import EmailClassification, EmailData
 
 
 def _make_email(sender: str = "prof@ufpr.br", subject: str = "Teste") -> EmailData:
+    """Local factory — mantida por compat. Novos testes devem usar a
+    fixture ``make_email`` de ``conftest.py``."""
     email = EmailData(sender=sender, subject=subject, body="corpo do email")
     email.compute_stable_id()
     return email
@@ -26,6 +28,8 @@ def _make_cls(
     confianca: float = 0.95,
     sugestao: str = "Prezado(a), recebemos...",
 ) -> EmailClassification:
+    """Local factory — mantida por compat. Novos testes devem usar a
+    fixture ``make_classification`` de ``conftest.py``."""
     return EmailClassification(
         categoria=categoria,
         resumo="Resumo",
