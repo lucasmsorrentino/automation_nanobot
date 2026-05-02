@@ -54,23 +54,6 @@ class TestHasEmails:
         assert _has_emails({"emails": []}) == "end"
         assert _has_emails({}) == "end"
 
-    def test_needs_tier1_skips_rag_when_all_tier0(self):
-        from ufpr_automation.graph.builder import _needs_tier1
-
-        e = _make_email()
-        # Every email is a Tier 0 hit → skip RAG entirely
-        state = {"emails": [e], "tier0_hits": [e.stable_id]}
-        assert _needs_tier1(state) == "rotear"
-
-    def test_needs_tier1_runs_rag_when_misses(self):
-        from ufpr_automation.graph.builder import _needs_tier1
-
-        e1 = _make_email()
-        e2 = _make_email()
-        e2.stable_id = "different"
-        state = {"emails": [e1, e2], "tier0_hits": [e1.stable_id]}
-        assert _needs_tier1(state) == "rag_retrieve"
-
 
 # ===========================================================================
 # builder.py — build_graph structure

@@ -472,25 +472,6 @@ class SEIClient:
             logger.debug("SEI: falha ao extrair documentos: %s", e)
         return docs
 
-    async def get_process_status(self, numero_processo: str) -> str:
-        """Get the current status/tramitation of a process.
-
-        Returns a human-readable status string.
-        """
-        processo = await self.search_process(numero_processo)
-        if not processo:
-            return f"Processo {numero_processo} nao encontrado no SEI."
-        parts = [f"Processo: {processo.numero}"]
-        if processo.status:
-            parts.append(f"Status: {processo.status}")
-        if processo.unidade_atual:
-            parts.append(f"Unidade atual: {processo.unidade_atual}")
-        if processo.documentos:
-            parts.append(f"Documentos: {len(processo.documentos)}")
-        if processo.observacoes:
-            parts.append(f"Obs: {processo.observacoes[:200]}")
-        return " | ".join(parts)
-
     @staticmethod
     def prepare_despacho_draft(
         tipo: DespachoTipo,

@@ -12,7 +12,6 @@ Usage:
         steps=[ProcedureStep(name="perceber", duration_ms=1200, result="ok")],
         outcome="draft_saved",
     ))
-    stats = store.get_stats()
 """
 
 from __future__ import annotations
@@ -126,62 +125,6 @@ class ProcedureStore:
             return 0
         with open(self._path, "r", encoding="utf-8") as f:
             return sum(1 for line in f if line.strip())
-
-    def get_stats(self) -> dict:
-        """Compute statistics from procedure records.
-
-        Returns dict with:
-        - total_runs: total procedure records
-        - by_outcome: count per outcome type
-        - by_categoria: count per email category
-        - avg_duration_ms: average total duration
-        - avg_duration_by_step: average duration per step name
-        - sei_consultations: how many times SEI was consulted
-        - siga_consultations: how many times SIGA was consulted
-        - feedback_distribution: count of approved/corrected/rejected
-        """
-        records = self.list_all()
-        if not records:
-            return {"total_runs": 0}
-
-        by_outcome: dict[str, int] = {}
-        by_categoria: dict[str, int] = {}
-        step_durations: dict[str, list[int]] = {}
-        total_durations: list[int] = []
-        sei_count = 0
-        siga_count = 0
-        feedback_dist: dict[str, int] = {}
-
-        for r in records:
-            by_outcome[r.outcome] = by_outcome.get(r.outcome, 0) + 1
-            if r.email_categoria:
-                by_categoria[r.email_categoria] = by_categoria.get(r.email_categoria, 0) + 1
-            total_durations.append(r.total_duration_ms)
-            for step in r.steps:
-                step_durations.setdefault(step.name, []).append(step.duration_ms)
-            if r.sei_process:
-                sei_count += 1
-            if r.siga_grr:
-                siga_count += 1
-            if r.human_feedback:
-                feedback_dist[r.human_feedback] = feedback_dist.get(r.human_feedback, 0) + 1
-
-        avg_by_step = {
-            name: sum(durs) // len(durs) for name, durs in step_durations.items() if durs
-        }
-
-        return {
-            "total_runs": len(records),
-            "by_outcome": by_outcome,
-            "by_categoria": by_categoria,
-            "avg_duration_ms": sum(total_durations) // len(total_durations)
-            if total_durations
-            else 0,
-            "avg_duration_by_step": avg_by_step,
-            "sei_consultations": sei_count,
-            "siga_consultations": siga_count,
-            "feedback_distribution": feedback_dist,
-        }
 
     @property
     def path(self) -> Path:

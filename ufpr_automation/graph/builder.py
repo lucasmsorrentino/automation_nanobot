@@ -32,37 +32,6 @@ def _has_emails(state: EmailState) -> str:
     return "tier0_lookup" if state.get("emails") else "end"
 
 
-def _needs_tier1(state: EmailState) -> str:
-    """Skip Tier 1 entirely if every email was resolved by the Tier 0 playbook.
-
-    Kept for backward compatibility with tests and for potential reuse by
-    the AFlow ``baseline`` topology. The default ``fleet`` topology uses
-    :func:`ufpr_automation.graph.fleet.dispatch_tier1` instead, which
-    returns a fan-out list of :class:`langgraph.types.Send` objects.
-    """
-    emails = state.get("emails", [])
-    tier0_hits = set(state.get("tier0_hits", []))
-    if emails and len(tier0_hits) >= len(emails):
-        return "rotear"
-    return "rag_retrieve"
-
-
-def _needs_sei_siga(state: EmailState) -> str:
-    """Legacy router: dispatch to SEI/SIGA consultation for any Estágios email.
-
-    Preserved for backward compatibility with tests and for the AFlow
-    ``baseline`` topology. The default ``fleet`` topology folds SEI/SIGA
-    consultation into :func:`ufpr_automation.graph.fleet.process_one_email`,
-    so this router is **no longer used** by the default graph built by
-    :func:`build_graph`.
-    """
-    classifications = state.get("classifications", {})
-    for cls in classifications.values():
-        if cls.categoria == "Estágios":
-            return "consultar_sei"
-    return "registrar_feedback"
-
-
 def build_graph(channel: str = "gmail", checkpointer=None) -> StateGraph:
     """Build and compile the email processing StateGraph.
 

@@ -144,8 +144,7 @@ EMAIL_CHANNEL = os.getenv("EMAIL_CHANNEL", "gmail")
 # ============================================================================
 
 GMAIL_EMAIL = os.getenv("GMAIL_EMAIL", "")
-GMAIL_API_KEY = os.getenv("GMAIL_API_KEY", "")  # Primary credential for IMAP/SMTP
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # Fallback credential
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")  # IMAP credential
 
 
 # ============================================================================

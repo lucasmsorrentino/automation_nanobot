@@ -17,6 +17,63 @@
 
 ## Pendente
 
+### 🔵 Refator (branch `refactor/codebase-simplification`) — Ondas 2-5 pendentes
+
+Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Explore identificou ~1700 LOC removíveis sem mudança de comportamento. Onda 1 (cleanup seguro, ~500 LOC) iniciada nesta sessão. Ondas 2-5 ficam pendentes pra sessões dedicadas.
+
+**Onda 2 — Deletar AFlow inteiro** (~700 LOC, 1-2h, risco médio)
+- **Justificativa**: AFlow é hand-authored topology evaluator MVP que nunca foi exercitado em produção. 4 das 5 topologias (`baseline`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`) são CLI-only ablation study; default sempre é `fleet`. Evaluator (`python -m ufpr_automation.aflow.cli`) nunca foi rodado contra eval set. Função de avaliação (necessária pra fazer sentido) nunca foi escrita. Mais discussão: vide chat session 2026-04-30/05-01.
+- **Decisão pendente do user**: A) deletar (recomendação minha), B) mover pra `experiments/aflow/`, C) manter, D) ativar de fato com função de avaliação no scheduler.
+- **Passos** (assumindo A):
+  1. `grep -r "AFLOW_TOPOLOGY=" .env*` — confirmar que ninguém usa não-`fleet`. Se aparecer, pausar e conversar.
+  2. `rm -r ufpr_automation/aflow/`
+  3. Em `graph/builder.py:76-98` remover bloco `topology_override`
+  4. Em `nodes.py:617`, `nodes.py:827`, `fleet.py:198` remover `if AFLOW_TOPOLOGY == "..."` checks
+  5. Em `config/settings.py` remover `AFLOW_TOPOLOGY`, `AFLOW_METRIC`, `AFLOW_EVAL_LIMIT`
+  6. `tests/test_aflow.py` → deletar; verificar se outros tests importam de aflow
+  7. CLAUDE.md → remover seção AFlow (linhas ~98-101 + bloco tabela 106-115)
+  8. ARCHITECTURE.md → remover linha 47 (caixinha AFLOW) + seção 277+
+  9. Junto: deletar legacy batch nodes em nodes.py (`rag_retrieve` 597-690, `classificar` 842-890, `consultar_sei` 1000-1070, `consultar_siga` 1215-1254 — ~360 LOC). Existem só pra `baseline`, com AFlow morto ficam órfãos.
+- **Verificação**: `pytest -q` (espera ~1050 passing); smoke Letícia produz mesmo output; 1 run agendado real (08h/13h/17h) com pelo menos 5 emails.
+
+**Onda 3 — Deletar DSPy modules** (~240 LOC, 2-3h, risco médio)
+- **Justificativa**: gate `USE_DSPY=auto` procura `dspy_modules/gepa_optimized.json` que **nunca foi gerado** (otimização requer 20+ feedback samples; corpus está vazio). Path real é sempre LiteLLM via `_classify_with_litellm`. Deletar = 0 mudança runtime.
+- **Sequência crítica** (uma ordem errada quebra coisas):
+  1. **Migrar `Categoria` legacy alias map**: em `dspy_modules/modules.py` há dict mapeando `"Ofícios"`/`"Memorandos"`/`"Portarias"`/`"Informes"` → `"Outros"`. Mover pra `core/models.py` como `_LEGACY_CATEGORIA_ALIAS` + aplicar em parser do LLM client ou em `EmailClassification.__post_init__`.
+  2. Em `nodes.py` remover `_compiled_prompt_paths()`, `_has_compiled_prompt()`, `_should_use_dspy()`, `_classify_with_dspy()` (700-770). No callsite, deixar só LiteLLM path.
+  3. Deletar `dspy_modules/optimize.py`, `signatures.py`, `modules.py`, `metrics.py`. `__init__.py` vazio ou deletar package se não houver imports residuais.
+  4. Deletar `tests/test_dspy_*` (verificar quais existem). Atualizar tests não-DSPy que mockavam `_should_use_dspy` pro path único.
+  5. `pyproject.toml`: remover `dspy` do `[marco2]` extra (mantém `langgraph` + `apscheduler`).
+  6. CLAUDE.md: remover seção DSPy gate.
+  7. `config/settings.py`: remover `USE_DSPY` env var.
+- **Verificação crítica**: `grep -r "import dspy" ufpr_automation/ tests/` deve retornar zero.
+- **Risco**: residual em alguma referência a `_should_use_dspy` ou `Categoria` alias map não migrado.
+
+**Onda 4 — Cross-module consolidation** (~100 LOC, 3-4h, risco médio)
+4 commits independentes, do menos arriscado pro mais:
+- **4.1 IMAP context manager** (gmail) 30min: criar `_with_imap_connection(fn)` em `gmail/client.py`; aplicar em `apply_labels`/`mark_read`/`list_unread` (3 try/except/logout idênticos). Risco: baixo.
+- **4.2 `_FORBIDDEN_SELECTORS` consolidation** 30min: criar `ufpr_automation/_guard_selectors.py` com lista + `_is_forbidden(selector)`. `sei/writer.py:53-71` e `siga/selectors.py:55-67` importam ao invés de duplicar. Risco: baixo (defesa em camadas).
+- **4.3 Selector YAML loader unification** 60min: criar `_selectors_loader.py` com `load_selectors_yaml(path, defaults, manifest_type)` + `lru_cache`. `sei/writer_selectors.py` e `siga/selectors.py` reduzem pra ~30 LOC cada. Risco: médio.
+- **4.4 Browser lifecycle** 60-90min: mover `has_credentials`/`has_saved_session`/`launch_browser`/`create_browser_context`/`save_session_state` pro `_session_browser.py` parametrizados. `sei/browser.py` e `siga/browser.py` viram thin wrappers só com `auto_login` e `is_logged_in`. Risco: médio (toca login path) — smoke ao vivo + simulação de session expirada (`rm session_data/sei_state.json`).
+
+**Onda 5 — Decompor long functions** (~0 LOC delta, 4-6h, risco médio-alto, **opcional**)
+Refactor mecânico (extract method), do mais seguro pro mais arriscado:
+1. `agir_gmail()` 163L → extrair `_label_email()` (30min, baixo)
+2. `tier0_lookup()` 130L → extrair `_tier0_lookup_one_email(email, playbook, ...)` (45min, baixo)
+3. SIGA `validate_internship_eligibility()` 97L → `_check_matricula()` + `_check_curriculum()` + `_check_graduation_timing()` + `_check_reprovacoes()` (60min, baixo)
+4. LLM `_build_messages()` 60L → `_inject_rag_context()` + `_inject_attachments()` (45min, médio)
+5. SEI `find_in_acompanhamento_especial()` 67L + `find_processes_by_keyword_filtered()` 56L → sub-helpers (60min, baixo)
+6. SIGA `auto_login()` 82L (Keycloak) → `_fill_keycloak_credentials()` + `_select_role_card()` + `_wait_siga_home()` (60min, médio — toca auth)
+7. **`agir_estagios()` 318L → `_run_blocking_checks_for_email` + `_draft_blocked_response_for_email` + `_execute_sei_chain_for_email`** (90-120min, mais arriscado — toca SEI write chain). Smoke completo + verificação manual de cada hard/soft block.
+
+**Sequenciamento recomendado entre ondas**: Onda 1 (esta sessão) → push + 1 dia repouso + smoke. Onda 2 (sessão dedicada). Onda 3 (sessão dedicada). Pausa de 1 semana com pipeline em produção. Ondas 4-5 conforme paciência.
+
+**Combinações a evitar**: Onda 2 + Onda 4.4 (AFlow + browser lifecycle juntos = muita superfície). Onda 5.7 (`agir_estagios`) sem ter feito 1-4 antes.
+
+**Reverter qualquer onda**: `git revert <commit-sha>` ou `git reset --hard <ref>`. Cada onda é commit autocontido por design.
+
+---
+
 ### 🔴 PRIORIDADE — Marco IV: Estágios end-to-end (próxima sessão)
 
 Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Despacho → rascunhar email de acuse. Infraestrutura lógica pronta (modelo `Intent` estendido, `SEI_DOC_CATALOG.yaml`, checker registry com 11 checks, `SEIWriter` com dry-run), falta o fluxo Playwright ao vivo e o wire-up no graph.
