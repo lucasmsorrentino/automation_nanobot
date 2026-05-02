@@ -611,30 +611,6 @@ def rag_retrieve(state: EmailState) -> dict[str, Any]:
     tier0_hits = set(state.get("tier0_hits", []))
     tier1_emails = [e for e in emails if e.stable_id not in tier0_hits]
 
-    # AFlow ablation: skip_rag_high_tier0 skips RAG retrieval for emails
-    # whose Tier 0 semantic score came close to the routing threshold but
-    # didn't clear it. Cheaper but may hurt classification accuracy.
-    if os.environ.get("AFLOW_TOPOLOGY") == "skip_rag_high_tier0":
-        near_miss = state.get("tier0_near_miss_scores", {}) or {}
-        threshold = float(os.environ.get("SKIP_RAG_NEAR_MISS_THRESHOLD", "0.80"))
-        skipped = []
-        kept = []
-        for e in tier1_emails:
-            score = near_miss.get(e.stable_id, 0.0)
-            if score > threshold:
-                skipped.append((e, score))
-            else:
-                kept.append(e)
-        if skipped:
-            logger.info(
-                "RAG skip_rag_high_tier0: skipping %d email(s) with near-miss > %.2f",
-                len(skipped),
-                threshold,
-            )
-            for e, s in skipped:
-                logger.debug("  skip '%s' (score=%.3f)", e.subject[:40], s)
-        tier1_emails = kept
-
     if not tier1_emails:
         logger.info("RAG: todos os e-mails atendidos pelo Tier 0 — pulando RAG")
         return {"rag_contexts": {}}
@@ -823,14 +799,10 @@ def _classify_with_litellm(emails, rag_contexts) -> dict[str, Any]:
             try:
                 rag_ctx = rag_contexts.get(email.stable_id)
                 cls = await client.classify_email_async(email, rag_context=rag_ctx)
-                # AFlow ablation: no_self_refine skips the refine step
-                if os.environ.get("AFLOW_TOPOLOGY") == "no_self_refine":
-                    logger.info("Self-Refine skipped (AFLOW_TOPOLOGY=no_self_refine)")
-                else:
-                    try:
-                        cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
-                    except Exception as e:
-                        logger.warning("Self-Refine falhou para '%s': %s", email.subject[:40], e)
+                try:
+                    cls = await client.self_refine_async(email, cls, rag_context=rag_ctx)
+                except Exception as e:
+                    logger.warning("Self-Refine falhou para '%s': %s", email.subject[:40], e)
                 results[email.stable_id] = cls
             except Exception as e:
                 logger.warning("Classificacao falhou para '%s': %s", email.subject[:40], e)
