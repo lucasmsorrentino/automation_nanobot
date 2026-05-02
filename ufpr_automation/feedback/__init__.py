@@ -1,1 +1,1 @@
-"""Feedback module — stores human corrections for future prompt optimization (DSPy)."""
+"""Feedback module — stores human corrections for auditing and Reflexion-based learning."""

@@ -6,8 +6,9 @@ Each record captures:
 - The human reviewer's correction
 - Timestamp
 
-This data will feed DSPy's MIPROv2 optimizer in Marco II for automatic
-prompt re-optimization based on accumulated human corrections.
+Usado pelo `feedback/reflexion.py` para construir contexto negativo (erros
+passados) que entra como context na próxima classificação, e pelo Streamlit
+em `feedback/web.py` para auditoria humana.
 
 Usage:
     store = FeedbackStore()

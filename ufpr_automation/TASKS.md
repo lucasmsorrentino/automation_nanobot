@@ -7,7 +7,7 @@
 | Marco | Status | Resumo |
 |---|---|---|
 | **Marco I** — Protótipo | ✅ | Pipeline Perceber→Pensar→Agir, OWA Playwright + Gmail IMAP, auto-login MFA, anexos (PDF/DOCX/XLSX), salva como rascunho |
-| **Marco II** — Roteamento Agêntico | ✅ | LangGraph StateGraph, RAG (LanceDB + RAPTOR), Self-Refine, DSPy (gate `USE_DSPY` tri-state), Reflexion, Locator chain, Model cascading |
+| **Marco II** — Roteamento Agêntico | ✅ | LangGraph StateGraph, RAG (LanceDB + RAPTOR), Self-Refine, Reflexion, Locator chain, Model cascading |
 | **Marco II.5** — SEI/SIGA + Scheduler | ✅ | Módulos SEI/SIGA (read-only, Playwright), pipeline expandido, ProcedureStore, scheduler (3x/dia), Streamlit feedback UI |
 | **Marco III** — Cognição Relacional | ✅ | GraphRAG/Neo4j (1.757 nós, 2.296 rels), **LangGraph Fleet** (sub-agentes paralelos via `Send` API + reducers), **AFlow** (5 topologias hand-authored + evaluator), **SEIWriter** (attach + draft only, sem sign/send/protocol), **TemplateRegistry** (despachos via Neo4j) |
 | **Marco IV — em andamento** | 🟡 | Estágios end-to-end: `Intent` estendido (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`, `acompanhamento_especial_grupo`), `SEI_DOC_CATALOG.yaml`, **15 checkers** registrados (11 iniciais + 4 aditivo/conclusão), `SEIWriter` com **live mode wired up** para TODOS os 4 métodos write (`create_process`/`attach_document`/`save_despacho_draft`/`add_to_acompanhamento_especial` via `sei/writer_selectors.py` + `sei_selectors.yaml` + defaults in-source para POP-38). **POP-38 Fase 2 concluída em 2026-04-21** — live path de `add_to_acompanhamento_especial` implementado: navega toolbar → trata os 2 casos (já tem grupo → `gerenciar_processo` → `#btnAdicionar`, nunca teve grupo → `cadastrar` direto); seleciona `#selGrupoAcompanhamento` por texto visível; se grupo não existe, clica `#imgNovoGrupoAcompanhamento`, aguarda iframe modal `grupo_acompanhamento_cadastrar`, preenche `#txtNome`, submit modal, aguarda modal fechar, re-seleciona no outer form; preenche `#txaObservacao` (opcional); submit `button[name="sbmCadastrarAcompanhamento"]`. `_safe_frame_click` guard preserva `_FORBIDDEN_SELECTORS`. Cobertura em `test_sei_writer.py` + `test_sei_writer_acompanhamento_live.py` (8 testes do live path: dry-run não submete, grupo existente, grupo novo via modal, regressão forbidden selectors). Scripts de captura (`scripts/sei_drive.py`) e smokes live (`scripts/smoke_create_process_live.py`, `scripts/smoke_writer_live_e2e.py`). **Sprint 3 validado em 2026-04-16** (run_id `c0357e8dd8f2`, processo fictício `23075.022027/2026-22`): 3 ops live `success=true`, despacho body limpo (fix Ctrl+A+Delete confirmado via screenshot). Side-effect: `sei/browser.py:auto_login` corrigido — sei.ufpr.br tem 2 elementos `pwdSenha` (hidden decoy `type=password name=pwdSenha` + visible real `type=text id=pwdSenha`), `.first` resolvia para o decoy; fix usa `input#pwdSenha` puro + `#sbmAcessar` como botão primário. **Fleet smoke em batch real validado em 2026-04-18** (4 smokes consecutivos via `--channel gmail --langgraph --limit 10`): smoke #1 + #2 revelaram 2 bugs (intent `sei_action="attach_document"` inválido → corrigido para `append_to_existing`; `perceber_gmail` não chamava `extract_text_from_attachment` — regressão silenciosa do pipeline linear legado); smoke #3 validou extração de anexos (aditivo: 4 campos faltando → 2; acuse_inicial: 4 → 1); smoke #4 com `numero_tce` movido para opcional (feedback do Lucas: nem todo TCE tem número) produziu **primeiro Tier 0 hit end-to-end** (intent `estagio_nao_obrig_acuse_inicial`, keyword score 1.00) e **primeiro `agir_estagios` fire real** — resultou em SOFT BLOCK (3 pendências), portanto SEIWriter live não foi acionado (caminho correto: rascunho de email pedindo justificativa). SEIWriter live create_process ainda não exercitado via pipeline; aguardando email de aluno 100% ok nos checkers. **Restante:** flipar `SEI_WRITE_MODE=live` como default em prod depois de primeiro create_process real end-to-end pelo pipeline. Regex `_ADITIVO_RE` + datas em extenso (helper `_parse_br_date`) **adicionado em 2026-04-19** — Tier 0 de aditivo agora extrai `numero_aditivo` e `data_termino_novo` do PDF. |
@@ -17,9 +17,9 @@
 
 ## Pendente
 
-### 🔵 Refator (branch `refactor/codebase-simplification`) — Ondas 2-5 pendentes
+### 🔵 Refator (branch `refactor/codebase-simplification`) — Ondas 4-5 pendentes
 
-Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Explore identificou ~1700 LOC removíveis sem mudança de comportamento. Onda 1 (cleanup seguro, ~500 LOC) iniciada nesta sessão. Ondas 2-5 ficam pendentes pra sessões dedicadas.
+Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Explore identificou ~1700 LOC removíveis sem mudança de comportamento. Ondas 1+2 mergeadas em `dev` (PR #4 + PR #5; -533 + -1581 LOC). Onda 3 executada em 2026-05-02 (PR pendente). Ondas 4-5 ficam pendentes pra sessões dedicadas.
 
 **Onda 2 — Deletar AFlow inteiro** ✅ executada 2026-05-02 na branch `refactor/onda-2-delete-aflow` (PR pendente). −~1700 LOC líquido entre código + tests. Decisão tomada: **opção A** (deletar limpo).
 - **Justificativa**: AFlow é hand-authored topology evaluator MVP que nunca foi exercitado em produção. 4 das 5 topologias (`baseline`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`) são CLI-only ablation study; default sempre é `fleet`. Evaluator (`python -m ufpr_automation.aflow.cli`) nunca foi rodado contra eval set. Função de avaliação (necessária pra fazer sentido) nunca foi escrita.
@@ -36,18 +36,14 @@ Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Ex
   10. Junto (desbloqueado pela #9): mover `rag/raptor.py` → `rag/advanced/raptor.py` (deveria ter ido na Onda 1.4 mas estava bloqueado pelo `rag_retrieve` em `nodes.py:562` que importava lazy). Atualizar CLI command em README/CLAUDE.md (`python -m ufpr_automation.rag.advanced.raptor`). Mover `tests/test_raptor.py` se necessário pra refletir o novo path.
 - **Verificação**: `pytest -q` (espera ~1050 passing); smoke Letícia produz mesmo output; 1 run agendado real (08h/13h/17h) com pelo menos 5 emails.
 
-**Onda 3 — Deletar DSPy modules** (~240 LOC, 2-3h, risco médio)
-- **Justificativa**: gate `USE_DSPY=auto` procura `dspy_modules/gepa_optimized.json` que **nunca foi gerado** (otimização requer 20+ feedback samples; corpus está vazio). Path real é sempre LiteLLM via `_classify_with_litellm`. Deletar = 0 mudança runtime.
-- **Sequência crítica** (uma ordem errada quebra coisas):
-  1. **Migrar `Categoria` legacy alias map**: em `dspy_modules/modules.py` há dict mapeando `"Ofícios"`/`"Memorandos"`/`"Portarias"`/`"Informes"` → `"Outros"`. Mover pra `core/models.py` como `_LEGACY_CATEGORIA_ALIAS` + aplicar em parser do LLM client ou em `EmailClassification.__post_init__`.
-  2. Em `nodes.py` remover `_compiled_prompt_paths()`, `_has_compiled_prompt()`, `_should_use_dspy()`, `_classify_with_dspy()` (700-770). No callsite, deixar só LiteLLM path.
-  3. Deletar `dspy_modules/optimize.py`, `signatures.py`, `modules.py`, `metrics.py`. `__init__.py` vazio ou deletar package se não houver imports residuais.
-  4. Deletar `tests/test_dspy_*` (verificar quais existem). Atualizar tests não-DSPy que mockavam `_should_use_dspy` pro path único.
-  5. `pyproject.toml`: remover `dspy` do `[marco2]` extra (mantém `langgraph` + `apscheduler`).
-  6. CLAUDE.md: remover seção DSPy gate.
-  7. `config/settings.py`: remover `USE_DSPY` env var.
-- **Verificação crítica**: `grep -r "import dspy" ufpr_automation/ tests/` deve retornar zero.
-- **Risco**: residual em alguma referência a `_should_use_dspy` ou `Categoria` alias map não migrado.
+**Onda 3 — Deletar DSPy modules** ✅ executada 2026-05-02 na branch `refactor/onda-3-delete-dspy` (PR pendente). −~691 LOC líquido (4 arquivos `dspy_modules/` + 658 LOC de tests `test_dspy*`). Decisão tomada: opção A (deletar limpo, ZERO mudança runtime — gate sempre caía no fallback).
+- **Justificativa confirmada**: `dspy_modules/optimized/` nunca existiu, `feedback_data/` vazio, gate `_should_use_dspy()` sempre retornava `False` em prod. Deletar foi 0 mudança runtime.
+- **Sequência executada** (5 commits autocontidos):
+  - 3.1: migrar `_normalize_categoria` + `_CATEGORY_ALIASES` (alias map curado de 100+ entradas) de `dspy_modules/modules.py` para `core/models.py:normalize_categoria`. Wired em `LLMClient.classify_email[_async]` antes do `TypeAdapter.validate_python` — agora "estagio"/"Ofícios" não quebram no Pydantic Literal.
+  - 3.2: remover de `graph/nodes.py` os 4 helpers DSPy (`_compiled_prompt_paths`, `_has_compiled_prompt`, `_should_use_dspy`, `_classify_with_dspy`); simplificar `graph/fleet.py` para sempre chamar `_classify_with_litellm`.
+  - 3.3: deletar `dspy_modules/` inteiro + `tests/test_dspy.py` + `tests/test_dspy_thread_safety.py`.
+  - 3.4: remover `dspy>=3.0.0` do extra `[marco2]` em `pyproject.toml` + bloco `USE_DSPY` em `config/settings.py`.
+  - 3.5: docs (CLAUDE.md, ARCHITECTURE.md, README.md, feedback docstrings).
 
 **Onda 4 — Cross-module consolidation** (~100 LOC, 3-4h, risco médio)
 4 commits independentes, do menos arriscado pro mais:

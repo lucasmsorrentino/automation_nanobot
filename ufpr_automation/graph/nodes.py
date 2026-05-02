@@ -688,7 +688,7 @@ def registrar_feedback(state: EmailState) -> dict[str, Any]:
     This node runs after classification and routing. It:
     1. Saves the run results to last_run.jsonl (for the `review` CLI command)
     2. Records each classification in the FeedbackStore as a pending entry
-       (original == corrected, notes="pipeline-auto") so DSPy has baseline data
+       (original == corrected, notes="pipeline-auto") como baseline para auditoria
 
     Human reviewers later use `python -m ufpr_automation.feedback review` to
     accept or correct these classifications, which triggers ReflexionMemory
