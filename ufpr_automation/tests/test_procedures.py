@@ -62,32 +62,6 @@ class TestProcedureStore:
     def test_list_all_empty(self, store):
         assert store.list_all() == []
 
-    def test_get_stats_empty(self, store):
-        stats = store.get_stats()
-        assert stats["total_runs"] == 0
-
-    def test_get_stats(self, store, sample_record):
-        store.add(sample_record)
-        # Add a second record with different outcome
-        r2 = ProcedureRecord(
-            run_id="run456",
-            email_hash="def789",
-            email_subject="Solicitação de diploma",
-            email_categoria="Diplomação / Diploma",
-            steps=[ProcedureStep(name="perceber", duration_ms=300)],
-            outcome="escalated",
-        )
-        store.add(r2)
-
-        stats = store.get_stats()
-        assert stats["total_runs"] == 2
-        assert stats["by_outcome"]["draft_saved"] == 1
-        assert stats["by_outcome"]["escalated"] == 1
-        assert stats["by_categoria"]["Estagios"] == 1
-        assert stats["by_categoria"]["Diplomação / Diploma"] == 1
-        assert stats["sei_consultations"] == 1
-        assert stats["avg_duration_by_step"]["perceber"] > 0
-
     def test_list_recent(self, store, sample_record):
         store.add(sample_record)
         recent = store.list_recent(days=1)

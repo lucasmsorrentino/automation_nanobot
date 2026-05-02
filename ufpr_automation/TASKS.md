@@ -17,6 +17,64 @@
 
 ## Pendente
 
+### 🔵 Refator (branch `refactor/codebase-simplification`) — Ondas 2-5 pendentes
+
+Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Explore identificou ~1700 LOC removíveis sem mudança de comportamento. Onda 1 (cleanup seguro, ~500 LOC) iniciada nesta sessão. Ondas 2-5 ficam pendentes pra sessões dedicadas.
+
+**Onda 2 — Deletar AFlow inteiro** (~700 LOC, 1-2h, risco médio)
+- **Justificativa**: AFlow é hand-authored topology evaluator MVP que nunca foi exercitado em produção. 4 das 5 topologias (`baseline`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`) são CLI-only ablation study; default sempre é `fleet`. Evaluator (`python -m ufpr_automation.aflow.cli`) nunca foi rodado contra eval set. Função de avaliação (necessária pra fazer sentido) nunca foi escrita. Mais discussão: vide chat session 2026-04-30/05-01.
+- **Decisão pendente do user**: A) deletar (recomendação minha), B) mover pra `experiments/aflow/`, C) manter, D) ativar de fato com função de avaliação no scheduler.
+- **Passos** (assumindo A):
+  1. `grep -r "AFLOW_TOPOLOGY=" .env*` — confirmar que ninguém usa não-`fleet`. Se aparecer, pausar e conversar.
+  2. `rm -r ufpr_automation/aflow/`
+  3. Em `graph/builder.py:76-98` remover bloco `topology_override`
+  4. Em `nodes.py:617`, `nodes.py:827`, `fleet.py:198` remover `if AFLOW_TOPOLOGY == "..."` checks
+  5. Em `config/settings.py` remover `AFLOW_TOPOLOGY`, `AFLOW_METRIC`, `AFLOW_EVAL_LIMIT`
+  6. `tests/test_aflow.py` → deletar; verificar se outros tests importam de aflow
+  7. CLAUDE.md → remover seção AFlow (linhas ~98-101 + bloco tabela 106-115)
+  8. ARCHITECTURE.md → remover linha 47 (caixinha AFLOW) + seção 277+
+  9. Junto: deletar legacy batch nodes em nodes.py (`rag_retrieve` 597-690, `classificar` 842-890, `consultar_sei` 1000-1070, `consultar_siga` 1215-1254 — ~360 LOC). Existem só pra `baseline`, com AFlow morto ficam órfãos.
+  10. Junto (desbloqueado pela #9): mover `rag/raptor.py` → `rag/advanced/raptor.py` (deveria ter ido na Onda 1.4 mas estava bloqueado pelo `rag_retrieve` em `nodes.py:562` que importava lazy). Atualizar CLI command em README/CLAUDE.md (`python -m ufpr_automation.rag.advanced.raptor`). Mover `tests/test_raptor.py` se necessário pra refletir o novo path.
+- **Verificação**: `pytest -q` (espera ~1050 passing); smoke Letícia produz mesmo output; 1 run agendado real (08h/13h/17h) com pelo menos 5 emails.
+
+**Onda 3 — Deletar DSPy modules** (~240 LOC, 2-3h, risco médio)
+- **Justificativa**: gate `USE_DSPY=auto` procura `dspy_modules/gepa_optimized.json` que **nunca foi gerado** (otimização requer 20+ feedback samples; corpus está vazio). Path real é sempre LiteLLM via `_classify_with_litellm`. Deletar = 0 mudança runtime.
+- **Sequência crítica** (uma ordem errada quebra coisas):
+  1. **Migrar `Categoria` legacy alias map**: em `dspy_modules/modules.py` há dict mapeando `"Ofícios"`/`"Memorandos"`/`"Portarias"`/`"Informes"` → `"Outros"`. Mover pra `core/models.py` como `_LEGACY_CATEGORIA_ALIAS` + aplicar em parser do LLM client ou em `EmailClassification.__post_init__`.
+  2. Em `nodes.py` remover `_compiled_prompt_paths()`, `_has_compiled_prompt()`, `_should_use_dspy()`, `_classify_with_dspy()` (700-770). No callsite, deixar só LiteLLM path.
+  3. Deletar `dspy_modules/optimize.py`, `signatures.py`, `modules.py`, `metrics.py`. `__init__.py` vazio ou deletar package se não houver imports residuais.
+  4. Deletar `tests/test_dspy_*` (verificar quais existem). Atualizar tests não-DSPy que mockavam `_should_use_dspy` pro path único.
+  5. `pyproject.toml`: remover `dspy` do `[marco2]` extra (mantém `langgraph` + `apscheduler`).
+  6. CLAUDE.md: remover seção DSPy gate.
+  7. `config/settings.py`: remover `USE_DSPY` env var.
+- **Verificação crítica**: `grep -r "import dspy" ufpr_automation/ tests/` deve retornar zero.
+- **Risco**: residual em alguma referência a `_should_use_dspy` ou `Categoria` alias map não migrado.
+
+**Onda 4 — Cross-module consolidation** (~100 LOC, 3-4h, risco médio)
+4 commits independentes, do menos arriscado pro mais:
+- **4.1 IMAP context manager** (gmail) 30min: criar `_with_imap_connection(fn)` em `gmail/client.py`; aplicar em `apply_labels`/`mark_read`/`list_unread` (3 try/except/logout idênticos). Risco: baixo.
+- **4.2 `_FORBIDDEN_SELECTORS` consolidation** 30min: criar `ufpr_automation/_guard_selectors.py` com lista + `_is_forbidden(selector)`. `sei/writer.py:53-71` e `siga/selectors.py:55-67` importam ao invés de duplicar. Risco: baixo (defesa em camadas).
+- **4.3 Selector YAML loader unification** 60min: criar `_selectors_loader.py` com `load_selectors_yaml(path, defaults, manifest_type)` + `lru_cache`. `sei/writer_selectors.py` e `siga/selectors.py` reduzem pra ~30 LOC cada. Risco: médio.
+- **4.4 Browser lifecycle** 60-90min: mover `has_credentials`/`has_saved_session`/`launch_browser`/`create_browser_context`/`save_session_state` pro `_session_browser.py` parametrizados. `sei/browser.py` e `siga/browser.py` viram thin wrappers só com `auto_login` e `is_logged_in`. Risco: médio (toca login path) — smoke ao vivo + simulação de session expirada (`rm session_data/sei_state.json`).
+
+**Onda 5 — Decompor long functions** (~0 LOC delta, 4-6h, risco médio-alto, **opcional**)
+Refactor mecânico (extract method), do mais seguro pro mais arriscado:
+1. `agir_gmail()` 163L → extrair `_label_email()` (30min, baixo)
+2. `tier0_lookup()` 130L → extrair `_tier0_lookup_one_email(email, playbook, ...)` (45min, baixo)
+3. SIGA `validate_internship_eligibility()` 97L → `_check_matricula()` + `_check_curriculum()` + `_check_graduation_timing()` + `_check_reprovacoes()` (60min, baixo)
+4. LLM `_build_messages()` 60L → `_inject_rag_context()` + `_inject_attachments()` (45min, médio)
+5. SEI `find_in_acompanhamento_especial()` 67L + `find_processes_by_keyword_filtered()` 56L → sub-helpers (60min, baixo)
+6. SIGA `auto_login()` 82L (Keycloak) → `_fill_keycloak_credentials()` + `_select_role_card()` + `_wait_siga_home()` (60min, médio — toca auth)
+7. **`agir_estagios()` 318L → `_run_blocking_checks_for_email` + `_draft_blocked_response_for_email` + `_execute_sei_chain_for_email`** (90-120min, mais arriscado — toca SEI write chain). Smoke completo + verificação manual de cada hard/soft block.
+
+**Sequenciamento recomendado entre ondas**: Onda 1 (esta sessão) → push + 1 dia repouso + smoke. Onda 2 (sessão dedicada). Onda 3 (sessão dedicada). Pausa de 1 semana com pipeline em produção. Ondas 4-5 conforme paciência.
+
+**Combinações a evitar**: Onda 2 + Onda 4.4 (AFlow + browser lifecycle juntos = muita superfície). Onda 5.7 (`agir_estagios`) sem ter feito 1-4 antes.
+
+**Reverter qualquer onda**: `git revert <commit-sha>` ou `git reset --hard <ref>`. Cada onda é commit autocontido por design.
+
+---
+
 ### 🔴 PRIORIDADE — Marco IV: Estágios end-to-end (próxima sessão)
 
 Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Despacho → rascunhar email de acuse. Infraestrutura lógica pronta (modelo `Intent` estendido, `SEI_DOC_CATALOG.yaml`, checker registry com 11 checks, `SEIWriter` com dry-run), falta o fluxo Playwright ao vivo e o wire-up no graph.
@@ -42,49 +100,9 @@ Fluxo objetivo: receber TCE → criar processo SEI → anexar TCE → lavrar Des
 - [x] **Atualizar `SOUL.md §8.1` e `§11`** — "2 dias úteis" (era "10 dias"), "> 1 reprovação → justificativa formal" (era "> 50%"), regra "jornada antes do meio-dia exige integralização prévia"
 - [x] **Skip drafting + corpus de aprendizado humano** (2026-04-22) — quando o coordenador responde manualmente de `design.grafico@ufpr.br` (CC para `design.grafico.ufpr@gmail.com`), o pipeline: (a) detecta via `thread_last_sender` (Gmail `X-GM-THRID`) que a thread já foi tratada, (b) seta `EmailData.already_replied_by_us=True`, (c) `agir_gmail` e `agir_estagios` pulam o rascunho, (d) novo node `capturar_corpus_humano` copia a thread inteira para o label Gmail `aprendizado/interacoes-secretaria-humano` e registra `feedback_data/learning_corpus.jsonl` (`{thread_id, categoria, intent_name, labeled_at}`). Idempotente por `thread_id`; marca a mensagem CC'd como lida pra não re-processar. Env vars: `INSTITUTIONAL_EMAIL` (default `design.grafico@ufpr.br`), `GMAIL_LEARNING_LABEL`. 16 testes novos (5 thread fetch/copy + 2 agir_gmail skip + 4 corpus + 1 agir_estagios skip + 4 thread_last_sender). **Futuro (Marco V)**: mineração das threads deste label como few-shot do `intent_drafter.py` para gerar `PROCEDURES_CANDIDATES.md` com base em respostas reais do humano — ver seção "Marco V futuro" abaixo.
 
-### ✅ Concluído (2026-04-22) — Checker supervisor + cascade AE por nome + end-to-end Marlon
+### Histórico de conclusões
 
-**Checker novo `supervisor_formacao_compativel`** (SOFT, 16º checker registrado):
-- Regra: Art. 9 Lei 11.788/2008 + Art. 10 Res. CEPE 46/10 — supervisor precisa ter formação/experiência em área afim ao curso. Se NÃO tiver → exigir **Declaração de Experiência do Supervisor** (form PROGRAD `http://www.prograd.ufpr.br/estagio/formularios/form/declaracao_experiencia.php` assinado pela chefia imediata).
-- Extração: `_SUPERVISOR_NOME_RE` + `_SUPERVISOR_FORMACAO_RE` em `procedures/playbook.py` (labels "Supervisor:", "Formação do Supervisor:", "Cargo do Supervisor:", etc.).
-- Lista curada `_SUPERVISOR_AREAS_AFINS_DESIGN` em `checkers.py` (~28 áreas afins ao Design Gráfico, derivadas de `GUIA_ESTAGIOS_DG.txt` §SUPERVISOR + SOUL.md §7). Normalização accent-insensitive + case-insensitive.
-- Comportamento: pass silencioso quando `formacao_supervisor` não foi extraída (outros checkers cuidam de TCE incompleto). Soft_block com mensagem completa (link do form + base legal) quando dado extraído mas fora das áreas afins.
-- Entry nova em `SEI_DOC_CATALOG.yaml`: "Declaração de Experiência do Supervisor" (Externo/Declaração/Inicial/sigiloso).
-- Registrado em `blocking_checks` do intent `estagio_nao_obrig_acuse_inicial`. **Testes: 11 novos** (3 extract_variables + 8 checker — pass/soft_block/accent-insensitive/missing-data).
-
-**Cascade AE também por nome** (commit `392b063`):
-- Após AE-GRR retornar 0 hits → tenta AE com cada candidato de nome extraído do email/anexos, tanto completo quanto curto (first+last).
-- `extract_candidate_names(text)` + `shorten_name_first_last(name)` em `sei/client.py`. Filtro por token institucional (UNIVERSIDADE, SETOR, DESIGN, CURSO, etc.) pra evitar falsos positivos.
-- Motivação validada live: smoke de `GRR20215550` (MATHEUS KLEINE ALBERS) retornou 0 em AE-GRR mas o AE tem o processo indexado como "Matheus Albers" (só nome).
-- Testes: +13 (7 extract + 6 shorten).
-
-**Keywords novas no intent `estagio_nao_obrig_acuse_inicial`**: adicionadas "Termo de Estágio", "Termo de Estágio para assinatura", "assinar TCE", "assinatura do termo", "assinar termo de estágio" — capturam formas curtas usadas pelo aluno (validado live no email do Marlon 2026-04-22 15:55).
-
-**Smoke live Marlon (2026-04-22 15:55)**:
-- Email "Termo de Estágio para assinatura" (GRR20223876, anexo PDF 104KB) → **Tier 0 HIT keyword 1.00** `estagio_nao_obrig_acuse_inicial`.
-- AE busca por GRR → **1 processo** encontrado direto (`23075.011886/2026-96` — processo ativo em AE do unit).
-- `agir_estagios` rodou 16 checkers → HARD BLOCK em `tce_jornada_sem_horario` (TCE não especifica horário da jornada — comportamento correto).
-- Rascunho de recusa gerado com a mensagem formal do bloqueador (link do form PROGRAD + reason legal) pra `marloncrybb@gmail.com` CC `design.grafico@ufpr.br`. **NÃO** mais o "vou verificar" genérico do path legacy Marco I.
-
-### ✅ Concluído (2026-04-22) — SEI busca via Acompanhamento Especial (AE)
-
-Cascade em 4 níveis — os 3 primeiros implementados e validados ao vivo:
-
-| # | Método | Status | Nota |
-|---|---|---|---|
-| 1 | Nº SEI explícito (`23075.*`) | ✅ `extract_sei_process_number` + `search_process` | UFPR prefix-only |
-| **2** | **AE + palavra-chave** | ✅ **validado ao vivo 2026-04-22** | `#txtPalavrasPesquisaAcompanhamento` + `#tblAcompanhamentos` (8 colunas) |
-| 3 | Pesquisa Rápida geral por GRR | ✅ `find_processes_by_grr` + `_parse_search_results_table` (`table.pesquisaResultado`) | Fallback quando AE retorna 0 |
-| 4 | Pesquisa Rápida geral por nome | ⏳ trivial (mesmo `#txtPesquisaRapida` com nome) | Risco de homônimos |
-
-**O que foi feito**:
-- [x] Captura ao vivo via `scripts/sei_drive.py --target ae_keyword_search` (novo target): identificou selectors `#txtPalavrasPesquisaAcompanhamento` (input) e `#tblAcompanhamentos` (tabela, 8 colunas: checkbox, sort, Processo, Usuário, Data, Grupo, Observação, Ações). Captura em `procedures_data/sei_capture/20260422_143854/raw/`.
-- [x] `SEIClient.find_in_acompanhamento_especial(keyword)` + `_parse_ae_results_table()` em `sei/client.py`. Regex restrito a UFPR (`23075.*`) também no parser AE.
-- [x] Cascade em `graph/nodes.py:_consult_sei_async` (batch node) **E** em `_consult_sei_for_email` (Fleet single-email path — o que realmente roda em produção). Ordem: nº SEI → AE GRR → Pesquisa Rápida GRR → select_best_processo. `lookup_mode` vira `"ae"` quando AE resolveu.
-- [x] 6 testes novos em `test_sei.py` (parser + fluxo completo + edge cases IFPR/menu ausente).
-- [x] **Smoke live 2026-04-22 14:59**: email "Re: Contrato CIEE" (Estágios, GRR20215550) → `SEI: busca AE por palavra-chave 'GRR20215550'` → 0 hits em AE → fallback automático pra Pesquisa Rápida → 7 processos retornados → select_best_processo desambiguou. Cascade completo exercitado.
-
-**Observação**: GRR20215550 (MATHEUS KLEINE ALBERS) não está no AE desse unit porque o processo dele é antigo. Para alunos com processo ativo marcado em AE (exemplo validado no smoke do dia: GRR20223876 MARLON), AE retorna 1 match direto e pula a Pesquisa Rápida.
+Seções "✅ Concluído" mais antigas (2026-04-22 em diante) movidas para [COMPLETED_TASKS.md](COMPLETED_TASKS.md) pra reduzir ruído no roadmap atual. Para histórico completo (Marcos I/II/II.5/III), `git log`.
 
 ### Bugs descobertos no smoke 2026-04-22 (não críticos)
 - [x] ~~**SIGA login timeout Keycloak SSO**~~ — corrigido commits `56c8224`/`8bbe917`: trocadas 3 chamadas `wait_for_load_state("networkidle", 20s)` por waits element-based (`a:has-text('Discentes')`). Bug secundário de locator CSS inválido (`input#username, text=...`) também corrigido.

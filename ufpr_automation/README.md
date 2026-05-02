@@ -91,7 +91,6 @@ streamlit run ufpr_automation/rag/web.py
 docker run -d -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/ufpr2026 neo4j:5
 
 python -m ufpr_automation.graphrag.seed              # popular base
-python -m ufpr_automation.graphrag.enrich            # extrair normas do RAG → Neo4j
 ```
 
 ### Feedback / DSPy

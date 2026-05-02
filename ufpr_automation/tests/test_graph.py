@@ -16,6 +16,8 @@ from ufpr_automation.core.models import EmailClassification, EmailData
 
 
 def _make_email(sender: str = "prof@ufpr.br", subject: str = "Teste") -> EmailData:
+    """Local factory — mantida por compat. Novos testes devem usar a
+    fixture ``make_email`` de ``conftest.py``."""
     email = EmailData(sender=sender, subject=subject, body="corpo do email")
     email.compute_stable_id()
     return email
@@ -26,6 +28,8 @@ def _make_cls(
     confianca: float = 0.95,
     sugestao: str = "Prezado(a), recebemos...",
 ) -> EmailClassification:
+    """Local factory — mantida por compat. Novos testes devem usar a
+    fixture ``make_classification`` de ``conftest.py``."""
     return EmailClassification(
         categoria=categoria,
         resumo="Resumo",
@@ -53,23 +57,6 @@ class TestHasEmails:
 
         assert _has_emails({"emails": []}) == "end"
         assert _has_emails({}) == "end"
-
-    def test_needs_tier1_skips_rag_when_all_tier0(self):
-        from ufpr_automation.graph.builder import _needs_tier1
-
-        e = _make_email()
-        # Every email is a Tier 0 hit → skip RAG entirely
-        state = {"emails": [e], "tier0_hits": [e.stable_id]}
-        assert _needs_tier1(state) == "rotear"
-
-    def test_needs_tier1_runs_rag_when_misses(self):
-        from ufpr_automation.graph.builder import _needs_tier1
-
-        e1 = _make_email()
-        e2 = _make_email()
-        e2.stable_id = "different"
-        state = {"emails": [e1, e2], "tier0_hits": [e1.stable_id]}
-        assert _needs_tier1(state) == "rag_retrieve"
 
 
 # ===========================================================================

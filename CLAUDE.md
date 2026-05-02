@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Last updated: 2026-05-01. Major recent changes: SIGA wrong-student bug fix + checker registry refactor (estagio ativo movido pro SEI cascade; jornada matinal aceita exceção pra alunos só com TCC/OD501). Refator em curso na branch `refactor/codebase-simplification` — ver `ufpr_automation/TASKS.md` "Refator (branch refactor/codebase-simplification)".
+
 ## Commands
 
 ```bash
@@ -129,9 +131,6 @@ pip install -e ".[marco3]"
 python -m ufpr_automation.graphrag.seed                         # populate base knowledge graph
 python -m ufpr_automation.graphrag.seed --clear                 # clear graph + re-seed
 python -m ufpr_automation.graphrag.seed --dry-run               # show connection + stats only
-python -m ufpr_automation.graphrag.enrich                       # extract norms from RAG → Neo4j (with lineage)
-python -m ufpr_automation.graphrag.enrich --dry-run             # extract only, print stats
-python -m ufpr_automation.graphrag.enrich --conselho cepe       # filter by conselho
 
 # Model cascading (Marco III) — set in .env:
 # LLM_CLASSIFY_MODEL=ollama/qwen3:8b     # local model for classification
@@ -197,7 +196,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 
 **Packages under `ufpr_automation/`:**
 
-- **`gmail/`** — Gmail IMAP/SMTP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()` (with attachment download), `save_draft()`, `send_reply()`, `mark_read()`. `thread.py` splits email bodies into (new_reply, quoted_history) by detecting `Em … escreveu:` / `On … wrote:` / `-----Mensagem Original-----` / `>` quoting — used by the LLM prompt so the model can tell what the sender is asking *now* vs. what was said before in the thread. **`save_draft` anti-hallucination pipeline (2026-04-23)**: every draft body is passed through `normalize_signature_block(body, settings.ASSINATURA_EMAIL)` which (a) locates the LAST sign-off marker (`Atenciosamente`/`Att`/`Cordialmente`/`Saudações`/`Respeitosamente` on its own line), (b) cuts everything from there onwards, (c) strips any line containing a known hallucinated sector (`_HALLUCINATED_SECTORS` whitelist — started with "Núcleo de Estágios" after MiniMax-M2 invented it for the Paloma aditivo 2026-04-23 run), (d) appends the canonical `settings.ASSINATURA_EMAIL`. Idempotent. `save_draft` also dedupes within the recipient's thread before APPEND (`_delete_existing_drafts`): stale drafts from previous pipeline runs are removed so the reviewer sees exactly one current version per thread.
+- **`gmail/`** — Gmail IMAP client for reading forwarded emails (primary channel). Uses App Password auth — no MFA, no Playwright. `client.py` provides `list_unread()` (with attachment download), `save_draft()`, `mark_read()`. `thread.py` splits email bodies into (new_reply, quoted_history) by detecting `Em … escreveu:` / `On … wrote:` / `-----Mensagem Original-----` / `>` quoting — used by the LLM prompt so the model can tell what the sender is asking *now* vs. what was said before in the thread. **`save_draft` anti-hallucination pipeline (2026-04-23)**: every draft body is passed through `normalize_signature_block(body, settings.ASSINATURA_EMAIL)` which (a) locates the LAST sign-off marker (`Atenciosamente`/`Att`/`Cordialmente`/`Saudações`/`Respeitosamente` on its own line), (b) cuts everything from there onwards, (c) strips any line containing a known hallucinated sector (`_HALLUCINATED_SECTORS` whitelist — started with "Núcleo de Estágios" after MiniMax-M2 invented it for the Paloma aditivo 2026-04-23 run), (d) appends the canonical `settings.ASSINATURA_EMAIL`. Idempotent. `save_draft` also dedupes within the recipient's thread before APPEND (`_delete_existing_drafts`): stale drafts from previous pipeline runs are removed so the reviewer sees exactly one current version per thread.
 - **`attachments/`** — Attachment text extraction module. `extractor.py` handles PDF (PyMuPDF), DOCX (python-docx), XLSX (openpyxl), plain text, and **OCR** (Tesseract via pytesseract) for scanned PDFs and images. Falls back to `needs_ocr=True` if Tesseract is not installed. Downloaded files saved to `ATTACHMENTS_DIR`.
 - **`outlook/`** — Playwright-based scraping of OWA (Outlook Web Access, fallback channel). Includes automated login with credential filling and MFA number-match notification via Telegram Bot. `locators.py` provides resilient locator fallback chains (semantic -> text -> ID -> CSS).
 - **`llm/`** — LLM client for email classification and draft generation. Uses LiteLLM (provider-agnostic); configured for MiniMax-M2. Includes **Self-Refine** (generate -> critique -> refine cycle), RAG context injection, attachment text injection, and **model cascading** (`router.py` — routes classification to cheap/local models and drafting to capable API models, with automatic fallback).
@@ -263,7 +262,6 @@ powershell -ExecutionPolicy Bypass -File scripts\sync_to_drive.ps1
 # G: → local
 robocopy "G:\Meu Drive\ufpr_rag\store\ufpr.lance" "<RAG_STORE_DIR>\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5
 .venv/Scripts/python.exe -m ufpr_automation.graphrag.seed --clear
-.venv/Scripts/python.exe -m ufpr_automation.graphrag.enrich
 
 # local → G:
 robocopy "<RAG_STORE_DIR>\ufpr.lance" "G:\Meu Drive\ufpr_rag\store\ufpr.lance" /MIR /COPY:DAT /R:3 /W:5

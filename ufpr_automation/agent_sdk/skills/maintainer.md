@@ -86,10 +86,6 @@ python -m ufpr_automation.agent_sdk.debug_classification --last 5
 # Seed / re-seed do grafo
 python -m ufpr_automation.graphrag.seed
 python -m ufpr_automation.graphrag.seed --clear
-
-# Enriquecer com normas do RAG
-python -m ufpr_automation.graphrag.enrich --dry-run
-python -m ufpr_automation.graphrag.enrich --conselho cepe
 ```
 
 ### 7. AFlow topology eval

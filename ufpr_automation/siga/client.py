@@ -403,17 +403,6 @@ class SIGAClient:
         result["nao_vencidas"] = nao_vencidas
         return result
 
-    async def check_enrollment(self, grr: str) -> EnrollmentInfo | None:
-        """Check enrollment details for the current semester."""
-        try:
-            grr_clean = re.sub(r"[^0-9]", "", grr)
-            logger.info("SIGA: consultando matricula GRR%s", grr_clean)
-            enrollment = EnrollmentInfo(grr=f"GRR{grr_clean}")
-            return enrollment
-        except Exception as e:
-            logger.error("SIGA: falha ao consultar matricula %s: %s", grr, e)
-            return None
-
     async def validate_internship_eligibility(
         self, grr: str, vigencia_meses: int = 12
     ) -> EligibilityResult:
@@ -504,9 +493,6 @@ class SIGAClient:
                 "Bom rendimento academico e requisito para estagio — "
                 "solicitar justificativa formal ao aluno."
             )
-
-        enrollment = await self.check_enrollment(grr)
-        result.enrollment = enrollment
 
         result.eligible = len(reasons) == 0
         result.reasons = reasons

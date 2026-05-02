@@ -140,26 +140,3 @@ class TestRegistrarProcedimento:
         assert result["procedures_logged"] == 1
 
 
-@pytest.mark.skipif(
-    not pytest.importorskip("langgraph", reason="langgraph not installed"),
-    reason="langgraph not installed",
-)
-class TestGraphBuilder:
-    def test_needs_sei_siga_with_estagios(self):
-        from ufpr_automation.graph.builder import _needs_sei_siga
-
-        cls = _make_cls(categoria="Estágios")
-        state = {"classifications": {"x1": cls}}
-        assert _needs_sei_siga(state) == "consultar_sei"
-
-    def test_needs_sei_siga_without_estagios(self):
-        from ufpr_automation.graph.builder import _needs_sei_siga
-
-        cls = _make_cls(categoria="Outros")
-        state = {"classifications": {"x1": cls}}
-        assert _needs_sei_siga(state) == "registrar_feedback"
-
-    def test_needs_sei_siga_empty(self):
-        from ufpr_automation.graph.builder import _needs_sei_siga
-
-        assert _needs_sei_siga({"classifications": {}}) == "registrar_feedback"

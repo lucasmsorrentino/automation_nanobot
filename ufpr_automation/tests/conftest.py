@@ -84,3 +84,93 @@ def sample_email() -> EmailData:
     )
     email.compute_stable_id()
     return email
+
+
+@pytest.fixture
+def make_email():
+    """Factory para ``EmailData`` em testes.
+
+    Substitui as 5+ reimplementacoes de ``_make_email`` espalhadas por
+    ``test_graph.py``, ``test_agir_estagios.py``, ``test_pipeline.py``,
+    ``test_tier0_lookup.py``, ``test_graph_expanded.py``. Aceita superset
+    de params: se ``stable_id`` for passado explicito, usa esse; senao
+    chama ``compute_stable_id()``.
+
+    Uso:
+        def test_foo(make_email):
+            email = make_email(sender="aluno@ufpr.br", subject="TCE")
+    """
+    from ufpr_automation.core.models import EmailData
+
+    def _factory(
+        sender: str = "prof@ufpr.br",
+        subject: str = "Teste",
+        body: str = "corpo do email",
+        stable_id: str | None = None,
+    ) -> EmailData:
+        e = EmailData(sender=sender, subject=subject, body=body)
+        if stable_id is not None:
+            e.stable_id = stable_id
+        else:
+            e.compute_stable_id()
+        return e
+
+    return _factory
+
+
+@pytest.fixture
+def make_classification():
+    """Factory para ``EmailClassification`` em testes.
+
+    Substitui as 5+ reimplementacoes de ``_make_cls``/``_make_classification``
+    espalhadas pelos test files. Aceita superset de params.
+
+    Uso:
+        def test_foo(make_classification):
+            cls = make_classification(categoria="Estágios", confianca=0.85)
+    """
+    from ufpr_automation.core.models import EmailClassification
+
+    def _factory(
+        categoria: str = "Estágios",
+        confianca: float = 0.95,
+        sugestao: str = "Prezado(a), recebemos...",
+        resumo: str = "Resumo",
+        acao_necessaria: str = "Redigir Resposta",
+    ) -> EmailClassification:
+        return EmailClassification(
+            categoria=categoria,
+            resumo=resumo,
+            acao_necessaria=acao_necessaria,
+            sugestao_resposta=sugestao,
+            confianca=confianca,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def require_rag_docs():
+    """Skip o teste se RAG docs nao estao disponiveis localmente.
+
+    Alguns testes em ``test_rag.py`` skipam quando ``RAG_DOCS_DIR`` nao
+    contem subpastas esperadas (estagio/, cepe/resolucoes/) — caso comum
+    em CI ou em maquinas onde G:/Meu Drive/ufpr_rag nao esta sincronizado.
+    Esta fixture centraliza o skip.
+
+    Uso:
+        def test_rag_estagio(require_rag_docs):
+            docs_dir = require_rag_docs("estagio")
+            ...
+    """
+    import os
+    from pathlib import Path
+
+    def _check(subset: str = ""):
+        rag_docs_dir = Path(os.getenv("RAG_DOCS_DIR", "ufpr_automation/docs"))
+        target = rag_docs_dir / subset if subset else rag_docs_dir
+        if not target.exists():
+            pytest.skip(f"RAG docs nao disponiveis: {target}")
+        return target
+
+    return _check
