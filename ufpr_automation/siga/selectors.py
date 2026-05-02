@@ -34,14 +34,11 @@ callers can fall back to the legacy guess-based path.
 
 from __future__ import annotations
 
-import os
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ufpr_automation._guard_selectors import is_forbidden as _guard_is_forbidden
+from ufpr_automation._selectors_loader import make_loader
 
 # Must match siga/client.py read-only policy. Any attempt to load a
 # manifest whose leaf selector matches one of these raises immediately.
@@ -86,19 +83,17 @@ _REQUIRED_TOP_LEVEL_KEYS = ("meta", "login", "screens")
 _DEFAULT_DIR = Path(__file__).resolve().parent.parent / "procedures_data" / "siga_capture"
 
 
-def _manifest_path() -> Path:
+def _default_path_resolver() -> Path:
     """Resolve the path of the active manifest.
 
     Precedence:
-        1. ``SIGA_SELECTORS_PATH`` env var (absolute path).
-        2. ``procedures_data/siga_capture/latest/siga_selectors.yaml``.
-        3. Most recently modified ``siga_selectors.yaml`` under any
+        1. ``procedures_data/siga_capture/latest/siga_selectors.yaml``.
+        2. Most recently modified ``siga_selectors.yaml`` under any
            timestamped subdir of ``procedures_data/siga_capture/``.
-    """
-    override = os.environ.get("SIGA_SELECTORS_PATH")
-    if override:
-        return Path(override)
 
+    The ``SIGA_SELECTORS_PATH`` env var override is applied by
+    :mod:`ufpr_automation._selectors_loader`, not here.
+    """
     latest = _DEFAULT_DIR / "latest" / "siga_selectors.yaml"
     if latest.exists():
         return latest
@@ -117,42 +112,12 @@ def _manifest_path() -> Path:
     return latest
 
 
-@lru_cache(maxsize=1)
-def get_selectors() -> dict[str, Any]:
-    """Load, validate, and cache the SIGA selectors manifest.
-
-    Raises:
-        SIGASelectorsError: if the YAML is missing, malformed, violates
-            the schema, or references a forbidden (write-op) selector.
+def _is_forbidden(sel: str) -> bool:
+    """Thin wrapper around the shared substring guard, pinning the
+    SIGA-specific forbidden-token tuple. Kept as a module-level function
+    so internal callers (and any external imports) keep working unchanged.
     """
-    path = _manifest_path()
-    if not path.exists():
-        raise SIGASelectorsError(
-            f"siga_selectors.yaml not found at {path}. "
-            "Run the grounder (python -m ufpr_automation.agent_sdk.siga_grounder) "
-            "after the UFPR Aberta BLOCO 3 tutorial has been processed into "
-            "base_conhecimento/ufpr_aberta/, or set SIGA_SELECTORS_PATH to "
-            "point at a fixture manifest."
-        )
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as e:
-        raise SIGASelectorsError(f"malformed siga_selectors.yaml at {path}: {e}") from e
-
-    if not isinstance(data, dict):
-        raise SIGASelectorsError(
-            f"siga_selectors.yaml at {path} must be a mapping at the top level"
-        )
-
-    _validate_schema(data, path)
-    _validate_no_forbidden_selectors(data, path)
-    return data
-
-
-def clear_cache() -> None:
-    """Clear the lru_cache. Needed in tests that swap manifests."""
-    get_selectors.cache_clear()
+    return _guard_is_forbidden(sel, _FORBIDDEN_SELECTORS)
 
 
 def _validate_schema(data: dict[str, Any], path: Path) -> None:
@@ -171,12 +136,63 @@ def _validate_schema(data: dict[str, Any], path: Path) -> None:
         )
 
 
-def _is_forbidden(sel: str) -> bool:
-    """Thin wrapper around the shared substring guard, pinning the
-    SIGA-specific forbidden-token tuple. Kept as a module-level function
-    so internal callers (and any external imports) keep working unchanged.
+def _is_selector_leaf(loc: str, value: str) -> bool:
+    """True iff the leaf at dotted path ``loc`` with string ``value``
+    should be treated as a Playwright selector.
+
+    SIGA is more heuristic than SEI because the grounder-produced
+    manifest doesn't enforce a fixed key suffix. Two paths to True:
+
+    1. Parent key is a known selector field (``selector``,
+       ``tab_selector``, ``submit_selector``, ``result_indicator``,
+       ``logged_in_indicator``, or ``*_selector``).
+    2. Value starts with one of the canonical Playwright selector
+       prefixes (``#``, ``.``, ``text=``, ``xpath=``, ``input[``,
+       ``button[``, ``a[``).
     """
-    return _guard_is_forbidden(sel, _FORBIDDEN_SELECTORS)
+    parent_key = loc.rsplit(".", 1)[-1] if "." in loc else loc
+    is_selector_key = parent_key in {
+        "selector",
+        "tab_selector",
+        "submit_selector",
+        "result_indicator",
+        "logged_in_indicator",
+    } or parent_key.endswith("_selector")
+    looks_like_selector = value.startswith(
+        ("#", ".", "text=", "xpath=", "input[", "button[", "a[")
+    )
+    return is_selector_key or looks_like_selector
+
+
+def _skip_forbidden_path(loc: str) -> bool:
+    """Skip the documentation-only ``forbidden_selectors`` block —
+    listing them is documentation, using them is the violation.
+    """
+    return loc.startswith("forbidden_selectors")
+
+
+_loader = make_loader(
+    manifest_filename="siga_selectors.yaml",
+    default_path_resolver=_default_path_resolver,
+    env_var="SIGA_SELECTORS_PATH",
+    forbidden_tokens=_FORBIDDEN_SELECTORS,
+    forbidden_skip_paths=_skip_forbidden_path,
+    is_selector_leaf=_is_selector_leaf,
+    error_cls=SIGASelectorsError,
+    schema_validator=_validate_schema,
+    missing_manifest_hint=(
+        "Run the grounder (python -m ufpr_automation.agent_sdk.siga_grounder) "
+        "after the UFPR Aberta BLOCO 3 tutorial has been processed into "
+        "base_conhecimento/ufpr_aberta/, or set SIGA_SELECTORS_PATH to "
+        "point at a fixture manifest."
+    ),
+    forbidden_violation_msg="selectors violate read-only policy",
+)
+
+get_selectors = _loader["get_selectors"]
+clear_cache = _loader["clear_cache"]
+has_manifest = _loader["has_manifest"]
+_manifest_path = _loader["manifest_path"]
 
 
 def _validate_no_forbidden_selectors(data: dict[str, Any], path: Path) -> None:
@@ -186,44 +202,12 @@ def _validate_no_forbidden_selectors(data: dict[str, Any], path: Path) -> None:
     The ``forbidden_selectors`` section (if present) is explicitly
     excluded — listing them is documentation; using them is the
     violation.
+
+    Exposed at module level (in addition to running internally during
+    :func:`get_selectors`) because :mod:`agent_sdk.siga_grounder`
+    validates a candidate manifest before persisting it.
     """
-    violations: list[str] = []
-
-    def _walk(node: Any, loc: str) -> None:
-        if isinstance(node, dict):
-            for k, v in node.items():
-                _walk(v, f"{loc}.{k}" if loc else str(k))
-        elif isinstance(node, list):
-            for i, v in enumerate(node):
-                _walk(v, f"{loc}[{i}]")
-        elif isinstance(node, str):
-            # Ignore the documentation block that names the forbidden
-            # selectors by design.
-            if loc.startswith("forbidden_selectors"):
-                return
-            # Only flag values that LOOK like a selector — heuristic:
-            # either the key is a known selector field, or the value
-            # starts with #, ., text=, xpath=, input[.
-            parent_key = loc.rsplit(".", 1)[-1] if "." in loc else loc
-            is_selector_key = parent_key in {
-                "selector",
-                "tab_selector",
-                "submit_selector",
-                "result_indicator",
-                "logged_in_indicator",
-            } or parent_key.endswith("_selector")
-            looks_like_selector = node.startswith(
-                ("#", ".", "text=", "xpath=", "input[", "button[", "a[")
-            )
-            if (is_selector_key or looks_like_selector) and _is_forbidden(node):
-                violations.append(f"{loc} = {node!r}")
-
-    _walk(data, "")
-    if violations:
-        raise SIGASelectorsError(
-            f"{path}: selectors violate read-only policy (_FORBIDDEN_SELECTORS):\n"
-            + "\n".join(f"  - {v}" for v in violations)
-        )
+    _loader["validate_no_forbidden_selectors"](data, path)
 
 
 # Convenience accessors -----------------------------------------------------
@@ -261,12 +245,3 @@ def get_login() -> dict[str, Any]:
     if not login:
         raise SIGASelectorsError("manifest is missing the 'login' section")
     return login
-
-
-def has_manifest() -> bool:
-    """Cheap check: does a manifest exist on disk? Doesn't validate it.
-
-    Callers can use this to fall back to the legacy guess-based path
-    while the grounder hasn't run yet.
-    """
-    return _manifest_path().exists()
