@@ -16,13 +16,11 @@ Usage:
 
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from ufpr_automation.sei.writer import _is_forbidden
+from ufpr_automation._selectors_loader import make_loader
+from ufpr_automation.sei.writer import _FORBIDDEN_SELECTORS, _is_forbidden  # noqa: F401
 
 
 class SelectorsError(RuntimeError):
@@ -47,79 +45,54 @@ _LEGACY_LOCAL_PATH = (
 _DEFAULT_PATH = _DRIVE_PATH if _DRIVE_PATH.exists() else _LEGACY_LOCAL_PATH
 
 
-def _manifest_path() -> Path:
-    import os
-
-    override = os.environ.get("SEI_SELECTORS_PATH")
-    if override:
-        return Path(override)
+def _default_path_resolver() -> Path:
     return _DEFAULT_PATH
 
 
-@lru_cache(maxsize=1)
-def get_selectors() -> dict[str, Any]:
-    """Load and cache the selector manifest.
+def _is_selector_leaf(loc: str, _value: str) -> bool:
+    """True iff the leaf at dotted path ``loc`` is a Playwright selector.
 
-    Raises:
-        SelectorsError: if the YAML file is missing, malformed, or
-            contains a selector that collides with _FORBIDDEN_SELECTORS.
+    The SEI capture pipeline stamps selector keys with predictable
+    suffixes. Filtering by key avoids false positives on documentation
+    strings (notes that legitimately mention "assinar").
     """
-    path = _manifest_path()
-    if not path.exists():
-        raise SelectorsError(
-            f"sei_selectors.yaml not found at {path}. "
-            f"Run the selector capture sprint (SDD §6) or set "
-            f"SEI_SELECTORS_PATH to point at a valid manifest."
-        )
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as e:
-        raise SelectorsError(f"malformed sei_selectors.yaml: {e}") from e
-
-    _validate_no_forbidden_selectors(data)
-    return data
+    return loc.endswith(("selector", "label", "hidden_store", "hidden_id", "dropdown"))
 
 
-def clear_cache() -> None:
-    """Clear the lru_cache — only needed in tests that swap manifests."""
-    get_selectors.cache_clear()
+def _skip_forbidden_path(loc: str) -> bool:
+    """Skip the documentation-only ``forbidden_buttons`` block, which
+    intentionally lists buttons the writer MUST NEVER click — listing
+    them is documentation, using them is the violation.
+    """
+    return ".forbidden_buttons" in loc
+
+
+_loader = make_loader(
+    manifest_filename="sei_selectors.yaml",
+    default_path_resolver=_default_path_resolver,
+    env_var="SEI_SELECTORS_PATH",
+    forbidden_tokens=_FORBIDDEN_SELECTORS,
+    forbidden_skip_paths=_skip_forbidden_path,
+    is_selector_leaf=_is_selector_leaf,
+    error_cls=SelectorsError,
+    missing_manifest_hint=(
+        "Run the selector capture sprint (SDD §6) or set "
+        "SEI_SELECTORS_PATH to point at a valid manifest."
+    ),
+)
+
+get_selectors = _loader["get_selectors"]
+clear_cache = _loader["clear_cache"]
+_manifest_path = _loader["manifest_path"]
 
 
 def _validate_no_forbidden_selectors(data: dict[str, Any]) -> None:
-    """Walk the manifest and raise if any leaf string would match
-    _FORBIDDEN_SELECTORS (assinar, enviar processo, etc).
-
-    This is belt-and-suspenders: _safe_click also checks at click time,
-    but validating at load time fails fast with a clear message.
+    """Backwards-compatible single-arg wrapper around the factory's
+    invariant check. Kept so existing tests / call sites that pass just
+    the parsed dict still work; the factory needs a path purely for
+    error messages, so a synthetic ``<inline>`` is fine.
     """
-    violations: list[str] = []
-
-    def _walk(node: Any, path: str) -> None:
-        if isinstance(node, dict):
-            for k, v in node.items():
-                _walk(v, f"{path}.{k}" if path else str(k))
-        elif isinstance(node, list):
-            for i, v in enumerate(node):
-                _walk(v, f"{path}[{i}]")
-        elif isinstance(node, str):
-            # Only check keys that are *selectors* — filtering by key name
-            # avoids false positives on documentation strings like notes
-            # that legitimately mention "assinar".
-            # EXCLUDE the forbidden_buttons section: that section
-            # intentionally documents buttons the writer MUST NEVER click;
-            # listing them is not a violation, using them would be.
-            if ".forbidden_buttons" in path:
-                return
-            if path.endswith(("selector", "label", "hidden_store", "hidden_id", "dropdown")):
-                if _is_forbidden(node):
-                    violations.append(f"{path} = {node!r}")
-
-    _walk(data, "")
-    if violations:
-        raise SelectorsError(
-            "sei_selectors.yaml contains selectors that match _FORBIDDEN_SELECTORS:\n"
-            + "\n".join(f"  - {v}" for v in violations)
-        )
+    _loader["validate_no_forbidden_selectors"](data, Path("<inline>"))
 
 
 # Convenience accessors -----------------------------------------------------

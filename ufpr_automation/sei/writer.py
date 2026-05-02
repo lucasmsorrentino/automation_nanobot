@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
+from ufpr_automation._guard_selectors import is_forbidden as _guard_is_forbidden
 from ufpr_automation.config import settings
 from ufpr_automation.sei.writer_models import (
     AcompanhamentoEspecialResult,
@@ -64,11 +65,15 @@ _FORBIDDEN_SELECTORS = [
 
 
 def _is_forbidden(selector: str) -> bool:
-    """Return True if the selector contains any forbidden substring."""
-    if not selector:
-        return False
-    s = selector.lower()
-    return any(token.lower() in s for token in _FORBIDDEN_SELECTORS)
+    """Return True if the selector contains any forbidden substring.
+
+    Thin wrapper around :func:`ufpr_automation._guard_selectors.is_forbidden`
+    that pins the SEI-specific token list. Kept as a module-level function
+    (rather than inlining the helper at every call site) because
+    ``sei/writer_selectors.py`` re-exports it via
+    ``from ufpr_automation.sei.writer import _is_forbidden``.
+    """
+    return _guard_is_forbidden(selector, _FORBIDDEN_SELECTORS)
 
 
 class SEIWriter:
