@@ -19,7 +19,7 @@ from ufpr_automation.config import settings
 from ufpr_automation.utils.logging import logger
 
 TELEGRAM_API = "https://api.telegram.org"
-_TIMEOUT_S = 10
+_TIMEOUT_S = 30
 
 # Telegram hard limit is 4096 chars per message; stay comfortably under it.
 _MAX_MESSAGE_CHARS = 3800
