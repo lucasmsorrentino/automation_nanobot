@@ -163,6 +163,78 @@ def _render_email_block(
     return "\n".join(lines)
 
 
+def _format_counts_block(state: dict[str, Any]) -> str:
+    """Render the routing-counts strip (Tier 0/1, urgent, auto/review/escalação).
+
+    Two lines: tier breakdown then routing parts. Always non-empty.
+    """
+    classifications = state["classifications"]
+    drafts_count = state["drafts_count"]
+    tier0_count = state["tier0_count"]
+    tier1_count = state["tier1_count"]
+    auto_draft = state["auto_draft"]
+    human_review = state["human_review"]
+    manual_escalation = state["manual_escalation"]
+
+    urgent_count = sum(
+        1 for c in classifications.values() if getattr(c, "categoria", None) == "Urgente"
+    )
+
+    routing_parts = []
+    if urgent_count:
+        routing_parts.append(f"🔴 {urgent_count} urgente(s)")
+    routing_parts.append(f"🤖 {len(auto_draft) or drafts_count} auto")
+    routing_parts.append(f"👁️ {len(human_review)} revisão")
+    routing_parts.append(f"⚠️ {len(manual_escalation)} escalação")
+
+    return (
+        f"⚡ Tier 0 (playbook): {tier0_count}   🧠 Tier 1 (RAG+LLM): {tier1_count}\n"
+        + " · ".join(routing_parts)
+    )
+
+
+def _format_tier0_block(state: dict[str, Any]) -> str:
+    """Render the rascunhos / corpus / procedures strip.
+
+    Multi-line. Returns at least the "Rascunhos salvos" line; conditionally
+    appends drafts-skipped, corpus, and procedures rows.
+    """
+    drafts_count = state["drafts_count"]
+    drafts_skipped = state["drafts_skipped"]
+    corpus = state["corpus"]
+    procedures = state["procedures"]
+
+    lines = [f"✅ Rascunhos salvos: {drafts_count}"]
+    if drafts_skipped:
+        lines.append(f"⏭️ Já respondidos pela humana: {len(drafts_skipped)}")
+    if corpus:
+        lines.append(f"📚 Threads no corpus: {len(corpus)}")
+    if procedures:
+        lines.append(f"📒 Procedimentos: {procedures}")
+    return "\n".join(lines)
+
+
+def _format_sei_ops_block(state: dict[str, Any]) -> str:
+    """Render the SEI ops summary, or empty string when no ops were logged."""
+    sei_ops = state["sei_ops"]
+    if not sei_ops:
+        return ""
+    sei_success = sum(1 for op in sei_ops if op.get("success") is True)
+    sei_failed = sum(1 for op in sei_ops if op.get("op") == "error" or op.get("success") is False)
+    return f"📝 SEI ops: {sei_success} ok / {sei_failed} falha(s)"
+
+
+def _format_errors_block(state: dict[str, Any]) -> str:
+    """Render the errors footer (or "no errors" pill)."""
+    errors = state["errors"]
+    if not errors:
+        return "🟢 Sem erros"
+    first = errors[0]
+    node = first.get("node") or "?"
+    err_msg = str(first.get("error") or "")[:120]
+    return f"🔴 Erros: {len(errors)}\n   └─ [{node}] {err_msg}"
+
+
 def format_run_summary(
     state: dict[str, Any] | None,
     *,
@@ -232,42 +304,36 @@ def format_run_summary(
     classified_count = _count(classifications) or _count(state.get("classified"))
     tier0_count = len(tier0_hits)
     tier1_count = max(0, classified_count - tier0_count)
-    urgent_count = sum(
-        1 for c in classifications.values() if getattr(c, "categoria", None) == "Urgente"
-    )
-    sei_success = sum(1 for op in sei_ops if op.get("success") is True)
-    sei_failed = sum(1 for op in sei_ops if op.get("op") == "error" or op.get("success") is False)
+
+    # Bag of pre-computed values shared between the section formatters; keeps
+    # each helper's signature simple while preserving the single-pass coerce
+    # over the raw state dict above.
+    section_state = {
+        "classifications": classifications,
+        "drafts_count": drafts_count,
+        "drafts_skipped": drafts_skipped,
+        "tier0_count": tier0_count,
+        "tier1_count": tier1_count,
+        "auto_draft": auto_draft,
+        "human_review": human_review,
+        "manual_escalation": manual_escalation,
+        "corpus": corpus,
+        "procedures": procedures,
+        "sei_ops": sei_ops,
+        "errors": errors,
+    }
 
     lines = [
         header,
         f"📧 {total_emails} email(s) · ⏱️ {duration} · canal: {channel}",
         "",
-        f"⚡ Tier 0 (playbook): {tier0_count}   🧠 Tier 1 (RAG+LLM): {tier1_count}",
+        _format_counts_block(section_state),
+        _format_tier0_block(section_state),
     ]
-    routing_parts = []
-    if urgent_count:
-        routing_parts.append(f"🔴 {urgent_count} urgente(s)")
-    routing_parts.append(f"🤖 {len(auto_draft) or drafts_count} auto")
-    routing_parts.append(f"👁️ {len(human_review)} revisão")
-    routing_parts.append(f"⚠️ {len(manual_escalation)} escalação")
-    lines.append(" · ".join(routing_parts))
-    lines.append(f"✅ Rascunhos salvos: {drafts_count}")
-    if drafts_skipped:
-        lines.append(f"⏭️ Já respondidos pela humana: {len(drafts_skipped)}")
-    if corpus:
-        lines.append(f"📚 Threads no corpus: {len(corpus)}")
-    if sei_ops:
-        lines.append(f"📝 SEI ops: {sei_success} ok / {sei_failed} falha(s)")
-    if procedures:
-        lines.append(f"📒 Procedimentos: {procedures}")
-    if errors:
-        lines.append(f"🔴 Erros: {len(errors)}")
-        first = errors[0]
-        node = first.get("node") or "?"
-        err_msg = str(first.get("error") or "")[:120]
-        lines.append(f"   └─ [{node}] {err_msg}")
-    else:
-        lines.append("🟢 Sem erros")
+    sei_block = _format_sei_ops_block(section_state)
+    if sei_block:
+        lines.append(sei_block)
+    lines.append(_format_errors_block(section_state))
 
     # Attach classifications to emails when the caller didn't already —
     # the scheduler path hands us raw state without that side-effect.

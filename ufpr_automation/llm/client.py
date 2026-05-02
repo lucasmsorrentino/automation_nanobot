@@ -22,6 +22,72 @@ from ufpr_automation.llm.router import TaskType, cascaded_completion, cascaded_c
 from ufpr_automation.utils.logging import logger
 
 
+# ---------------------------------------------------------------------------
+# Pure section formatters used by ``LLMClient._build_messages``.
+# Kept at module level so they are trivially unit-testable in isolation and
+# make the prompt-construction pipeline read top-to-bottom (RAG, anexos,
+# guarda da assinatura) without burying intent in a single ~100-line method.
+# ---------------------------------------------------------------------------
+
+
+def _format_rag_section(rag_context: str | None) -> str:
+    """Render the RAG-recovered norms block (empty string when absent)."""
+    if not rag_context:
+        return ""
+    return (
+        "\n\n=== NORMAS E DOCUMENTOS RECUPERADOS (base vetorial) ===\n\n"
+        f"{rag_context}\n\n"
+        "Use as normas acima como referência para classificar e redigir a resposta. "
+        "Cite a resolução ou documento específico quando aplicável.\n"
+    )
+
+
+def _format_attachment_section(attachments: list) -> str:
+    """Render the attachments block, or empty string when there are none."""
+    if not attachments:
+        return ""
+    section = "\n\n=== ANEXOS DO E-MAIL ===\n"
+    for att in attachments:
+        if att.extracted_text:
+            truncated = att.extracted_text[:3000]
+            section += f"\n[Anexo: {att.filename}]\n{truncated}\n"
+        elif att.needs_ocr:
+            section += (
+                f"\n[Anexo: {att.filename} — documento escaneado, texto nao disponivel]\n"
+            )
+        else:
+            section += (
+                f"\n[Anexo: {att.filename} ({att.mime_type}) — "
+                "tipo nao suportado para extracao]\n"
+            )
+    return section
+
+
+def _format_signature_guard(signature: str | None) -> str:
+    """Render the explicit anti-hallucination signature guard.
+
+    MiniMax-M2 (and other small LLMs) routinely invent plausible-looking but
+    fictitious sectors ("Núcleo de Estágios", "Secretaria do Curso",
+    "Assessoria de Estágios" etc.) when left to freestyle the sign-off. The
+    canonical signature is already in the system prompt (via
+    ``SOUL_ESSENTIALS``), but restating it inside the user prompt near the
+    draft-writing instruction materially reduces hallucinations in the
+    generated draft.
+    """
+    if not signature:
+        return ""
+    return (
+        "\n\n=== ASSINATURA OBRIGATÓRIA ===\n"
+        "Use EXATAMENTE este bloco ao final do campo 'sugestao_resposta', "
+        "sem alterações, abreviações, substituições ou acréscimos:\n\n"
+        f"{signature}\n\n"
+        "NÃO invente nomes de setores. O único setor válido é "
+        "'Secretaria da Coordenação de Design Gráfico'. NÃO escreva "
+        "'Núcleo de Estágios', 'Secretaria do Curso', 'Assessoria de "
+        "Estágios' ou qualquer outra variação — esses setores NÃO EXISTEM."
+    )
+
+
 class LLMClient:
     """Client for generating email classifications using LiteLLM.
 
@@ -124,53 +190,9 @@ class LLMClient:
         else:
             content_label = "Corpo completo" if email.body else "Preview"
 
-        rag_section = ""
-        if rag_context:
-            rag_section = (
-                "\n\n=== NORMAS E DOCUMENTOS RECUPERADOS (base vetorial) ===\n\n"
-                f"{rag_context}\n\n"
-                "Use as normas acima como referência para classificar e redigir a resposta. "
-                "Cite a resolução ou documento específico quando aplicável.\n"
-            )
-
-        # Build attachment context if available
-        attachment_section = ""
-        if email.attachments:
-            attachment_section = "\n\n=== ANEXOS DO E-MAIL ===\n"
-            for att in email.attachments:
-                if att.extracted_text:
-                    truncated = att.extracted_text[:3000]
-                    attachment_section += f"\n[Anexo: {att.filename}]\n{truncated}\n"
-                elif att.needs_ocr:
-                    attachment_section += (
-                        f"\n[Anexo: {att.filename} — documento escaneado, texto nao disponivel]\n"
-                    )
-                else:
-                    attachment_section += (
-                        f"\n[Anexo: {att.filename} ({att.mime_type}) — "
-                        "tipo nao suportado para extracao]\n"
-                    )
-
-        # Explicit anti-hallucination guard on the signature. MiniMax-M2
-        # (and other small LLMs) routinely invent plausible-looking but
-        # fictitious sectors ("Núcleo de Estágios", "Secretaria do Curso",
-        # "Assessoria de Estágios" etc.) when left to freestyle the
-        # sign-off. The canonical signature is already in the system
-        # prompt (via SOUL_ESSENTIALS), but restating it inside the user
-        # prompt near the draft-writing instruction materially reduces
-        # hallucinations in the generated draft.
-        signature_guard = ""
-        if settings.ASSINATURA_EMAIL:
-            signature_guard = (
-                "\n\n=== ASSINATURA OBRIGATÓRIA ===\n"
-                "Use EXATAMENTE este bloco ao final do campo 'sugestao_resposta', "
-                "sem alterações, abreviações, substituições ou acréscimos:\n\n"
-                f"{settings.ASSINATURA_EMAIL}\n\n"
-                "NÃO invente nomes de setores. O único setor válido é "
-                "'Secretaria da Coordenação de Design Gráfico'. NÃO escreva "
-                "'Núcleo de Estágios', 'Secretaria do Curso', 'Assessoria de "
-                "Estágios' ou qualquer outra variação — esses setores NÃO EXISTEM."
-            )
+        rag_section = _format_rag_section(rag_context)
+        attachment_section = _format_attachment_section(email.attachments)
+        signature_guard = _format_signature_guard(settings.ASSINATURA_EMAIL)
 
         user_prompt = (
             "Por favor, analise o seguinte e-mail recebido na caixa de entrada:\n\n"

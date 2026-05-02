@@ -403,6 +403,77 @@ class SIGAClient:
         result["nao_vencidas"] = nao_vencidas
         return result
 
+    @staticmethod
+    def _check_matricula_active(student) -> str | None:
+        """Return blocking reason if matrícula is trancada/cancelada, else None."""
+        situacao_lower = student.situacao.lower()
+        if any(s in situacao_lower for s in ["trancada", "cancelada", "cancelado"]):
+            return (
+                f"Matricula {student.situacao} — estagio nao permitido "
+                "(SOUL.md secao 11: matricula trancada ou registro cancelado)"
+            )
+        return None
+
+    @staticmethod
+    def _check_curriculum_completed(integ: dict) -> str | None:
+        """Return blocking reason if currículo já foi integralizado, else None."""
+        if integ.get("integralizado"):
+            return (
+                "Curriculo ja integralizado — estagio nao obrigatorio vedado (SOUL.md secao 11)"
+            )
+        return None
+
+    @staticmethod
+    def _check_graduation_timing(integ: dict, vigencia_meses: int) -> str | None:
+        """Return a soft warning if student may graduate before internship ends.
+
+        Skipped for short internships (≤6 months). Returns ``None`` when the
+        student still has OD501/ODDA6 pending (plenty of runway) or when more
+        than three disciplines remain (not close to graduating).
+        """
+        if vigencia_meses <= 6:
+            return None
+
+        nao_vencidas = integ.get("nao_vencidas", [])
+        disciplines = integ.get("disciplines", [])
+        disc_map = {d["sigla"]: d for d in disciplines}
+
+        od501 = disc_map.get(_ANNUAL_ESTAGIO)
+        odda6 = disc_map.get(_TCC1)
+
+        has_time = False
+        if od501 and "Não Vencida" in od501.get("situacao", ""):
+            has_time = True
+        if odda6 and "Não Vencida" in odda6.get("situacao", ""):
+            has_time = True
+        if _ANNUAL_ESTAGIO in nao_vencidas or _TCC1 in nao_vencidas:
+            has_time = True
+
+        if has_time or not nao_vencidas:
+            return None
+
+        few_remaining = len(nao_vencidas) <= 3
+        if not few_remaining:
+            return None
+
+        return (
+            f"Aluno com apenas {len(nao_vencidas)} disciplina(s) pendente(s) "
+            f"({', '.join(nao_vencidas[:5])}). Verificar se pode se formar "
+            f"antes do fim da vigencia do estagio ({vigencia_meses} meses)."
+        )
+
+    @staticmethod
+    def _check_reprovacoes(historico: dict) -> str | None:
+        """Return a soft warning if total reprovações > 2, else None."""
+        total_reprov = historico.get("reprovacoes_total", 0)
+        if total_reprov > 2:
+            return (
+                f"Aluno com {total_reprov} reprovacoes no historico. "
+                "Bom rendimento academico e requisito para estagio — "
+                "solicitar justificativa formal ao aluno."
+            )
+        return None
+
     async def validate_internship_eligibility(
         self, grr: str, vigencia_meses: int = 12
     ) -> EligibilityResult:
@@ -438,61 +509,21 @@ class SIGAClient:
             return result
         result.student = student
 
-        # Rule: matrícula must be active
-        situacao_lower = student.situacao.lower()
-        if any(s in situacao_lower for s in ["trancada", "cancelada", "cancelado"]):
-            reasons.append(
-                f"Matricula {student.situacao} — estagio nao permitido "
-                "(SOUL.md secao 11: matricula trancada ou registro cancelado)"
-            )
+        if (matricula_block := self._check_matricula_active(student)) is not None:
+            reasons.append(matricula_block)
 
-        # Rule: currículo not yet completed
         integ = await self.get_integralizacao()
         result.integralizacao_data = integ
-        if integ.get("integralizado"):
-            reasons.append(
-                "Curriculo ja integralizado — estagio nao obrigatorio vedado (SOUL.md secao 11)"
-            )
+        if (curriculo_block := self._check_curriculum_completed(integ)) is not None:
+            reasons.append(curriculo_block)
 
-        # Rule: check if student can graduate before internship ends
-        nao_vencidas = integ.get("nao_vencidas", [])
-        disciplines = integ.get("disciplines", [])
+        if (graduation_warn := self._check_graduation_timing(integ, vigencia_meses)) is not None:
+            warnings.append(graduation_warn)
 
-        disc_map = {d["sigla"]: d for d in disciplines}
-
-        od501 = disc_map.get(_ANNUAL_ESTAGIO)
-        odda6 = disc_map.get(_TCC1)
-
-        if vigencia_meses <= 6:
-            pass
-        else:
-            has_time = False
-            if od501 and "Não Vencida" in od501.get("situacao", ""):
-                has_time = True
-            if odda6 and "Não Vencida" in odda6.get("situacao", ""):
-                has_time = True
-            if _ANNUAL_ESTAGIO in nao_vencidas or _TCC1 in nao_vencidas:
-                has_time = True
-
-            if not has_time and nao_vencidas:
-                few_remaining = len(nao_vencidas) <= 3
-                if few_remaining:
-                    warnings.append(
-                        f"Aluno com apenas {len(nao_vencidas)} disciplina(s) pendente(s) "
-                        f"({', '.join(nao_vencidas[:5])}). Verificar se pode se formar "
-                        f"antes do fim da vigencia do estagio ({vigencia_meses} meses)."
-                    )
-
-        # Rule: >2 reprovações -> soft block (justification needed)
         historico = await self.get_historico()
         result.historico_data = historico
-        total_reprov = historico.get("reprovacoes_total", 0)
-        if total_reprov > 2:
-            warnings.append(
-                f"Aluno com {total_reprov} reprovacoes no historico. "
-                "Bom rendimento academico e requisito para estagio — "
-                "solicitar justificativa formal ao aluno."
-            )
+        if (reprov_warn := self._check_reprovacoes(historico)) is not None:
+            warnings.append(reprov_warn)
 
         result.eligible = len(reasons) == 0
         result.reasons = reasons
