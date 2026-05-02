@@ -108,4 +108,4 @@ Hoje só temos `estagio_obrig_matricula`. Aqui adicionamos os fluxos SEI complet
 - [ ] Revisão concluída por: ___________________ em ____/____/____
 - [ ] Correções aplicadas em PROCEDURES.md
 - [ ] Tags `[A REVISAR — 2026-04-27]` removidas das seções §12–§16 após revisão
-- [ ] Bench A/B `aflow.cli --topologies fleet --limit 20` rodado pós-revisão para validar cobertura
+- [ ] Bench A/B pós-revisão validando cobertura via logs de runs agendados (procedures_data/ JSONL): meta `tier0_hits/total ≥ 0.85`

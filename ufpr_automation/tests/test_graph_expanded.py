@@ -31,74 +31,11 @@ def _make_cls(categoria="Estágios", **kwargs):
     )
 
 
-class TestConsultarSEI:
-    def test_no_emails(self):
-        from ufpr_automation.graph.nodes import consultar_sei
-
-        result = consultar_sei({"emails": [], "classifications": {}})
-        assert result["sei_contexts"] == {}
-
-    def test_no_estagio_emails(self):
-        from ufpr_automation.graph.nodes import consultar_sei
-
-        email = _make_email(stable_id="x1")
-        cls = _make_cls(categoria="Outros")
-        result = consultar_sei(
-            {
-                "emails": [email],
-                "classifications": {"x1": cls},
-            }
-        )
-        assert result["sei_contexts"] == {}
-
-    @patch("ufpr_automation.sei.browser.has_credentials", return_value=False)
-    def test_no_credentials(self, mock_creds):
-        from ufpr_automation.graph.nodes import consultar_sei
-
-        email = _make_email(stable_id="x1")
-        cls = _make_cls()
-        result = consultar_sei(
-            {
-                "emails": [email],
-                "classifications": {"x1": cls},
-            }
-        )
-        assert result["sei_contexts"] == {}
-
-
-class TestConsultarSIGA:
-    def test_no_emails(self):
-        from ufpr_automation.graph.nodes import consultar_siga
-
-        result = consultar_siga({"emails": [], "classifications": {}})
-        assert result["siga_contexts"] == {}
-
-    def test_no_grr_in_email(self):
-        from ufpr_automation.graph.nodes import consultar_siga
-
-        email = _make_email(subject="Oficio generico", body="Sem matricula", stable_id="x1")
-        cls = _make_cls()
-        result = consultar_siga(
-            {
-                "emails": [email],
-                "classifications": {"x1": cls},
-            }
-        )
-        assert result["siga_contexts"] == {}
-
-    @patch("ufpr_automation.siga.browser.has_credentials", return_value=False)
-    def test_no_credentials(self, mock_creds):
-        from ufpr_automation.graph.nodes import consultar_siga
-
-        email = _make_email(stable_id="x1")
-        cls = _make_cls()
-        result = consultar_siga(
-            {
-                "emails": [email],
-                "classifications": {"x1": cls},
-            }
-        )
-        assert result["siga_contexts"] == {}
+# ``TestConsultarSEI`` e ``TestConsultarSIGA`` removidos em 2026-05-02
+# (Onda 2.3) junto com os wrappers sync ``consultar_sei`` / ``consultar_siga``.
+# Os helpers async ``_consult_sei_async`` / ``_consult_siga_async`` continuam
+# vivos e cobertos via ``_consult_sei_for_email`` / ``_consult_siga_for_email``
+# (ver test_consultar_tier0_sei_siga.py + test_graph_fleet.py).
 
 
 class TestRegistrarProcedimento:

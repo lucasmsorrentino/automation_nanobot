@@ -12,7 +12,6 @@
       "Bash(python -m ufpr_automation.agent_sdk.intent_drafter --dry-run:*)",
       "Bash(python -m ufpr_automation.agent_sdk.debug_classification:*)",
       "Bash(python -m ufpr_automation.agent_sdk.rag_auditor --quick)",
-      "Bash(python -m ufpr_automation.aflow.cli:*)",
       "Bash(python -c \"from ufpr_automation.procedures.checkers import registered_checkers:*)",
       "Bash(python -c \"from ufpr_automation.procedures.playbook import get_playbook:*)",
       "Bash(ruff check:*)",

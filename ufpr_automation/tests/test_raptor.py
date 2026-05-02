@@ -29,7 +29,7 @@ def three_cluster_embeddings():
 
 class TestClusterEmbeddings:
     def test_returns_at_least_one_cluster_for_nonempty_input(self, three_cluster_embeddings):
-        from ufpr_automation.rag.raptor import cluster_embeddings
+        from ufpr_automation.rag.advanced.raptor import cluster_embeddings
 
         clusters = cluster_embeddings(three_cluster_embeddings, max_clusters=5)
         assert len(clusters) >= 1
@@ -39,7 +39,7 @@ class TestClusterEmbeddings:
     def test_all_indices_are_accounted_for(self, three_cluster_embeddings):
         """Every input row lands in at least one cluster (soft assignment +
         the 'highest-probability fallback' guarantees nothing is dropped)."""
-        from ufpr_automation.rag.raptor import cluster_embeddings
+        from ufpr_automation.rag.advanced.raptor import cluster_embeddings
 
         n = len(three_cluster_embeddings)
         clusters = cluster_embeddings(three_cluster_embeddings, max_clusters=5)
@@ -49,14 +49,14 @@ class TestClusterEmbeddings:
         assert covered == set(range(n))
 
     def test_single_sample_returns_single_cluster(self):
-        from ufpr_automation.rag.raptor import cluster_embeddings
+        from ufpr_automation.rag.advanced.raptor import cluster_embeddings
 
         emb = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
         clusters = cluster_embeddings(emb)
         assert clusters == [[0]]
 
     def test_empty_input_returns_empty_cluster(self):
-        from ufpr_automation.rag.raptor import cluster_embeddings
+        from ufpr_automation.rag.advanced.raptor import cluster_embeddings
 
         emb = np.zeros((0, 4), dtype=np.float32)
         clusters = cluster_embeddings(emb)
@@ -70,7 +70,7 @@ class TestClusterEmbeddings:
         has structure; fully random isotropic Gaussians in 128-D can be
         near-singular after PCA down to min(50, n-1)).
         """
-        from ufpr_automation.rag.raptor import cluster_embeddings
+        from ufpr_automation.rag.advanced.raptor import cluster_embeddings
 
         rng = np.random.default_rng(1)
         n_per = 40
@@ -89,7 +89,7 @@ class TestClusterEmbeddings:
 
 class TestSummarizeCluster:
     def test_uses_litellm_response_content(self):
-        from ufpr_automation.rag import raptor
+        from ufpr_automation.rag.advanced import raptor
 
         fake_msg = MagicMock()
         fake_msg.content = "  Resumo mockado.  "
@@ -113,7 +113,7 @@ class TestSummarizeCluster:
         assert "chunk 2" in kwargs["messages"][0]["content"]
 
     def test_truncates_to_20_texts_to_avoid_overflow(self):
-        from ufpr_automation.rag import raptor
+        from ufpr_automation.rag.advanced import raptor
 
         fake_msg = MagicMock()
         fake_msg.content = "ok"
@@ -130,7 +130,7 @@ class TestSummarizeCluster:
         assert "chunk 20" not in prompt  # 21st text dropped
 
     def test_falls_back_on_litellm_exception(self):
-        from ufpr_automation.rag import raptor
+        from ufpr_automation.rag.advanced import raptor
 
         with patch("litellm.completion", side_effect=RuntimeError("boom")):
             out = raptor.summarize_cluster(
@@ -147,7 +147,7 @@ class TestSummarizeCluster:
 
 class TestRaptorRetrieverFormatting:
     def test_search_formatted_empty(self):
-        from ufpr_automation.rag.raptor import RaptorRetriever
+        from ufpr_automation.rag.advanced.raptor import RaptorRetriever
 
         r = RaptorRetriever()
         with patch.object(r, "search", return_value=[]):
@@ -155,7 +155,7 @@ class TestRaptorRetrieverFormatting:
         assert out == "Nenhum documento relevante encontrado."
 
     def test_search_formatted_tags_leaf_vs_level(self):
-        from ufpr_automation.rag.raptor import RaptorRetriever
+        from ufpr_automation.rag.advanced.raptor import RaptorRetriever
 
         r = RaptorRetriever()
         results = [

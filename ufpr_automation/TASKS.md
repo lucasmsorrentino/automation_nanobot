@@ -21,9 +21,8 @@
 
 Branch criada em 2026-04-30 a partir de `dev@c16b338`. Auditoria via 6 agents Explore identificou ~1700 LOC removíveis sem mudança de comportamento. Onda 1 (cleanup seguro, ~500 LOC) iniciada nesta sessão. Ondas 2-5 ficam pendentes pra sessões dedicadas.
 
-**Onda 2 — Deletar AFlow inteiro** (~700 LOC, 1-2h, risco médio)
-- **Justificativa**: AFlow é hand-authored topology evaluator MVP que nunca foi exercitado em produção. 4 das 5 topologias (`baseline`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`) são CLI-only ablation study; default sempre é `fleet`. Evaluator (`python -m ufpr_automation.aflow.cli`) nunca foi rodado contra eval set. Função de avaliação (necessária pra fazer sentido) nunca foi escrita. Mais discussão: vide chat session 2026-04-30/05-01.
-- **Decisão pendente do user**: A) deletar (recomendação minha), B) mover pra `experiments/aflow/`, C) manter, D) ativar de fato com função de avaliação no scheduler.
+**Onda 2 — Deletar AFlow inteiro** ✅ executada 2026-05-02 na branch `refactor/onda-2-delete-aflow` (PR pendente). −~1700 LOC líquido entre código + tests. Decisão tomada: **opção A** (deletar limpo).
+- **Justificativa**: AFlow é hand-authored topology evaluator MVP que nunca foi exercitado em produção. 4 das 5 topologias (`baseline`, `skip_rag_high_tier0`, `no_self_refine`, `fleet_no_siga`) são CLI-only ablation study; default sempre é `fleet`. Evaluator (`python -m ufpr_automation.aflow.cli`) nunca foi rodado contra eval set. Função de avaliação (necessária pra fazer sentido) nunca foi escrita.
 - **Passos** (assumindo A):
   1. `grep -r "AFLOW_TOPOLOGY=" .env*` — confirmar que ninguém usa não-`fleet`. Se aparecer, pausar e conversar.
   2. `rm -r ufpr_automation/aflow/`

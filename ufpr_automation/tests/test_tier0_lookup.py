@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from ufpr_automation.core.models import EmailClassification, EmailData
-from ufpr_automation.graph.nodes import classificar, rag_retrieve, tier0_lookup
+from ufpr_automation.graph.nodes import tier0_lookup
 from ufpr_automation.procedures.playbook import Playbook
 
 SAMPLE_PROCEDURES_MD = """\
@@ -172,80 +172,9 @@ class TestTier0Lookup:
         assert emails[1].stable_id not in result["tier0_hits"]
 
 
-# ---------------------------------------------------------------------------
-# rag_retrieve / classificar short-circuit on Tier 0 hits
-# ---------------------------------------------------------------------------
-
-
-class TestTier1ShortCircuit:
-    def test_rag_retrieve_skips_all_tier0(self, patch_get_playbook):
-        emails = [
-            _make_email("Ana <ana@ufpr.br>", "prorrogar meu estágio"),
-            _make_email("Bia <bia@ufpr.br>", "renovar estágio"),
-        ]
-        # Pretend tier0 caught both
-        state = {
-            "emails": emails,
-            "tier0_hits": [e.stable_id for e in emails],
-        }
-        result = rag_retrieve(state)
-        # Empty contexts because every email was already handled
-        assert result["rag_contexts"] == {}
-
-    def test_classificar_skips_tier0_and_preserves_them(self, patch_get_playbook):
-        e1 = _make_email("Ana <ana@ufpr.br>", "prorrogar")
-        cls1 = EmailClassification(
-            categoria="Estágios",
-            resumo="Tier 0",
-            acao_necessaria="Redigir Resposta",
-            sugestao_resposta="ok",
-            confianca=0.95,
-        )
-        state = {
-            "emails": [e1],
-            "classifications": {e1.stable_id: cls1},
-            "tier0_hits": [e1.stable_id],
-        }
-        # Should NOT call any LLM and should return the existing classification
-        result = classificar(state)
-        assert result["classifications"] == {e1.stable_id: cls1}
-
-    def test_classificar_merges_tier0_with_tier1(self, patch_get_playbook):
-        e1 = _make_email("Ana <ana@ufpr.br>", "prorrogar")
-        e2 = _make_email("Bia <bia@ufpr.br>", "alguma coisa nova")
-        cls1 = EmailClassification(
-            categoria="Estágios",
-            resumo="Tier 0",
-            acao_necessaria="Redigir Resposta",
-            sugestao_resposta="ok",
-            confianca=0.95,
-        )
-        cls2 = EmailClassification(
-            categoria="Outros",
-            resumo="Tier 1 LLM result",
-            acao_necessaria="Revisão Manual",
-            sugestao_resposta="",
-            confianca=0.6,
-        )
-
-        state = {
-            "emails": [e1, e2],
-            "classifications": {e1.stable_id: cls1},
-            "rag_contexts": {},
-        }
-
-        # Stub the inner LLM helpers so we don't call any model
-        with (
-            patch(
-                "ufpr_automation.graph.nodes._should_use_dspy",
-                return_value=True,
-            ),
-            patch(
-                "ufpr_automation.graph.nodes._classify_with_dspy",
-                return_value={e2.stable_id: cls2},
-            ),
-        ):
-            result = classificar(state)
-
-        assert result["classifications"][e1.stable_id] is cls1  # preserved
-        assert result["classifications"][e2.stable_id] is cls2  # added
+# Testes de short-circuit de ``rag_retrieve``/``classificar`` removidos
+# em 2026-05-02: as funcoes legacy batch foram deletadas (Onda 2.3).
+# O Fleet topology default trata o short-circuit per-email em
+# ``process_one_email`` (graph/fleet.py); curto-circuito de Tier 0 hits
+# fica coberto pelos testes de ``tier0_lookup`` acima + Fleet integration
+# tests em ``test_graph_fleet.py``.

@@ -174,117 +174,13 @@ class TestPerceberGmail:
         assert called_attachments[1].filename == "anexo2.pdf"
 
 
-# ===========================================================================
-# nodes.py — rag_retrieve
-# ===========================================================================
-
-
-class TestRagRetrieve:
-    def test_returns_empty_for_no_emails(self):
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        result = rag_retrieve({"emails": []})
-        assert result["rag_contexts"] == {}
-
-    def test_returns_contexts_for_emails(self):
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        email = _make_email(subject="Estagio obrigatorio")
-        mock_retriever = MagicMock()
-        mock_retriever.search_formatted.return_value = "Art. 1 ..."
-
-        with (
-            patch("ufpr_automation.graph.nodes._get_retriever", return_value=mock_retriever),
-            patch("ufpr_automation.graph.nodes._get_reflexion_context", return_value={}),
-        ):
-            result = rag_retrieve({"emails": [email]})
-
-        assert email.stable_id in result["rag_contexts"]
-        assert "Art. 1" in result["rag_contexts"][email.stable_id]
-
-    def test_skips_empty_rag_results(self):
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        email = _make_email()
-        mock_retriever = MagicMock()
-        mock_retriever.search_formatted.return_value = "Nenhum documento relevante encontrado."
-
-        with (
-            patch("ufpr_automation.graph.nodes._get_retriever", return_value=mock_retriever),
-            patch("ufpr_automation.graph.nodes._get_reflexion_context", return_value={}),
-            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
-        ):
-            result = rag_retrieve({"emails": [email]})
-
-        assert result["rag_contexts"] == {}
-
-    def test_appends_reflexion_context(self):
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        email = _make_email()
-        mock_retriever = MagicMock()
-        mock_retriever.search_formatted.return_value = "RAG context"
-        reflexion_ctx = {email.stable_id: "=== ERROS ANTERIORES ==="}
-
-        with (
-            patch("ufpr_automation.graph.nodes._get_retriever", return_value=mock_retriever),
-            patch("ufpr_automation.graph.nodes._get_reflexion_context", return_value=reflexion_ctx),
-        ):
-            result = rag_retrieve({"emails": [email]})
-
-        ctx = result["rag_contexts"][email.stable_id]
-        assert "RAG context" in ctx
-        assert "ERROS ANTERIORES" in ctx
-
-    def test_graceful_on_rag_unavailable(self):
-        from ufpr_automation.graph.nodes import rag_retrieve
-
-        email = _make_email()
-
-        with (
-            patch(
-                "ufpr_automation.graph.nodes._get_retriever",
-                side_effect=Exception("LanceDB not found"),
-            ),
-            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
-        ):
-            result = rag_retrieve({"emails": [email]})
-
-        assert result["rag_contexts"] == {}
-
-
-# ===========================================================================
-# nodes.py — classificar
-# ===========================================================================
-
-
-class TestClassificar:
-    def test_returns_empty_for_no_emails(self):
-        from ufpr_automation.graph.nodes import classificar
-
-        with patch("ufpr_automation.llm.router.log_cascade_config"):
-            result = classificar({"emails": [], "rag_contexts": {}})
-
-        assert result["classifications"] == {}
-
-    def test_calls_dspy_when_available(self):
-        from ufpr_automation.graph.nodes import classificar
-
-        email = _make_email()
-        cls = _make_cls()
-
-        with (
-            patch("ufpr_automation.llm.router.log_cascade_config"),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=True),
-            patch(
-                "ufpr_automation.graph.nodes._classify_with_dspy",
-                return_value={email.stable_id: cls},
-            ) as mock_dspy,
-        ):
-            result = classificar({"emails": [email], "rag_contexts": {}})
-
-        mock_dspy.assert_called_once()
-        assert email.stable_id in result["classifications"]
+# Testes ``TestRagRetrieve`` e ``TestClassificar`` removidos em
+# 2026-05-02 (Onda 2.3) junto com as funcoes legacy batch ``rag_retrieve``
+# e ``classificar``. O Fleet topology default (``process_one_email`` em
+# ``graph/fleet.py``) cobre RAG retrieval + classify per-email; o
+# comportamento do path quente continua coberto por ``test_graph_fleet.py``,
+# ``test_graphrag.py`` e os tests de ``classify_email_async`` em
+# ``test_llm_client.py``.
 
 
 # ===========================================================================
