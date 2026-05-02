@@ -180,7 +180,7 @@ def _generate_proposals(trace: DebugTrace) -> list[dict[str, str]]:
                 "type": "feedback_entry",
                 "description": (
                     f"Add a feedback correction: {trace.pipeline_categoria} → "
-                    f"{trace.corrected_categoria} (improves DSPy training data)"
+                    f"{trace.corrected_categoria} (recorded in feedback store for audit)"
                 ),
                 "risk": "low",
                 "effort": "Already recorded in feedback.jsonl",

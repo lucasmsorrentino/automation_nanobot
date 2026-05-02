@@ -30,6 +30,124 @@ Categoria = Literal[
 ]
 
 
+_VALID_CATEGORIAS: list[str] = list(Categoria.__args__)  # type: ignore[attr-defined]
+
+# Map common LLM free-form outputs (including legacy categories) to valid Categoria values.
+# Keys are lowercased, matched via equality then substring.
+_CATEGORY_ALIASES: dict[str, str] = {
+    # Estágios
+    "estagio": "Estágios",
+    "estagios": "Estágios",
+    "estágio": "Estágios",
+    "estágios": "Estágios",
+    "termo aditivo": "Estágios",
+    "tce": "Estágios",
+    "rescisão de estágio": "Estágios",
+    "vaga de estágio": "Estágios",
+    # Acadêmico / Matrícula
+    "matrícula": "Acadêmico / Matrícula",
+    "matricula": "Acadêmico / Matrícula",
+    "rematrícula": "Acadêmico / Matrícula",
+    "rematricula": "Acadêmico / Matrícula",
+    "trancamento": "Acadêmico / Matrícula",
+    # Acadêmico / Equivalência de Disciplinas
+    "equivalência": "Acadêmico / Equivalência de Disciplinas",
+    "equivalencia": "Acadêmico / Equivalência de Disciplinas",
+    "equivalência de disciplinas": "Acadêmico / Equivalência de Disciplinas",
+    # Acadêmico / Aproveitamento de Disciplinas
+    "aproveitamento": "Acadêmico / Aproveitamento de Disciplinas",
+    "aproveitamento de disciplinas": "Acadêmico / Aproveitamento de Disciplinas",
+    "dispensa": "Acadêmico / Aproveitamento de Disciplinas",
+    # Acadêmico / Ajuste de Disciplinas
+    "ajuste": "Acadêmico / Ajuste de Disciplinas",
+    "ajuste de disciplinas": "Acadêmico / Ajuste de Disciplinas",
+    "ajuste de matrícula": "Acadêmico / Ajuste de Disciplinas",
+    "inclusão de disciplina": "Acadêmico / Ajuste de Disciplinas",
+    "exclusão de disciplina": "Acadêmico / Ajuste de Disciplinas",
+    # Diplomação / Diploma
+    "diploma": "Diplomação / Diploma",
+    "diplomação": "Diplomação / Diploma",
+    "diplomacao": "Diplomação / Diploma",
+    "emissão de diploma": "Diplomação / Diploma",
+    "histórico": "Diplomação / Diploma",
+    "historico": "Diplomação / Diploma",
+    # Diplomação / Colação de Grau
+    "colação": "Diplomação / Colação de Grau",
+    "colacao": "Diplomação / Colação de Grau",
+    "colação de grau": "Diplomação / Colação de Grau",
+    "assinatura ata": "Diplomação / Colação de Grau",
+    "ata de colação": "Diplomação / Colação de Grau",
+    # Extensão
+    "extensão": "Extensão",
+    "extensao": "Extensão",
+    "atividade de extensão": "Extensão",
+    "projeto de extensão": "Extensão",
+    # Formativas
+    "formativas": "Formativas",
+    "horas formativas": "Formativas",
+    "atividade formativa": "Formativas",
+    "atividades formativas": "Formativas",
+    # Requerimentos (genérico — fallback legítimo)
+    "requerimento": "Requerimentos",
+    "requerimentos": "Requerimentos",
+    "solicitação": "Requerimentos",
+    "solicitacao": "Requerimentos",
+    "consulta": "Requerimentos",
+    "dúvida": "Requerimentos",
+    "duvida": "Requerimentos",
+    # Urgente
+    "urgente": "Urgente",
+    "urgência": "Urgente",
+    # Correio Lixo
+    "spam": "Correio Lixo",
+    "correio lixo": "Correio Lixo",
+    "lixo": "Correio Lixo",
+    "propaganda": "Correio Lixo",
+    "promocional": "Correio Lixo",
+    "divulgação": "Correio Lixo",
+    "divulgacao": "Correio Lixo",
+    # Outros
+    "outros": "Outros",
+    # === Legacy categories (migration from pre-sub-label taxonomy) ===
+    "ofícios": "Outros",
+    "oficios": "Outros",
+    "ofício": "Outros",
+    "oficio": "Outros",
+    "memorando": "Outros",
+    "memorandos": "Outros",
+    "portaria": "Outros",
+    "portarias": "Outros",
+    "informe": "Outros",
+    "informes": "Outros",
+    "informativo": "Outros",
+    "processo": "Outros",
+    "coordenação": "Outros",
+    "coordenacao": "Outros",
+}
+
+
+def normalize_categoria(raw: str) -> str:
+    """Normalize a free-form category string to a valid ``Categoria`` literal.
+
+    Resolution order:
+    1. Exact match (case-insensitive).
+    2. Alias map (lowercased, equality).
+    3. Substring match against alias keys.
+    4. Fallback to ``"Outros"``.
+    """
+    stripped = (raw or "").strip()
+    for valid in _VALID_CATEGORIAS:
+        if stripped.lower() == valid.lower():
+            return valid
+    key = stripped.lower()
+    if key in _CATEGORY_ALIASES:
+        return _CATEGORY_ALIASES[key]
+    for alias, mapped in _CATEGORY_ALIASES.items():
+        if alias in key:
+            return mapped
+    return "Outros"
+
+
 class EmailClassification(BaseModel):
     """Structured output for LLM email classification."""
 

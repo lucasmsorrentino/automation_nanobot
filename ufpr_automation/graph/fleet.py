@@ -15,7 +15,7 @@ Design notes:
     - Error isolation: :func:`process_one_email` wraps the whole sub-agent
       body in try/except and appends any catastrophic failure to
       ``state["errors"]`` via the ``operator.add`` reducer.
-    - Heavy imports (retriever, GraphRAG, DSPy) are deferred into
+    - Heavy imports (retriever, GraphRAG, LLM client) are deferred into
       :func:`process_one_email` so graph compilation stays cheap.
 """
 
@@ -80,7 +80,7 @@ def process_one_email(sub: SubState) -> dict[str, Any]:
         1. Vector RAG retrieval (``_get_retriever().search_formatted``).
         2. Graph context (``_get_graph_context``).
         3. Reflexion context (``_get_reflexion_context_single``).
-        4. Classification via DSPy or LiteLLM (gated by ``_should_use_dspy``).
+        4. Classification via LiteLLM (``_classify_with_litellm``).
         5. Conditional SEI/SIGA consultation for ``Estágios`` classifications.
 
     Returns a partial state dict whose dict fields are merged into the
@@ -109,14 +109,12 @@ def process_one_email(sub: SubState) -> dict[str, Any]:
 
         # Lazy imports — avoid loading heavy modules during graph build
         from ufpr_automation.graph.nodes import (
-            _classify_with_dspy,
             _classify_with_litellm,
             _consult_sei_for_email,
             _consult_siga_for_email,
             _get_graph_context,
             _get_reflexion_context_single,
             _get_retriever,
-            _should_use_dspy,
         )
 
         result: dict[str, Any] = {
@@ -166,18 +164,9 @@ def process_one_email(sub: SubState) -> dict[str, Any]:
 
             result["rag_contexts"][stable_id] = rag_text
 
-            # 4. Classify (DSPy gated, fallback to LiteLLM)
+            # 4. Classify (LiteLLM)
             rag_contexts = {stable_id: rag_text}
-            try:
-                use_dspy = _should_use_dspy()
-            except Exception as e:
-                logger.warning("Fleet[%s] DSPy gate failed: %s", stable_id[:8], e)
-                use_dspy = False
-
-            if use_dspy:
-                cls_dict = _classify_with_dspy([email], rag_contexts)
-            else:
-                cls_dict = _classify_with_litellm([email], rag_contexts)
+            cls_dict = _classify_with_litellm([email], rag_contexts)
 
             if stable_id in cls_dict:
                 result["classifications"][stable_id] = cls_dict[stable_id]

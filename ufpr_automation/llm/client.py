@@ -16,7 +16,7 @@ from typing import Optional
 from pydantic import TypeAdapter
 
 from ufpr_automation.config import settings
-from ufpr_automation.core.models import EmailClassification, EmailData
+from ufpr_automation.core.models import EmailClassification, EmailData, normalize_categoria
 from ufpr_automation.gmail.thread import format_for_prompt, split_reply_and_quoted
 from ufpr_automation.llm.router import TaskType, cascaded_completion, cascaded_completion_sync
 from ufpr_automation.utils.logging import logger
@@ -226,8 +226,11 @@ class LLMClient:
             )
             raw = response.choices[0].message.content
             text = self._extract_json(raw)
+            payload = json.loads(text)
+            if isinstance(payload, dict) and "categoria" in payload:
+                payload["categoria"] = normalize_categoria(str(payload["categoria"]))
             adapter = TypeAdapter(EmailClassification)
-            return adapter.validate_python(json.loads(text))
+            return adapter.validate_python(payload)
 
         except Exception as e:
             logger.warning("Erro ao classificar '%s': %s", email.subject, e)
@@ -260,8 +263,11 @@ class LLMClient:
         )
         raw = response.choices[0].message.content
         text = self._extract_json(raw)
+        payload = json.loads(text)
+        if isinstance(payload, dict) and "categoria" in payload:
+            payload["categoria"] = normalize_categoria(str(payload["categoria"]))
         adapter = TypeAdapter(EmailClassification)
-        return adapter.validate_python(json.loads(text))
+        return adapter.validate_python(payload)
 
     # ------------------------------------------------------------------
     # Self-Refine: generate → critique → refine (Madaan et al., NeurIPS 2023)

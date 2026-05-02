@@ -2,7 +2,7 @@
 
 Usage:
     python -m ufpr_automation.feedback stats      # show feedback statistics
-    python -m ufpr_automation.feedback export      # export as JSON for DSPy
+    python -m ufpr_automation.feedback export      # export as JSON
     python -m ufpr_automation.feedback review      # interactive review of recent drafts
     python -m ufpr_automation.feedback add         # manually add a correction
 """
@@ -62,7 +62,7 @@ def cmd_stats(store: FeedbackStore) -> None:
 
 
 def cmd_export(store: FeedbackStore) -> None:
-    """Export feedback records as JSON (for DSPy training data)."""
+    """Export feedback records as JSON."""
     records = store.list_all()
     if not records:
         print("Nenhum registro de feedback para exportar.", file=sys.stderr)
@@ -159,8 +159,8 @@ def cmd_review(store: FeedbackStore, approve_all: bool = False) -> None:
 
     Args:
         approve_all: If True, auto-accept all classifications without prompting.
-            Records each as feedback (original == corrected) so DSPy sees
-            confirmed-correct examples. Useful for CI or batch workflows.
+            Records each as feedback (original == corrected) for confirmed-correct
+            audit trail. Useful for CI or batch workflows.
     """
     entries = _load_last_run_entries(store)
 

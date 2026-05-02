@@ -65,7 +65,6 @@ class TestProcessOneEmail:
             patch("ufpr_automation.graph.nodes._get_retriever", return_value=None),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -91,7 +90,6 @@ class TestProcessOneEmail:
             ),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -107,7 +105,6 @@ class TestProcessOneEmail:
             patch("ufpr_automation.graph.nodes._get_retriever", return_value=None),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -126,7 +123,6 @@ class TestProcessOneEmail:
             patch("ufpr_automation.graph.nodes._get_retriever", return_value=None),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -152,7 +148,6 @@ class TestProcessOneEmail:
             patch("ufpr_automation.graph.nodes._get_retriever", return_value=None),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -175,7 +170,6 @@ class TestProcessOneEmail:
             ),
             patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
             patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=False),
             patch(
                 "ufpr_automation.graph.nodes._classify_with_litellm",
                 return_value={"e1": cls},
@@ -186,21 +180,3 @@ class TestProcessOneEmail:
         assert result["rag_contexts"]["e1"] == ""
         assert result["errors"] == []
 
-    def test_dspy_path_when_gate_enabled(self):
-        email = _email("e1")
-        cls = _cls()
-        with (
-            patch("ufpr_automation.graph.nodes._get_retriever", return_value=None),
-            patch("ufpr_automation.graph.nodes._get_graph_context", return_value=""),
-            patch("ufpr_automation.graph.nodes._get_reflexion_context_single", return_value=""),
-            patch("ufpr_automation.graph.nodes._should_use_dspy", return_value=True),
-            patch(
-                "ufpr_automation.graph.nodes._classify_with_dspy",
-                return_value={"e1": cls},
-            ) as mock_dspy,
-            patch("ufpr_automation.graph.nodes._classify_with_litellm") as mock_litellm,
-        ):
-            result = process_one_email({"email": email, "stable_id": "e1"})
-        mock_dspy.assert_called_once()
-        mock_litellm.assert_not_called()
-        assert result["classifications"]["e1"] is cls

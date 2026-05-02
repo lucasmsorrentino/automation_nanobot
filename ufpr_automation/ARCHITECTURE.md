@@ -30,12 +30,12 @@ graph TB
         direction TB
         LANGGRAPH2["🔀 LangGraph StateGraph<br/>+ SQLite Checkpointing"]
         VECTORDB["🗄️ LanceDB (34K chunks)<br/>+ RAPTOR hierárquico"]
-        DSPY["📐 DSPy + Self-Refine<br/>+ Reflexion (memória de erros)"]
+        SELFREFINE["📐 LiteLLM + Self-Refine<br/>+ Reflexion (memória de erros)"]
         ROUTER["🏷️ Roteamento por Confiança<br/>auto / review / escalação"]
         CASCADE["⚙️ Model Cascading<br/>local + API + fallback"]
 
         LANGGRAPH2 --> ROUTER --> VECTORDB
-        LANGGRAPH2 --> DSPY --> CASCADE
+        LANGGRAPH2 --> SELFREFINE --> CASCADE
     end
 
     subgraph PHASE3["🔴 MARCO III — Cognição Relacional ✅"]
@@ -68,7 +68,6 @@ graph TB
 | **LLM** | LiteLLM → MiniMax-M2 | Provider-agnostic. Cascading: local/Ollama → API → fallback |
 | **Memória vetorial** | LanceDB + RAPTOR | 34.285 chunks, multilingual-e5-large (1024 dim), Google Drive |
 | **Memória relacional** | Neo4j | 1.757 nós, 2.296 relações (órgãos, normas, fluxos, templates) |
-| **Otimização de prompts** | DSPy (GEPA / MIPROv2) | Signatures + métricas customizadas |
 | **Episódica** | ReflexionMemory | Análise + recall de erros passados |
 | **Canal e-mail** | Gmail IMAP (primário) / Playwright OWA (fallback) | Auto-login + MFA via Telegram (OWA) |
 | **Sistemas legados** | Playwright (SEI, SIGA) | Read-only por enquanto |
@@ -256,11 +255,9 @@ O corpo do email continua tendo precedência sobre o texto do anexo — assim o 
 
 Busca despachos do Neo4j com cache in-memory. Substitui as constantes hardcoded antes embutidas em `sei/client.py` (lines 20-79, removidas pelo Wave 1). Lazy import dentro de `prepare_despacho_draft` para evitar ciclo SEI ↔ GraphRAG. Fallback `campos_pendentes=["neo4j_unavailable"]` se Neo4j off.
 
-### USE_DSPY tri-state gate (`graph/nodes.py`)
+### Classificação (`graph/nodes.py:_classify_with_litellm`)
 
-`_should_use_dspy()` lê `settings.USE_DSPY` e roteia entre `_classify_with_dspy` (DSPy SelfRefineModule com prompt compilado) e `_classify_with_litellm` (LiteLLM direto):
+Path único — DSPy foi removido na Onda 3 (2026-05-02). O gate `USE_DSPY` sempre caía no fallback LiteLLM porque `dspy_modules/optimized/gepa_optimized.json` nunca foi gerado (otimização requer 20+ feedback samples; corpus está vazio). Restauração via `git show <pre-removal>:ufpr_automation/dspy_modules/`.
 
-- `"off"` → sempre LiteLLM
-- `"on"` → DSPy obrigatório (raise se `dspy` ausente ou se não houver `gepa_optimized.json`/`mipro_optimized.json`)
-- `"auto"` (default) → DSPy se importável e prompt compilado existe, senão LiteLLM com log INFO
+`_classify_with_litellm` chama `LLMClient.classify_email_async` + `LLMClient.self_refine_async` (Self-Refine Madaan et al. NeurIPS 2023). Antes de validar via Pydantic `TypeAdapter`, o cliente normaliza o campo `categoria` via `core/models.py:normalize_categoria` (alias map curado de 100+ entradas).
 

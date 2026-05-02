@@ -3,7 +3,7 @@
 > Sistema de automação burocrática da Universidade Federal do Paraná. Lê e-mails institucionais, classifica via LLM, recupera contexto de normas (RAG vetorial + grafo Neo4j) e gera respostas como rascunho para revisão humana.
 
 ![Python](https://img.shields.io/badge/python-≥3.12-blue)
-![Stack](https://img.shields.io/badge/stack-LangGraph%20Fleet%20%2B%20DSPy%20%2B%20RAPTOR%20%2B%20Neo4j%20%2B%20AFlow-violet)
+![Stack](https://img.shields.io/badge/stack-LangGraph%20Fleet%20%2B%20RAPTOR%20%2B%20Neo4j-violet)
 ![Status](https://img.shields.io/badge/Marcos%20I%2BII%2BII.5%2BIII%2BV-✅-green)
 ![Marco IV](https://img.shields.io/badge/Marco%20IV-🟡%20em%20andamento-yellow)
 
@@ -25,8 +25,7 @@ O sistema **nunca envia e-mails automaticamente** — sempre salva como rascunho
 | **Memória relacional** | `graphrag/` — Neo4j, 1.757 nós, normas com vigência (vigente/alterada/revogada). `templates.py` (TemplateRegistry) serve despachos a partir do grafo. |
 | **Memória episódica** | `feedback/reflexion.py` — análise + recall de erros passados |
 | **Memória híbrida (Tier 0)** | `procedures/playbook.py` + `workspace/PROCEDURES.md` — playbook YAML curto-circuita RAG/LLM em emails reconhecidos |
-| **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback). DSPy via `USE_DSPY=auto` (ativa quando há prompt compilado) |
-| **Otimização** | `dspy_modules/` — DSPy Signatures, GEPA / MIPROv2; gate `_should_use_dspy()` em `graph/nodes.py` |
+| **LLM** | `llm/` — LiteLLM → MiniMax-M2, Self-Refine, model cascading (local/API/fallback). Categoria normalizada via `core/models.py:normalize_categoria` (alias map curado, 100+ entradas). |
 | **Orquestrador** | `graph/` — LangGraph StateGraph + SQLite checkpointing. **`fleet.py`** paraleliza Tier 1 via `Send` API + reducers `Annotated[..., _merge_dict]`. **`browser_pool.py`** compartilha pages Playwright. |
 | **Sistemas legados (read)** | `sei/client.py`, `siga/client.py` — Playwright, read-only |
 | **SEI write ops** | `sei/writer.py` — `SEIWriter` com APENAS `attach_document` + `save_despacho_draft`. **Sem** `sign()`/`send()`/`protocol()` (safety arquitetural + 6 testes regressivos + `_FORBIDDEN_SELECTORS` runtime guard). |
@@ -92,7 +91,7 @@ docker run -d -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/ufpr2026 neo4j:5
 python -m ufpr_automation.graphrag.seed              # popular base
 ```
 
-### Feedback / DSPy
+### Feedback
 
 ```bash
 # Stats e revisão
@@ -101,16 +100,6 @@ python -m ufpr_automation.feedback review
 
 # Web UI (porta 8502)
 streamlit run ufpr_automation/feedback/web.py
-
-# Otimizar prompts
-python -m ufpr_automation.dspy_modules.optimize --strategy gepa  # bootstrap (synthetic ok)
-python -m ufpr_automation.dspy_modules.optimize --strategy mipro # 20+ feedback exemplos
-python -m ufpr_automation.dspy_modules.optimize --evaluate-only
-
-# Após gerar gepa_optimized.json, USE_DSPY=auto ativa o classifier DSPy automaticamente
-USE_DSPY=auto python -m ufpr_automation --channel gmail --limit 5
-USE_DSPY=off  python -m ufpr_automation --channel gmail   # força LiteLLM
-USE_DSPY=on   python -m ufpr_automation --channel gmail   # exige prompt compilado
 ```
 
 ### LangGraph Fleet (Marco III)
@@ -229,9 +218,6 @@ NEO4J_PASSWORD=...
 # Scheduler
 SCHEDULE_HOURS=8,13,17
 SCHEDULE_TZ=America/Sao_Paulo
-
-# DSPy gate (Marco III)
-USE_DSPY=auto                    # auto | on | off
 
 # Fleet pool de browsers (Marco III)
 FLEET_BROWSER_POOL_SIZE=3
