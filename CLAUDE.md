@@ -11,23 +11,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pip install -e ".[dev]"
 
 # Run all tests
-pytest tests/ -v
+pytest ufpr_automation/tests/ -v
 
 # Run a single test file
-pytest tests/test_loop.py -v
+pytest ufpr_automation/tests/test_graph.py -v
 
 # Run a single test function
-pytest tests/test_loop.py::test_function_name -v
+pytest ufpr_automation/tests/test_graph.py::test_function_name -v
 
 # Lint
-ruff check nanobot/
-ruff format nanobot/
-
-# Run the CLI
-nanobot onboard          # first-time setup
-nanobot agent -m "..."   # send a message
-nanobot gateway          # start the gateway server
-nanobot status           # show current status
+ruff check ufpr_automation/
+ruff format ufpr_automation/
 
 # Run UFPR automation
 python -m ufpr_automation               # full pipeline (uses EMAIL_CHANNEL from .env)
@@ -131,30 +125,7 @@ python -m ufpr_automation.ufpr_aberta --course-id 42      # outro curso no Moodl
 
 ## Architecture
 
-This repo contains two projects:
-
-### nanobot (core framework)
-
-An ultra-lightweight AI agent framework. The agent implements a simple sense → think → act loop.
-
-**Key packages under `nanobot/`:**
-
-- **`agent/`** — The core loop (`loop.py` ~23KB). Receives a message, builds context with system prompt + history, calls the LLM with available tools, executes tool calls, sends response back, persists session. Also contains memory consolidation, subagent spawning, and skills integration.
-- **`providers/`** — 20+ LLM providers (OpenRouter, Anthropic, OpenAI, Azure, DeepSeek, Groq, Gemini, Ollama, etc.). Registry-based — no if-elif chains. Adding a provider requires only a `ProviderSpec` and a `ProvidersConfig` field.
-- **`channels/`** — 11+ chat platform integrations (Telegram, Discord, Slack, WhatsApp, Feishu, DingTalk, QQ, Matrix, WeChat, Wecom, Email). Base class architecture; community plugins supported. Most use WebSocket/Socket.IO — no public IP required.
-- **`tools/`** — Built-in agent tools: shell (with `restrictToWorkspace`), filesystem (path traversal protected), web search (Brave/Tavily/Jina/SearXNG/DuckDuckGo), web fetch (readability), cron (croniter), MCP (Model Context Protocol), spawn (background subagents), message (send to channels).
-- **`session/`** — Conversation state grouped by channel+user.
-- **`bus/`** — Message routing between channels and agent.
-- **`cron/`** — Scheduled task execution.
-- **`heartbeat/`** — Proactive periodic task wake-up.
-- **`skills/`** — Bundled skills (GitHub, weather, Tmux, memory, summarize, skill-creator, cron).
-- **`config/`** — Pydantic-based config schema and loader.
-- **`cli/`** — Typer-based CLI (`nanobot` entrypoint).
-- **`security/`** — Network access control.
-
-**Data flow:** Channel receives message → Bus routes → Session groups by conversation → Agent loop (`loop.py`) processes → Tools execute → Response sent back via channel.
-
-### ufpr_automation (sub-project)
+### ufpr_automation
 
 A specialized deployment automating bureaucratic email processing at UFPR (Universidade Federal do Paraná). Currently in **Marco IV in progress** — Marcos I/II/II.5/III ✅ complete (Hybrid Memory Tier 0 + LangGraph Fleet + AFlow + SEIWriter + GraphRAG TemplateRegistry + DSPy USE_DSPY gate). Marco IV delivers Estágios end-to-end: extended `Intent` model (`sei_action`, `required_attachments`, `blocking_checks`, `despacho_template`, `acompanhamento_especial_grupo`), `SEI_DOC_CATALOG.yaml`, **15-checker** registry in `procedures/checkers.py` (11 iniciais + 4 aditivo/conclusão: `sei_processo_tce_existente`, `aditivo_antes_vencimento_tce`, `duracao_total_ate_24_meses`, `relatorio_final_assinado_orientador`), `SEIWriter` with **live mode wired up** for `create_process`/`attach_document`/`save_despacho_draft` (via `sei/writer_selectors.py` + captured `sei_selectors.yaml`) plus a **dry-run skeleton** for `add_to_acompanhamento_especial` (POP-38; live path raises `NotImplementedError` pending fresh selector capture). Dry-run remains the default `SEI_WRITE_MODE`. **Sprint 3 validado em 2026-04-16** (run_id `c0357e8dd8f2`, processo fictício `23075.022027/2026-22`): 3 ops `mode=live` `success=true`, body do despacho limpo (fix Ctrl+A+Delete do `_clear_editor_body` confirmado). Side-effect: corrigido `sei/browser.py:auto_login` — sei.ufpr.br tem decoy `<input type="password" name="pwdSenha">` hidden competindo com o campo real `<input type="text" id="pwdSenha">`; selector agora é `input#pwdSenha` puro + `#sbmAcessar` como botão primário. **Remaining**: flipar `SEI_WRITE_MODE=live` como default em prod depois de Fleet smoke em batch pequeno (10 emails reais). Tasks abertas: POP-38 live wire-up (bloqueado em nova captura de selectors — spec em `ufpr_automation/sei/SELECTOR_AUDIT.md §1`; dry-run + unit tests já prontos), live-path mocks, BrowserPagePool wire-up em SEI/SIGA helpers (parked pending Fleet async refactor). See `TASKS.md` for the Marco IV priority list.
 
@@ -193,7 +164,7 @@ A specialized deployment automating bureaucratic email processing at UFPR (Unive
 - **`graphrag/`** — Neo4j GraphRAG knowledge graph (Marco III). `client.py` wraps the Neo4j driver. `schema.py` defines node types (Orgao, Norma, TipoProcesso, Documento, Papel, Sistema, Template, Fluxo, Etapa, Pessoa, Curso, Disciplina, SigaAba) and relationships. `seed.py` populates the graph from institutional knowledge (SOUL.md, SEI/SIGA manuals, ClaudeCowork). After Marco III, `_seed_templates` also persists `Template.conteudo` and `Template.despacho_tipo` (the despacho bodies that used to live hardcoded in `sei/client.py`). `retriever.py` provides graph-aware retrieval: workflow matching, norm lookup, template selection, SIGA navigation hints, org contacts. **`templates.py`** (Marco III) — `TemplateRegistry` class with in-memory cache and `get_registry()` singleton; consumed by `sei/client.py:prepare_despacho_draft` and `sei/writer.py:save_despacho_draft` via lazy import to avoid circular dep. Fallback `campos_pendentes=["neo4j_unavailable"]` if Neo4j offline. Integrated into `process_one_email` (Fleet) alongside vector RAG.
 
 - **`scheduler.py`** — APScheduler-based pipeline scheduler. Runs LangGraph pipeline 3x/day (configurable via `SCHEDULE_HOURS`, `SCHEDULE_TZ`). CLI: `--schedule` (daemon) or `--schedule --once`.
-- **`workspace/`** — Nanobot integration files: `SOUL.md` (full agent persona + normative detail), **`SOUL_ESSENTIALS.md`** (slim system-prompt slice — identity, tone, categories, signature — injected per LLM call), **`PROCEDURES.md`** (Tier 0 playbook of intents organized by SEI process type), `AGENTS.md`, `SKILL.md`, `config.json`.
+- **`workspace/`** — Agent persona + procedure files: `SOUL.md` (full agent persona + normative detail), **`SOUL_ESSENTIALS.md`** (slim system-prompt slice — identity, tone, categories, signature — injected per LLM call), **`PROCEDURES.md`** (Tier 0 playbook of intents organized by SEI process type), `AGENTS.md`, `SKILL.md`, `config.json`.
 - **`ufpr_aberta/`** — Moodle (UFPR Aberta) scraper — login independente (não-SSO), captura o curso "Conheça o SIGA!" (id=9) para authoring de `PROCEDURES.md`, guia de navegação do `siga/browser.py` e ingestão RAG opcional. `browser.py` faz login no Moodle (form nativo) e persiste sessão em `session_data/ufpr_aberta_state.json`. `scraper.py` lida com tema `format_tiles` (visita cada seção via `?section=N`, filtra atividades por `#region-main a.cm-link` — **não** usar `courseindex` sidebar pois lista o curso inteiro). CLI: `python -m ufpr_automation.ufpr_aberta [--headed] [--course-id 9]`. Credenciais em `.env` com nomes literais `LOGING_UFPR_ABERTA`/`SENHA_UFPR_ABERTA` (o "G" a mais é intencional — casa com o arquivo do usuário). Dumps crus vão para `G:\Meu Drive\ufpr_rag\docs\ainda_n_ingeridos\ufpr_aberta\` (HTML + PDFs + `_structure.json`). Markdown estruturado de **BLOCO 1** (alunos, 16 atividades) e **BLOCO 3** (secretarias/coord, 21 atividades) em `base_conhecimento/ufpr_aberta/`: `bloco_alunos.md`, `bloco_siga_secretarias.md`, `FLUXO_GERAL.md` (Mermaid cross-bloco).
 - **`base_conhecimento/`** — Operational reference files used to author the playbook and train prompts: `manual_sei.txt`, `manual_siga.txt`, **`NAVEGACAO_SIGA.md`** (guia de navegação Playwright SIGA — consultar para tarefas de navegação), **`NAVEGACAO_SEI.md`** (guia de navegação Playwright SEI — consultar para tarefas de navegação), `FichaDoCurso.txt`, `procedimentos.md`, `ufpr_aberta/*.md` (ver acima), and **`SEI-tutotiais/`** — 60 POPs oficiais do SEI UFPR (POP-1 a POP-58 + PVA + Novidades 4.0 + organograma). A triagem A/B/C (relevância para Tier 0 atual vs. expansão vs. futuro) está em `SEI-tutotiais/README.md`. **Visão de longo prazo**: além de enriquecer o Tier 0 atual (Estágios), os POPs servem de base de conhecimento para um futuro **agente chat-driven full-SEI** — operações SEI sob demanda via chat ("abre processo X", "anexa Y", "encaminha para Z"). **Política atual (Marco IV)**: `_FORBIDDEN_SELECTORS` bloqueia assinar/protocolar/enviar processo; POPs desses fluxos (POP-22, POP-32, POP-54) são ingeridos no RAG com metadata `write_forbidden=true` para que o agente os **explique** mas não execute. **Marco futuro**: a execução desses fluxos está planejada — o boundary existe para blindar alucinações de LLM e para human-in-the-loop durante a maturação, não como veto permanente. Guia visual rápido do fluxo TCE (referência de apoio, não normativa): `G:\Meu Drive\ufpr_rag\docs\estagio\manual-de-estagios-versao-final.pdf` pgs impressas 81–83. **Regra `tipo_conferencia`**: `Nato Digital` quando a origem do doc é digital; `Cópia Autenticada Administrativamente` quando foi escaneado (dependeu de OCR). Estes arquivos são plain-text/PDF, não embedados no RAG por padrão — drive de authoring humano de `PROCEDURES.md`; subset `sei_pop` do RAG é opt-in via `rag/ingest.py --subset sei_pop`. **Staging de documentos crus pendentes de ingestão**: `G:\Meu Drive\ufpr_rag\docs\ainda_n_ingeridos\` — fonte de verdade do backlog de docs (PDFs, HTMLs, dumps UFPR Aberta, POPs novos, resoluções, etc.) que ainda não passaram pelo pipeline `rag/ingest.py`. Sempre consultar esse diretório antes de concluir que um doc "não existe na base" — ele pode estar apenas não-ingerido. Quando um doc for ingerido, mover de `ainda_n_ingeridos/` para a subpasta definitiva em `G:\Meu Drive\ufpr_rag\docs\` correspondente ao subset.
 - **`ClaudeCowork/`** — Base de conhecimento from Claude Cowork: SEI manual, SIGA manual, course data, internship guides, email templates, scheduled skills (morning/afternoon email checks).
@@ -207,8 +178,6 @@ The automation saves responses as drafts — never auto-sends (human-in-the-loop
 
 - **`pyproject.toml`** — Package metadata, dependencies, Ruff config (line-length=100, target py311). Build backend: hatchling.
 - **`.env`** (in `ufpr_automation/`) — Centralized credentials: Gmail (IMAP), OWA, SIGA, SEI, Telegram, LLM API keys. See `.env.example`.
-- **`docker-compose.yml`** — Two services: `nanobot-gateway` (port 18790, 1 CPU) and `nanobot-cli`.
-- **`nanobot/templates/`** — Default config templates copied during `nanobot onboard`.
 
 ## Sincronização entre PCs (RAG + Neo4j) — LEIA ANTES DE TOCAR EM RAG/NEO4J
 
